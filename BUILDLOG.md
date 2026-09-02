@@ -19,3 +19,13 @@
 - Commit/link/path: `docs/vector-sources.md` in this repository.
 - Blocker, if any: none; upstream JSON will be fetched and hash-checked rather than redistributed.
 - Next unchecked ID: A03 - add one tiny independently generated valid encrypt fixture and one valid decrypt fixture.
+
+## 2026-09-02 - A03 tiny valid fixtures
+
+- Project and task ID: ACVP Runner/Adapter - A03
+- Done condition: one tiny valid encrypt fixture and one tiny valid decrypt fixture exist under `fixtures/`, use ACVP-shaped prompt/result pairs, and are cryptographically checked.
+- Evidence produced: independently generated fixture pairs in `fixtures/aes-gcm-valid-encrypt/` and `fixtures/aes-gcm-valid-decrypt/`, plus provenance and execution instructions in `fixtures/README.md`.
+- Tests run and result: 4 fixture-specific checks passed for identifiers, declared lengths, ciphertext/tag generation, and authenticated plaintext recovery. The full gate passed Ruff, strict mypy, 9 pytest tests with 100% application coverage, and wheel/sdist builds.
+- Commit/link/path: the two fixture directories and `tests/unit/test_fixtures.py` in this repository.
+- Blocker, if any: none.
+- Next unchecked ID: A04 - define typed internal models for vector set, test group, test case, and result while preserving ACVP IDs.
