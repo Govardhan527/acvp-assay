@@ -7,7 +7,9 @@
 - [x] A04: define typed vector-set, group, case, value, and result models that preserve ACVP IDs.
 - [x] A05: validate required fields, types, hexadecimal values, and supported directions.
 - [x] A06: parse one group end to end without losing IDs.
-- [ ] A07-A09: provider interface plus AES-GCM encrypt/decrypt paths.
+- [x] A07: define a provider interface for encrypt, decrypt, and implementation metadata.
+- [ ] A08: implement and verify OpenSSL-backed AES-GCM encryption.
+- [ ] A09: implement and verify OpenSSL-backed AES-GCM decryption and authentication failures.
 - [ ] A10-A12: comparison, JSON summaries, CLI, and exit codes.
 - [ ] A13-A15: deterministic end-to-end tests, clean CI, documentation, and v0.1.0.
 

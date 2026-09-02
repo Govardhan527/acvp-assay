@@ -59,3 +59,13 @@
 - Commit/link/path: `src/acvp_runner/parser.py` and `tests/integration/test_parser.py`.
 - Blocker, if any: none.
 - Next unchecked ID: A07 - define a provider interface for encrypt, decrypt, and provider/version metadata.
+
+## 2026-09-02 - A07 provider boundary
+
+- Project and task ID: ACVP Runner/Adapter - A07
+- Done condition: parsing does not invoke OpenSSL; a replaceable typed interface defines encrypt, decrypt, and provider/backend metadata.
+- Evidence produced: `AesGcmProvider` is a runtime-checkable structural protocol, `ProviderMetadata` records both library and backend versions, and a non-cryptographic stub proves the boundary is implementation-independent.
+- Tests run and result: a non-OpenSSL stub satisfied the runtime protocol and exercised metadata, encrypt, and decrypt signatures. The full gate passed Ruff, strict mypy, 53 pytest tests with 100% coverage, and wheel/sdist builds.
+- Commit/link/path: `src/acvp_runner/providers/base.py`, `src/acvp_runner/models.py`, and `tests/unit/test_provider_contract.py`.
+- Blocker, if any: none.
+- Next unchecked ID: A08 - implement AES-GCM encrypt through the OpenSSL-backed `cryptography` binding and compare ciphertext/tag separately.

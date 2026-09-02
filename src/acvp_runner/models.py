@@ -80,6 +80,17 @@ class AesGcmValues:
 
 
 @dataclass(frozen=True, slots=True)
+class ProviderMetadata:
+    """Identity and versions for one cryptographic provider implementation."""
+
+    name: str
+    library_name: str
+    library_version: str
+    backend_name: str
+    backend_version: str
+
+
+@dataclass(frozen=True, slots=True)
 class TestCaseResult:
     """One classified case outcome with safe diagnostic context."""
 
@@ -97,6 +108,7 @@ __all__ = [
     "AesGcmValues",
     "AesGcmVectorSet",
     "Direction",
+    "ProviderMetadata",
     "ResultStatus",
     "TestCaseResult",
     "TestType",
