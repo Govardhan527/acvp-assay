@@ -52,6 +52,15 @@ class PinnedFile:
 AES_GCM = "ACVP-AES-GCM-1.0"
 SHA2_256 = "SHA2-256-1.0"
 HMAC_SHA2_256 = "HMAC-SHA2-256-1.0"
+ECDSA_SIGGEN = "ECDSA-SigGen-FIPS186-5"
+ECDSA_SIGVER = "ECDSA-SigVer-FIPS186-5"
+ML_KEM = "ML-KEM-encapDecap-FIPS203"
+ML_DSA_SIGVER = "ML-DSA-sigVer-FIPS204"
+CMAC_AES = "CMAC-AES-1.0"
+AES_ECB = "ACVP-AES-ECB-1.0"
+AES_GMAC = "ACVP-AES-GMAC-1.0"
+AES_KW = "ACVP-AES-KW-1.0"
+AES_KWP = "ACVP-AES-KWP-1.0"
 
 PINNED_FILES = (
     PinnedFile(
@@ -95,6 +104,114 @@ PINNED_FILES = (
         name="expectedResults.json",
         size_bytes=88459,
         sha256="dae3412189dfe11a63b40780f16c6c3304b5d9c2dff5351f653711903cf09e1f",
+    ),
+    PinnedFile(
+        directory=ECDSA_SIGGEN,
+        name="prompt.json",
+        size_bytes=987281,
+        sha256="a07cfcf2e3bdbda1cbf82cefc6f38a2d0559ee8852b2f0276a200e0747b46744",
+    ),
+    PinnedFile(
+        directory=ECDSA_SIGGEN,
+        name="expectedResults.json",
+        size_bytes=1057697,
+        sha256="64ddfc8cdf1e4d693e888e40bab5d898aa4a6684812ed94371e90bb040559c6d",
+    ),
+    PinnedFile(
+        directory=ECDSA_SIGVER,
+        name="prompt.json",
+        size_bytes=150759,
+        sha256="2547cabd9a6006943ff611d4990fad18162b51a614cd2d7986769a3e94dee7e3",
+    ),
+    PinnedFile(
+        directory=ECDSA_SIGVER,
+        name="expectedResults.json",
+        size_bytes=16027,
+        sha256="c4f2e21e9c6391a5349a81237b5c508466ce05f0d6eb6dbcecb17b458a6c5171",
+    ),
+    PinnedFile(
+        directory=ML_KEM,
+        name="prompt.json",
+        size_bytes=624189,
+        sha256="998e22dfb12efb14ce9fdff911ca634b13612819a1806f25da69adba7e16db91",
+    ),
+    PinnedFile(
+        directory=ML_KEM,
+        name="expectedResults.json",
+        size_bytes=190940,
+        sha256="9089ec6ff2424da9f2782b89b2f831a329a3e28d6e5e24b802b78ff36ac61cdf",
+    ),
+    PinnedFile(
+        directory=ML_DSA_SIGVER,
+        name="prompt.json",
+        size_bytes=3125947,
+        sha256="e2cba4589389756fa0bea1a7e6837138bf0a81f9d14234c9ee8f6d33caa1654e",
+    ),
+    PinnedFile(
+        directory=ML_DSA_SIGVER,
+        name="expectedResults.json",
+        size_bytes=13956,
+        sha256="e1d84ef1b2f35196278ab0b0ed6a46ec62cc03d2dfa92c564199e1999bfb8ea6",
+    ),
+    PinnedFile(
+        directory=CMAC_AES,
+        name="prompt.json",
+        size_bytes=4533505,
+        sha256="e2c412bbe9a63640ceb490e38fbad809259b4829b28995995994567547bd2cec",
+    ),
+    PinnedFile(
+        directory=CMAC_AES,
+        name="expectedResults.json",
+        size_bytes=61378,
+        sha256="ec48d26649b963183f3ceefb4b4c74563eddb51ff3c44ef92029ca05d58b7bcf",
+    ),
+    PinnedFile(
+        directory=AES_ECB,
+        name="prompt.json",
+        size_bytes=369982,
+        sha256="b4ec2a6e7011a9d7fb453aef52b32872cc7509dda07b13b28237d9b8f56076e9",
+    ),
+    PinnedFile(
+        directory=AES_ECB,
+        name="expectedResults.json",
+        size_bytes=343166,
+        sha256="4893c2718529d4af5a10f10335118e5a462808a0857005440c52b1083d71da18",
+    ),
+    PinnedFile(
+        directory=AES_GMAC,
+        name="prompt.json",
+        size_bytes=13084,
+        sha256="6bdac25495398b2221191fb8e1cd0a8c54664b33b52984c49b6d539c5d6e2d66",
+    ),
+    PinnedFile(
+        directory=AES_GMAC,
+        name="expectedResults.json",
+        size_bytes=4976,
+        sha256="9eacc97af44ed0b58bc35217c689f49e24b9dcc3567126bd55038ebe164b1d43",
+    ),
+    PinnedFile(
+        directory=AES_KW,
+        name="prompt.json",
+        size_bytes=5021125,
+        sha256="3e0c5a5fb8da3b484e42d73528a6a6e87c9a4c5e6386bc5bb98bbfcaa27831f3",
+    ),
+    PinnedFile(
+        directory=AES_KW,
+        name="expectedResults.json",
+        size_bytes=4100580,
+        sha256="ff722dcbc986252c4de5d7df10da5d74e677765524bcdcb666dfc7f4f6c08f34",
+    ),
+    PinnedFile(
+        directory=AES_KWP,
+        name="prompt.json",
+        size_bytes=4869914,
+        sha256="c39175c5f2eab4168c1e8d5bd6d1658ce83590499dabbf0f6f33d6533d3f7bc1",
+    ),
+    PinnedFile(
+        directory=AES_KWP,
+        name="expectedResults.json",
+        size_bytes=4001079,
+        sha256="114774bb317bc6fdb2491fa41e1c5d3b2b27f23ccb4d2b004d8610abc5689751",
     ),
 )
 

@@ -15,7 +15,8 @@ Two things distinguish it from `libacvp` and ACVP Proxy, which cover more algori
 
 Implemented today:
 
-- six algorithm families — AES-GCM, SHA-2, HMAC, ECDSA, ML-KEM, ML-DSA
+- eleven algorithm families — AES-GCM, AES-ECB, AES-GMAC, AES-KW/KWP,
+  CMAC-AES, SHA-2, HMAC, ECDSA, ML-KEM, ML-DSA
 - a replaceable provider boundary, in-process or an external harness over JSON
 - run-over-run regression diffing, including coverage that silently disappeared
 - typed parsing that preserves `vsId`, `tgId`, and `tcId`
@@ -65,6 +66,14 @@ The algorithm is read from the vector file itself and routed automatically. Curr
 | `ECDSA` | sigGen, sigVer | P-224/256/384/521; sigVer is verdict-only, sigGen is verified against its own key |
 | `ML-KEM` | encap, decap, key checks | Requires `--provider-command`: no built-in PQC implementation |
 | `ML-DSA` | sigVer | Requires `--provider-command`; external and internal interfaces |
+| `ACVP-AES-ECB` | AFT, MCT | The 100 x 1000 Monte Carlo chain, including the 192/256-bit key shuffle |
+| `ACVP-AES-GMAC` | AFT | Tag generation, and verification including deliberate forgeries |
+| `ACVP-AES-KW`, `ACVP-AES-KWP` | AFT | `kwCipher: cipher`; the `inverse` variant is reported UNSUPPORTED |
+| `CMAC-AES` | AFT (gen and ver) | Honours per-group `macLen` truncation |
+
+The five AES mode families run in process only. They are `cryptography`-backed
+and have no harness operations yet, so `--provider-command` is refused for them
+rather than silently ignored.
 
 PQC has no built-in provider on purpose. `cryptography` 50.0.1 implements neither ML-KEM nor ML-DSA, and in a real engagement the implementation under test is the customer's — OpenSSL 3.5+, liboqs, an HSM, or their own module. `examples/pqc_reference_harness.py` drives the pinned NIST ML-KEM and ML-DSA sets end to end using `kyber-py` and `dilithium-py`, which are educational, **not constant-time**, and exist here to verify this runner and to demonstrate it, never as an implementation to ship or validate.
 

@@ -455,3 +455,45 @@ def test_peek_algorithm_reports_malformed_files(tmp_path: Path, content: str, me
 
     with pytest.raises(AcvpValidationError, match=message):
         peek_algorithm(prompt)
+
+
+def test_aes_mode_families_are_dispatched_and_refuse_a_harness(tmp_path: Path) -> None:
+    """The five AES mode families route to their runner and decline --provider-command."""
+    from acvp_assay.algorithms import aes_modes
+
+    key = "000102030405060708090A0B0C0D0E0F"
+    prompt = {
+        "vsId": 1,
+        "algorithm": aes_modes.ECB,
+        "revision": "1.0",
+        "testGroups": [
+            {
+                "tgId": 1,
+                "testType": "AFT",
+                "direction": "encrypt",
+                "keyLen": 128,
+                "tests": [{"tcId": 1, "key": key, "pt": "00112233445566778899AABBCCDDEEFF"}],
+            }
+        ],
+    }
+    expected = {
+        "vsId": 1,
+        "testGroups": [
+            {"tgId": 1, "tests": [{"tcId": 1, "ct": "69C4E0D86A7B0430D8CDB78070B4C55A"}]}
+        ],
+    }
+    (tmp_path / "prompt.json").write_text(json.dumps(prompt), encoding="utf-8")
+    (tmp_path / "expectedResults.json").write_text(json.dumps(expected), encoding="utf-8")
+
+    results, metadata = run_vector_file(tmp_path / "prompt.json", tmp_path / "expectedResults.json")
+
+    assert metadata.name == "cryptography-aes-modes"
+    assert results[0].status is ResultStatus.PASS
+    assert "ACVP-AES-ECB" in supported_algorithms()
+
+    with pytest.raises(UnsupportedAlgorithmError, match="AES mode families"):
+        run_vector_file(
+            tmp_path / "prompt.json",
+            tmp_path / "expectedResults.json",
+            provider_command="python3 h.py",
+        )

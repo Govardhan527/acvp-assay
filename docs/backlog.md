@@ -32,6 +32,17 @@ Aimed at demand rather than portfolio scope; supersedes the v0.1.0 non-goals whe
 - [x] M05: add ML-KEM and ML-DSA ahead of the CNSA 2.0 January 2027 requirement (parsing and
       execution complete; requires an external implementation, see BUILDLOG).
 - [x] M06: add run-over-run regression diffing between two reports.
-- [ ] M07: publish to PyPI.
+- [x] M07: add the AES mode families that surround GCM in a real module — ECB (with the
+      Monte Carlo key shuffle), GMAC, CMAC-AES, and KW/KWP. Chosen by reading published
+      CAVP certificates rather than by guessing: these four names recur far more often
+      than anything else still missing.
+- [ ] M08: Counter DRBG (SP 800-90A). Effectively every FIPS module contains an approved
+      DRBG, so this is the widest remaining single gap. It is a state machine with
+      reseed and prediction resistance, not a one-shot transform, so it needs a new
+      provider shape rather than another method on an existing one.
+- [ ] M09: KDF SP 800-108 (counter, feedback, double-pipeline). Large — the pinned set has
+      thousands of groups — and the IUT supplies its own `fixedData`, which the runner
+      must accept rather than derive.
+- [ ] M10: publish to PyPI.
 
 Still out of scope: a full ACVP protocol client, algorithm count as a goal, an HTML dashboard, and any hosted service.

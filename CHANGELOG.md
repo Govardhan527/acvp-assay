@@ -5,6 +5,34 @@ All notable changes to this project are recorded here. The format follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Before 1.0.0 the
 provider protocols may change between minor versions.
 
+## [0.4.0] - 2026-09-02
+
+Broadens algorithm coverage toward what a real module actually validates.
+
+### Added
+
+- Five AES mode families: `ACVP-AES-ECB`, `ACVP-AES-GMAC`, `ACVP-AES-KW`,
+  `ACVP-AES-KWP` and `CMAC-AES`. AES-GCM alone covers very few real
+  validations; a module that validates GCM almost always validates a key wrap
+  and a CMAC beside it, and reviewing published CAVP certificates showed those
+  four names recurring far more often than anything still missing.
+- The AES Monte Carlo chain, whose key shuffle differs by key length — 128-bit
+  keys are refreshed from the final ciphertext block alone, while 192- and
+  256-bit keys reach back into the previous block because one 128-bit output is
+  not enough material. Verified against the pinned NIST set, all 2,144 cases.
+- Twelve more pinned vector files in `scripts/fetch_vectors.py`, covering the
+  five new families and — a pre-existing gap — the ECDSA, ML-KEM and ML-DSA
+  sets, which had been fetched by hand but never pinned. All 25 files are now
+  verified by size and SHA-256 before use.
+
+### Notes
+
+- `kwCipher: inverse` is reported UNSUPPORTED rather than guessed at. It is
+  half of the pinned KW and KWP sets, so the honest total is 3,600 executed and
+  3,600 declared per set, not a quiet 7,200.
+- Counter DRBG (SP 800-90A) and KDF SP 800-108 remain uncovered. Both need a
+  new result shape rather than a new provider method, and are next.
+
 ## [0.3.0] - 2026-09-02
 
 Closes the gap between what the project claimed and what it shipped.

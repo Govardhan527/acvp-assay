@@ -18,8 +18,12 @@ from pathlib import Path
 
 from acvp_assay import parser as aes_parser
 from acvp_assay import runner as aes_runner
-from acvp_assay.algorithms import ecdsa, hmac_mac, pqc, sha2
+from acvp_assay.algorithms import aes_modes, ecdsa, hmac_mac, pqc, sha2
 from acvp_assay.models import ProviderMetadata, TestCaseResult
+from acvp_assay.providers.aes_modes import (
+    AesModeProvider as AesModeProviderProtocol,
+)
+from acvp_assay.providers.aes_modes import CryptographyAesModeProvider
 from acvp_assay.providers.cryptography_aesgcm import CryptographyAesGcmProvider
 from acvp_assay.providers.digest import (
     HASHLIB_ALGORITHMS,
@@ -59,7 +63,7 @@ def peek_algorithm(vector_file: Path) -> tuple[str, str]:
 
 def supported_algorithms() -> list[str]:
     """List every algorithm name this runner can execute."""
-    names = ["ACVP-AES-GCM", "ECDSA", "ML-DSA", "ML-KEM", *HASHLIB_ALGORITHMS]
+    names = ["ACVP-AES-GCM", "ECDSA", "ML-DSA", "ML-KEM", *aes_modes.SUPPORTED, *HASHLIB_ALGORITHMS]
     names.extend(f"HMAC-{name}" for name in HASHLIB_ALGORITHMS)
     return sorted(names)
 
@@ -178,6 +182,24 @@ def _run_pqc(
     return pqc.run_ml_dsa(vector_set, expected, dsa), dsa.metadata()
 
 
+def _run_aes_modes(
+    vector_file: Path,
+    expected_file: Path,
+    provider_command: str | None,
+    provider_timeout: float,
+) -> tuple[list[TestCaseResult], ProviderMetadata]:
+    if provider_command is not None:
+        raise UnsupportedAlgorithmError(
+            "--provider-command does not yet cover the AES mode families; "
+            "run them with the built-in provider"
+        )
+    provider: AesModeProviderProtocol = CryptographyAesModeProvider()
+    metadata = provider.metadata()
+    vector_set = aes_modes.load_vector_set(vector_file)
+    expected = aes_modes.load_expected_results(expected_file)
+    return aes_modes.run_vector_set(vector_set, expected, provider), metadata
+
+
 def run_vector_file(
     vector_file: Path,
     expected_file: Path,
@@ -200,6 +222,10 @@ def run_vector_file(
     elif algorithm in ("ML-KEM", "ML-DSA"):
         runners[algorithm] = lambda: _run_pqc(
             algorithm, vector_file, expected_file, provider_command, provider_timeout
+        )
+    elif algorithm in aes_modes.SUPPORTED:
+        runners[algorithm] = lambda: _run_aes_modes(
+            vector_file, expected_file, provider_command, provider_timeout
         )
     elif algorithm == "ECDSA":
         runners[algorithm] = lambda: _run_ecdsa(
