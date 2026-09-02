@@ -57,6 +57,7 @@ python3.12 scripts/dev.py demo
 - `fixtures/`: small, rights-safe local test vectors
 - `docs/architecture.md`: component boundaries and data flow
 - `docs/limitations.md`: security and assurance boundaries
+- `docs/vector-sources.md`: pinned upstream source, hashes, licensing, and redistribution policy
 - `docs/decisions/`: committed design decisions
 
 ## Safety
