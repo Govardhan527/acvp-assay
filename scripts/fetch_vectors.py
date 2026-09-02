@@ -63,6 +63,7 @@ AES_KW = "ACVP-AES-KW-1.0"
 AES_KWP = "ACVP-AES-KWP-1.0"
 CTR_DRBG = "ctrDRBG-1.0"
 CTR_DRBG_R1 = "ctrDRBG-SP800-90Ar1"
+KDF_108 = "KDF-1.0"
 
 PINNED_FILES = (
     PinnedFile(
@@ -238,6 +239,18 @@ PINNED_FILES = (
         name="expectedResults.json",
         size_bytes=42956,
         sha256="c805df470563ec6e91413cde1a29b2574b7c33b67fd3a7bf3179b7ac26c77a6e",
+    ),
+    PinnedFile(
+        directory=KDF_108,
+        name="prompt.json",
+        size_bytes=3429414,
+        sha256="a97ac943f775fc249e258bc27a189075eb11e8c4029ae8eb39fd555671c610b8",
+    ),
+    PinnedFile(
+        directory=KDF_108,
+        name="expectedResults.json",
+        size_bytes=3496097,
+        sha256="bdba2cbbf68679db995c47e4bc8c53aa4c39c4a54e07c367450e4f91b83329e0",
     ),
 )
 

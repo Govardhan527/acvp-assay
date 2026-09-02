@@ -5,6 +5,32 @@ All notable changes to this project are recorded here. The format follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Before 1.0.0 the
 provider protocols may change between minor versions.
 
+## [0.6.0] - 2026-09-02
+
+### Added
+
+- `KDF` (SP 800-108), revision 1.0: counter, feedback and double-pipeline
+  modes across 14 PRFs — HMAC over SHA-1, the SHA-2 family and the SHA-3
+  family, plus CMAC-AES128/192/256.
+- 10,950 cases executed against the pinned upstream set, zero failures, with a
+  further 806 CMAC-TDES cases declared UNSUPPORTED.
+
+### Notes
+
+- This is the only set here whose *expected results file carries an input*. The
+  prompt gives only `keyIn`, because a conforming implementation chooses its own
+  `fixedData`; the runner reads NIST's choice back out of `expectedResults.json`
+  and derives against it. A pass therefore shows the derivation is correct for
+  that fixed data — it does not exercise an implementation's freedom to
+  construct fixed data of its own, which the ACVP server checks and no
+  file-based runner can. `docs/vector-sources.md` says so plainly.
+- `breakLocation` is a **bit** offset, not a byte offset. Upstream values run 1
+  to 127 against 128-bit fixed data, so the counter splices mid-byte. Treating
+  it as bytes passes 10,092 cases and fails 858 — the kind of near-miss that
+  looks like success on a summary line.
+- `keyOutLength` is frequently not a multiple of 8 (67, 331, 1003), so the last
+  byte's padding bits must be cleared.
+
 ## [0.5.0] - 2026-09-02
 
 ### Added

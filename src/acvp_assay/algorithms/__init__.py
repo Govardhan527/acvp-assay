@@ -18,7 +18,7 @@ from pathlib import Path
 
 from acvp_assay import parser as aes_parser
 from acvp_assay import runner as aes_runner
-from acvp_assay.algorithms import aes_modes, ctr_drbg, ecdsa, hmac_mac, pqc, sha2
+from acvp_assay.algorithms import aes_modes, ctr_drbg, ecdsa, hmac_mac, kdf, pqc, sha2
 from acvp_assay.models import ProviderMetadata, TestCaseResult
 from acvp_assay.providers.aes_modes import (
     AesModeProvider as AesModeProviderProtocol,
@@ -38,6 +38,8 @@ from acvp_assay.providers.digest import HashProvider as HashProviderProtocol
 from acvp_assay.providers.digest import MacProvider as MacProviderProtocol
 from acvp_assay.providers.ecdsa import CryptographyEcdsaProvider, SubprocessEcdsaProvider
 from acvp_assay.providers.ecdsa import EcdsaProvider as EcdsaProviderProtocol
+from acvp_assay.providers.kdf import CryptographyKdf
+from acvp_assay.providers.kdf import KdfProvider as KdfProviderProtocol
 from acvp_assay.providers.pqc import SubprocessMlDsaProvider, SubprocessMlKemProvider
 from acvp_assay.providers.subprocess_harness import SubprocessAesGcmProvider
 
@@ -71,6 +73,7 @@ def supported_algorithms() -> list[str]:
         "ML-DSA",
         "ML-KEM",
         ctr_drbg.ALGORITHM,
+        kdf.ALGORITHM,
         *aes_modes.SUPPORTED,
         *HASHLIB_ALGORITHMS,
     ]
@@ -227,6 +230,24 @@ def _run_ctr_drbg(
     return ctr_drbg.run_vector_set(vector_set, expected, provider), metadata
 
 
+def _run_kdf(
+    vector_file: Path,
+    expected_file: Path,
+    provider_command: str | None,
+    provider_timeout: float,
+) -> tuple[list[TestCaseResult], ProviderMetadata]:
+    if provider_command is not None:
+        raise UnsupportedAlgorithmError(
+            "--provider-command does not yet cover KDF SP 800-108; "
+            "run it with the built-in provider"
+        )
+    provider: KdfProviderProtocol = CryptographyKdf()
+    metadata = provider.metadata()
+    vector_set = kdf.load_vector_set(vector_file)
+    expected = kdf.load_expected_results(expected_file)
+    return kdf.run_vector_set(vector_set, expected, provider), metadata
+
+
 def run_vector_file(
     vector_file: Path,
     expected_file: Path,
@@ -249,6 +270,10 @@ def run_vector_file(
     elif algorithm in ("ML-KEM", "ML-DSA"):
         runners[algorithm] = lambda: _run_pqc(
             algorithm, vector_file, expected_file, provider_command, provider_timeout
+        )
+    elif algorithm == kdf.ALGORITHM:
+        runners[algorithm] = lambda: _run_kdf(
+            vector_file, expected_file, provider_command, provider_timeout
         )
     elif algorithm == ctr_drbg.ALGORITHM:
         runners[algorithm] = lambda: _run_ctr_drbg(

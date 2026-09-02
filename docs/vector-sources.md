@@ -86,6 +86,27 @@ rightmost bits increment. Where it is 128 the two revisions agree; the upstream
 set also exercises 64 and 4, and an implementation that ignores the field passes
 the first and fails the rest.
 
+| [`KDF-1.0/prompt.json`](https://github.com/usnistgov/ACVP-Server/blob/975de31eb83d87039ec88934fdc47d8c312b892d/gen-val/json-files/KDF-1.0/prompt.json) | 3,429,414 bytes | `a97ac943f775fc249e258bc27a189075eb11e8c4029ae8eb39fd555671c610b8` |
+| [`KDF-1.0/expectedResults.json`](https://github.com/usnistgov/ACVP-Server/blob/975de31eb83d87039ec88934fdc47d8c312b892d/gen-val/json-files/KDF-1.0/expectedResults.json) | 3,496,097 bytes | `bdba2cbbf68679db995c47e4bc8c53aa4c39c4a54e07c367450e4f91b83329e0` |
+
+### KDF SP 800-108 (v0.6.0)
+
+5,878 groups and 11,756 cases, and the only set here whose *expected results
+file carries an input*. The prompt gives only `keyIn`, because a conforming
+implementation chooses its own `fixedData`; NIST records the choice its
+reference made next to the answer, so the runner reads `fixedData` back out of
+`expectedResults.json` and derives against it.
+
+That bounds what a pass means, and the bound is worth stating: it shows the
+derivation is right for that fixed data. It does not exercise an
+implementation's freedom to construct fixed data of its own, which the ACVP
+server checks and no file-based runner can.
+
+Two details in this set are easy to miss. `breakLocation` is a **bit** offset —
+the upstream values run 1 to 127 against 128-bit fixed data — so the counter
+splices mid-byte. And `keyOutLength` is frequently not a multiple of 8 (331,
+1003, 67), so the final byte's padding bits must be cleared.
+
 Every size and SHA-256 is recorded in `scripts/fetch_vectors.py` and checked
 before a file is used. Run `python3 scripts/fetch_vectors.py` to retrieve them;
 `vectors/` is deliberately not committed, because NIST's vectors are theirs to

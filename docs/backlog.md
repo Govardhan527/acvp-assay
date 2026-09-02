@@ -41,9 +41,10 @@ Aimed at demand rather than portfolio scope; supersedes the v0.1.0 non-goals whe
       new provider shape — a state machine with reseed and prediction resistance rather
       than a one-shot transform. TDES is declared UNSUPPORTED: SP 800-131A disallowed it
       for this use after 2023.
-- [ ] M09: KDF SP 800-108 (counter, feedback, double-pipeline). Large — the pinned set has
-      thousands of groups — and the IUT supplies its own `fixedData`, which the runner
-      must accept rather than derive.
+- [x] M09: KDF SP 800-108 (counter, feedback, double-pipeline). 5,878 groups and 11,756
+      cases. The IUT supplies its own `fixedData`, so the runner reads it back from the
+      expected results and derives against it — which bounds what a pass means, and the
+      limitation is documented rather than glossed.
 - [ ] M10: publish to PyPI.
 
 Still out of scope: a full ACVP protocol client, algorithm count as a goal, an HTML dashboard, and any hosted service.

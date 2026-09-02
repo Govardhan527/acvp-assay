@@ -586,3 +586,58 @@ def test_ctr_drbg_is_dispatched_and_refuses_a_harness(tmp_path: Path) -> None:
             tmp_path / "expectedResults.json",
             provider_command="python3 h.py",
         )
+
+
+def test_kdf_is_dispatched_and_refuses_a_harness(tmp_path: Path) -> None:
+    """KDF SP 800-108 routes to its runner, and declines --provider-command.
+
+    The known answer is NIST's own, from the pinned KDF-1.0 set: counter mode,
+    CMAC-AES128, the counter after the fixed data.
+    """
+    prompt = {
+        "vsId": 1,
+        "algorithm": "KDF",
+        "revision": "1.0",
+        "testGroups": [
+            {
+                "tgId": 1,
+                "testType": "AFT",
+                "kdfMode": "counter",
+                "counterLocation": "after fixed data",
+                "macMode": "CMAC-AES128",
+                "counterLength": 8,
+                "keyOutLength": 8,
+                "tests": [{"tcId": 1, "keyIn": "C5FE792532A5088D296AD6622CCD5B42"}],
+            }
+        ],
+    }
+    expected = {
+        "vsId": 1,
+        "testGroups": [
+            {
+                "tgId": 1,
+                "tests": [
+                    {
+                        "tcId": 1,
+                        "fixedData": "31BF13E5997BABDB4602F3226F45D523",
+                        "keyOut": "38",
+                    }
+                ],
+            }
+        ],
+    }
+    (tmp_path / "prompt.json").write_text(json.dumps(prompt), encoding="utf-8")
+    (tmp_path / "expectedResults.json").write_text(json.dumps(expected), encoding="utf-8")
+
+    results, metadata = run_vector_file(tmp_path / "prompt.json", tmp_path / "expectedResults.json")
+
+    assert metadata.name == "cryptography-kdf-sp800-108"
+    assert [r.status for r in results] == [ResultStatus.PASS]
+    assert "KDF" in supported_algorithms()
+
+    with pytest.raises(UnsupportedAlgorithmError, match="KDF SP 800-108"):
+        run_vector_file(
+            tmp_path / "prompt.json",
+            tmp_path / "expectedResults.json",
+            provider_command="python3 h.py",
+        )
