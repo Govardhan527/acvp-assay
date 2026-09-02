@@ -5,6 +5,38 @@ All notable changes to this project are recorded here. The format follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Before 1.0.0 the
 provider protocols may change between minor versions.
 
+## [0.3.0] - 2026-09-02
+
+Closes the gap between what the project claimed and what it shipped.
+
+### Added
+
+- Every algorithm family is now reachable through `--provider-command`. SHA-2,
+  HMAC and ECDSA previously refused an external harness, so the central claim —
+  that an implementation which cannot be linked against can still be tested —
+  held only for AES-GCM and PQC. SHA-2 and HMAC are in essentially every
+  cryptographic module, so the gap hit the most common case first.
+- Wire contract operations `digest`, `digest-mct`, `mac`, `ecdsa-sign` and
+  `ecdsa-verify`, all implemented by `examples/reference_harness.py`. The Monte
+  Carlo chain is delegated whole: 100,000 round trips would take hours, and
+  running the chain is what an implementation under test does anyway.
+- `{"error": "unsupported"}` lets a harness decline a case it does not
+  implement. It is reported UNSUPPORTED rather than as a failure — telling a
+  customer their module is broken when it simply lacks a curve is the worst
+  output this tool can produce.
+
+### Fixed
+
+- ECDSA capability was filtered against what Python's `cryptography` exposes,
+  which would have wrongly declared an HSM's binary curves unsupported.
+  Capability now belongs to the provider via `supports()`.
+
+### Verified
+
+Through the external harness against pinned NIST vectors: AES-GCM 60/60,
+SHA2-256 513 passed, HMAC-SHA2-256 975/975, ECDSA sigVer 140 passed. The
+harness and in-process providers produce identical summaries.
+
 ## [0.2.0] - 2026-09-02
 
 Five more algorithm families, a provider boundary that reaches implementations
@@ -80,5 +112,6 @@ Initial release: an offline AES-GCM vector runner.
 - Clean-checkout Linux CI, and a pinned, hash-verified upstream vector source
   that is referenced rather than redistributed.
 
+[0.3.0]: https://github.com/Govardhan527/acvp-assay/releases/tag/v0.3.0
 [0.2.0]: https://github.com/Govardhan527/acvp-assay/releases/tag/v0.2.0
 [0.1.0]: https://github.com/Govardhan527/acvp-assay/releases/tag/v0.1.0
