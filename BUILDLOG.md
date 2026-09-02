@@ -69,3 +69,13 @@
 - Commit/link/path: `src/acvp_runner/providers/base.py`, `src/acvp_runner/models.py`, and `tests/unit/test_provider_contract.py`.
 - Blocker, if any: none.
 - Next unchecked ID: A08 - implement AES-GCM encrypt through the OpenSSL-backed `cryptography` binding and compare ciphertext/tag separately.
+
+## 2026-09-02 - A08 OpenSSL-backed encryption
+
+- Project and task ID: ACVP Runner/Adapter - A08
+- Done condition: the first concrete provider encrypts AES-GCM through `cryptography`'s OpenSSL binding, identifies both versions, returns ciphertext/tag separately, and covers empty plaintext and AAD.
+- Evidence produced: `CryptographyAesGcmProvider.encrypt()` uses the GCM cipher API, emits byte-separated ciphertext and a requested 32-128-bit tag, and retains the provider boundary defined in A07.
+- Tests run and result: the stored encrypt fixture matched ciphertext and tag separately; three empty plaintext/AAD combinations matched the independent high-level API; 32-bit tag truncation and invalid tag lengths were covered. The full gate passed Ruff, strict mypy, 64 pytest tests with 100% coverage, and wheel/sdist builds.
+- Commit/link/path: `src/acvp_runner/providers/cryptography_aesgcm.py` and `tests/unit/test_cryptography_provider.py`.
+- Blocker, if any: none.
+- Next unchecked ID: A09 - implement authenticated decryption and negative cases for modified inputs and wrong keys.

@@ -8,7 +8,7 @@
 - [x] A05: validate required fields, types, hexadecimal values, and supported directions.
 - [x] A06: parse one group end to end without losing IDs.
 - [x] A07: define a provider interface for encrypt, decrypt, and implementation metadata.
-- [ ] A08: implement and verify OpenSSL-backed AES-GCM encryption.
+- [x] A08: implement and verify OpenSSL-backed AES-GCM encryption.
 - [ ] A09: implement and verify OpenSSL-backed AES-GCM decryption and authentication failures.
 - [ ] A10-A12: comparison, JSON summaries, CLI, and exit codes.
 - [ ] A13-A15: deterministic end-to-end tests, clean CI, documentation, and v0.1.0.
