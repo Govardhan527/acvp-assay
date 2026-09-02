@@ -11,18 +11,24 @@ Two things distinguish it from `libacvp` and ACVP Proxy, which cover more algori
 - **It reaches implementations they cannot.** A harness reads one JSON request on stdin and writes one on stdout, so an HSM, a smartcard, an embedded device over a serial link, or a library in any language can be tested without linking anything.
 - **It answers "are we *still* conformant?"** `acvp-assay diff` compares two runs and reports regressions, including coverage that silently disappeared. With re-validation running well over a year, that is the failure mode that costs a cycle.
 
-## MVP scope
+## Scope
 
-The frozen v0.1.0 MVP contains:
+Implemented today:
 
-- Python 3.12 and pytest;
-- offline AES-GCM vector files only;
-- one adapter backed by the OpenSSL used by Python's `cryptography` package;
-- typed parsing models that preserve `vsId`, `tgId`, and `tcId` values when present;
-- input validation, encrypt/decrypt execution, comparison, JSON reporting, and a CLI;
-- deterministic unit and end-to-end tests on Linux.
+- six algorithm families — AES-GCM, SHA-2, HMAC, ECDSA, ML-KEM, ML-DSA
+- a replaceable provider boundary, in-process or an external harness over JSON
+- run-over-run regression diffing, including coverage that silently disappeared
+- typed parsing that preserves `vsId`, `tgId`, and `tcId`
+- deterministic tests on Linux, verified against pinned NIST vectors
 
-Explicit non-goals for v0.1.0 are live ACVP server sessions, a second algorithm or provider, full FIPS 140-3 validation, vector redistribution without confirmed rights, an HTML dashboard, and performance benchmarking.
+Deliberately out of scope: a live ACVP protocol client (`libacvp` and ACVP Proxy
+already do that well), an HTML dashboard, performance benchmarking, and
+redistribution of upstream vectors whose licensing is unconfirmed. There is also
+no built-in ML-KEM or ML-DSA implementation — for post-quantum work the
+implementation under test is yours, supplied through `--provider-command`.
+
+Versions before 1.0.0 do not promise a stable provider API; the protocols are
+still settling as algorithm families are added.
 
 ## Requirements
 
@@ -200,6 +206,7 @@ python3.12 scripts/dev.py demo
 - `docs/limitations.md`: security and assurance boundaries
 - `docs/vector-sources.md`: pinned upstream source, hashes, licensing, and redistribution policy
 - `docs/decisions/`: committed design decisions
+- `CHANGELOG.md`: release history
 
 ## Safety
 

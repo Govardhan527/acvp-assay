@@ -21,7 +21,7 @@ The parser owns external JSON interpretation for both files and must preserve AC
 
 ## The `run` command
 
-`acvp-assay run VECTOR_FILE [--output RESULT_FILE] [--strict]` loads `VECTOR_FILE` as the prompt document and requires a sibling `expectedResults.json` in the same directory (the layout every fixture under `fixtures/` already uses). This sibling-file convention is deliberate: v0.1.0 only supports offline sample vector sets that ship both files together, and it avoids a second required CLI argument for the common case.
+`acvp-assay run VECTOR_FILE [--output RESULT_FILE] [--strict]` loads `VECTOR_FILE` as the prompt document and requires a sibling `expectedResults.json` in the same directory (the layout every fixture under `fixtures/` already uses). This sibling-file convention is deliberate: only offline sample vector sets that ship both files together are supported, and it avoids a second required CLI argument for the common case.
 
 Exit codes:
 
@@ -40,4 +40,4 @@ A group is classified UNSUPPORTED, not executed, when its `ivGen` is not `extern
 - Expected ciphertext and authentication tags are compared as separate fields.
 - Machine-readable results are the source of truth for human-readable summaries.
 
-The v0.1.0 baseline includes UTF-8 JSON file loading and validation for both vector and expected-results documents, immutable typed models, a replaceable provider interface, OpenSSL-backed AES-GCM operations, bounded comparison, deterministic JSON case/summary reporting with provider versions, and the `run` CLI command described above with clean-checkout Linux CI coverage, including one intentionally corrupted fixture that proves failures surface rather than get swallowed (`fixtures/README.md`).
+The baseline includes UTF-8 JSON file loading and validation for both vector and expected-results documents, immutable typed models, a replaceable provider interface, OpenSSL-backed AES-GCM operations, bounded comparison, deterministic JSON case/summary reporting with provider versions, and the `run` CLI command described above with clean-checkout Linux CI coverage, including one intentionally corrupted fixture that proves failures surface rather than get swallowed (`fixtures/README.md`).
