@@ -12,6 +12,11 @@ from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec, utils
 
 from acvp_assay.models import ProviderMetadata
+from acvp_assay.providers.subprocess_harness import (
+    HarnessClient,
+    HarnessProtocolError,
+    decode_hex,
+)
 
 #: ACVP curve name to the ``cryptography`` curve implementing it. Binary (B-)
 #: and Koblitz (K-) curves are deliberately absent: OpenSSL does not offer them
@@ -53,6 +58,15 @@ class EcdsaProvider(Protocol):
 
     def metadata(self) -> ProviderMetadata:
         """Identify the provider library and its cryptographic backend."""
+        ...
+
+    def supports(self, *, curve: str, hash_algorithm: str) -> bool:
+        """Whether this implementation offers the curve and hash.
+
+        Capability belongs to the implementation. Deciding it from what
+        ``cryptography`` happens to expose would wrongly declare an HSM's
+        binary curves unsupported.
+        """
         ...
 
     def sign(self, *, curve: str, hash_algorithm: str, message: bytes) -> GeneratedSignature:
@@ -102,6 +116,10 @@ class CryptographyEcdsaProvider:
             backend_name="OpenSSL",
             backend_version=backend.openssl_version_text(),
         )
+
+    def supports(self, *, curve: str, hash_algorithm: str) -> bool:
+        """Report what this OpenSSL build actually offers."""
+        return curve in CURVES and hash_algorithm in HASHES
 
     def sign(self, *, curve: str, hash_algorithm: str, message: bytes) -> GeneratedSignature:
         """Generate a fresh key pair and sign, as an ACVP sigGen case requires.
@@ -161,10 +179,65 @@ class CryptographyEcdsaProvider:
         return True
 
 
+class SubprocessEcdsaProvider(HarnessClient):
+    """ECDSA operations performed by an external harness."""
+
+    def supports(self, *, curve: str, hash_algorithm: str) -> bool:
+        """Assume capability; the harness declines per case with ``unsupported``."""
+        return True
+
+    def sign(self, *, curve: str, hash_algorithm: str, message: bytes) -> GeneratedSignature:
+        """Ask the harness to generate a key pair and sign."""
+        response = self.invoke(
+            {
+                "operation": "ecdsa-sign",
+                "curve": curve,
+                "hashAlg": hash_algorithm,
+                "message": message.hex().upper(),
+            }
+        )
+        return GeneratedSignature(
+            qx=decode_hex(response, "qx"),
+            qy=decode_hex(response, "qy"),
+            r=decode_hex(response, "r"),
+            s=decode_hex(response, "s"),
+        )
+
+    def verify(
+        self,
+        *,
+        curve: str,
+        hash_algorithm: str,
+        message: bytes,
+        qx: bytes,
+        qy: bytes,
+        r: bytes,
+        s: bytes,
+    ) -> bool:
+        """Ask the harness for its verification verdict."""
+        response = self.invoke(
+            {
+                "operation": "ecdsa-verify",
+                "curve": curve,
+                "hashAlg": hash_algorithm,
+                "message": message.hex().upper(),
+                "qx": qx.hex().upper(),
+                "qy": qy.hex().upper(),
+                "r": r.hex().upper(),
+                "s": s.hex().upper(),
+            }
+        )
+        verdict = response.get("testPassed")
+        if not isinstance(verdict, bool):
+            raise HarnessProtocolError("harness response is missing a boolean 'testPassed'")
+        return verdict
+
+
 __all__ = [
     "CURVES",
     "HASHES",
     "CryptographyEcdsaProvider",
     "EcdsaProvider",
     "GeneratedSignature",
+    "SubprocessEcdsaProvider",
 ]

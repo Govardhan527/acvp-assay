@@ -78,7 +78,7 @@ The built-in provider exercises OpenSSL through Python's `cryptography`. To test
 acvp-assay run VECTOR_FILE --provider-command "python3 examples/reference_harness.py"
 ```
 
-The harness reads one JSON request on stdin and writes one JSON response on stdout. That is the whole contract, so it can be written in any language:
+The harness reads one JSON request on stdin and writes one JSON response on stdout. That is the whole contract, so it can be written in any language, and **every algorithm family goes through it** — AES-GCM, SHA-2 (including the Monte Carlo chain), HMAC, ECDSA, ML-KEM and ML-DSA:
 
 ```json
 → {"operation": "encrypt", "key": "000102…", "iv": "1011…", "aad": "", "pt": "4865…", "tagLen": 128}
@@ -89,7 +89,13 @@ The harness reads one JSON request on stdin and writes one JSON response on stdo
 ← {"error": "authentication failed"}
 ```
 
+Operations: `metadata`, `encrypt`, `decrypt`, `digest`, `digest-mct`, `mac`, `ecdsa-sign`, `ecdsa-verify`, `ml-kem-encapsulate`, `ml-kem-decapsulate`, `ml-kem-key-check`, `ml-dsa-verify`. A harness need only implement the families you are testing.
+
+Two error values are reserved. `{"error": "unsupported"}` declines a case the implementation does not offer — a curve, a parameter set, a mode — and is reported UNSUPPORTED rather than as a failure, because capability is yours to declare, not ours to assume. (An HSM's binary curves are not "unsupported" merely because Python's `cryptography` lacks them.)
+
 A rejected authentication tag is reported as `{"error": "authentication failed"}`, **not** as a crash or a non-zero exit. This matters: roughly a third of NIST's own AES-GCM decrypt cases are deliberate failures where rejecting the tag is the correct answer, and a harness that dies on them will score a conforming implementation as broken.
+
+The Monte Carlo chain is delegated whole via `digest-mct`: at 100,000 inner iterations, one round trip per hash would take hours, and running the chain is what a real implementation under test does anyway.
 
 `examples/reference_harness.py` is a complete worked implementation that imports nothing from this package. `--provider-timeout SECONDS` bounds each call, so a wedged device cannot hang the run. The harness is invoked once per case; its stderr passes through to your terminal for debugging but never enters the JSON report, since a crashing harness may print key material.
 

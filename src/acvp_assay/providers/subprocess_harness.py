@@ -23,6 +23,11 @@ Hex is uppercase on the wire and either case is accepted on the way in; empty
 byte strings are the empty string, which real vectors do use for zero-length
 payloads and AAD.
 
+``{"error": "unsupported"}`` lets a harness decline a case it does not
+implement -- a curve, parameter set, or mode it lacks -- which is reported
+UNSUPPORTED rather than as a failure. Capability is the implementation's to
+declare, not this runner's to assume.
+
 ``{"error": "authentication failed"}`` is the one error the caller must be able
 to state, because a rejected tag is a *correct* outcome for roughly a third of
 NIST's decrypt cases. It is translated into the same ``InvalidTag`` the
@@ -53,6 +58,7 @@ from acvp_assay.models import AesGcmValues, ProviderMetadata
 
 DEFAULT_TIMEOUT_SECONDS = 30.0
 AUTHENTICATION_FAILED = "authentication failed"
+UNSUPPORTED = "unsupported"
 
 _METADATA_FIELDS = (
     ("name", "name"),
@@ -61,6 +67,15 @@ _METADATA_FIELDS = (
     ("backendName", "backend_name"),
     ("backendVersion", "backend_version"),
 )
+
+
+class HarnessUnsupportedError(Exception):
+    """The harness declined a case it does not implement.
+
+    Deliberately not a ``ValueError``: an implementation saying "I do not
+    support this curve/parameter set" is a coverage statement, not a failure,
+    and must be reported UNSUPPORTED rather than as an errored case.
+    """
 
 
 class HarnessProtocolError(ValueError):
@@ -167,6 +182,8 @@ class HarnessClient:
         if error is not None:
             if error == AUTHENTICATION_FAILED:
                 raise InvalidTag
+            if error == UNSUPPORTED:
+                raise HarnessUnsupportedError
             raise HarnessProtocolError("harness reported a failure")
         return response
 
@@ -225,8 +242,10 @@ class SubprocessAesGcmProvider(HarnessClient):
 __all__ = [
     "AUTHENTICATION_FAILED",
     "DEFAULT_TIMEOUT_SECONDS",
+    "UNSUPPORTED",
     "HarnessClient",
     "HarnessProtocolError",
+    "HarnessUnsupportedError",
     "SubprocessAesGcmProvider",
     "decode_hex",
 ]

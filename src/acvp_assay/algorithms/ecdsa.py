@@ -38,7 +38,8 @@ from acvp_assay.parser import (
     optional_hex_bytes,
     string_field,
 )
-from acvp_assay.providers.ecdsa import CURVES, HASHES, EcdsaProvider
+from acvp_assay.providers.ecdsa import EcdsaProvider
+from acvp_assay.providers.subprocess_harness import HarnessUnsupportedError
 
 SIG_GEN = "sigGen"
 SIG_VER = "sigVer"
@@ -264,7 +265,7 @@ def run_vector_set(
     """Execute every ECDSA case using the shape its mode requires."""
     results: list[TestCaseResult] = []
     for group in vector_set.test_groups:
-        supported = group.curve in CURVES and group.hash_algorithm in HASHES
+        supported = provider.supports(curve=group.curve, hash_algorithm=group.hash_algorithm)
         for case in group.tests:
             if not supported:
                 results.append(
@@ -280,14 +281,19 @@ def run_vector_set(
                     _unsupported(group.tg_id, case.tc_id, "component-only tests are not supported")
                 )
                 continue
-            if vector_set.mode == SIG_VER:
-                results.append(
-                    _run_sig_ver(
-                        group, case, expected.verdicts.get((group.tg_id, case.tc_id)), provider
+            try:
+                if vector_set.mode == SIG_VER:
+                    results.append(
+                        _run_sig_ver(
+                            group, case, expected.verdicts.get((group.tg_id, case.tc_id)), provider
+                        )
                     )
+                else:
+                    results.append(_run_sig_gen(group, case, provider))
+            except HarnessUnsupportedError:
+                results.append(
+                    _unsupported(group.tg_id, case.tc_id, "the harness declined this case")
                 )
-                continue
-            results.append(_run_sig_gen(group, case, provider))
     return results
 
 

@@ -6,10 +6,15 @@ import hashlib
 import hmac
 import platform
 import sys
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from typing import Protocol, runtime_checkable
 
 from acvp_assay.models import ProviderMetadata
+from acvp_assay.providers.subprocess_harness import (
+    HarnessClient,
+    HarnessProtocolError,
+    decode_hex,
+)
 
 MCT_OUTER_ITERATIONS = 100
 MCT_INNER_ITERATIONS = 1000
@@ -166,6 +171,78 @@ __all__ = [
     "HashlibHashProvider",
     "HashlibMacProvider",
     "MacProvider",
+    "SubprocessHashProvider",
+    "SubprocessMacProvider",
     "monte_carlo",
     "ssl_version_text",
 ]
+
+
+class SubprocessHashProvider(HarnessClient):
+    """Message digests computed by an external harness.
+
+    The Monte Carlo chain is delegated whole rather than driven case by case:
+    at 100,000 inner iterations, one process spawn per hash would take hours.
+    Running the chain is what a real implementation under test does anyway.
+    """
+
+    def __init__(self, algorithm: str, command: Sequence[str], **kwargs: float) -> None:
+        super().__init__(command, **kwargs)
+        self._algorithm = algorithm
+
+    def digest(self, message: bytes) -> bytes:
+        """Hash one complete message through the harness."""
+        response = self.invoke(
+            {
+                "operation": "digest",
+                "algorithm": self._algorithm,
+                "message": message.hex().upper(),
+            }
+        )
+        return decode_hex(response, "md")
+
+    def digest_mct(self, seed: bytes, *, alternate: bool) -> list[bytes]:
+        """Ask the harness to run the whole Monte Carlo chain and return its outputs."""
+        response = self.invoke(
+            {
+                "operation": "digest-mct",
+                "algorithm": self._algorithm,
+                "seed": seed.hex().upper(),
+                "alternate": alternate,
+            }
+        )
+        values = response.get("md")
+        if not isinstance(values, list):
+            raise HarnessProtocolError("harness returned no 'md' array for the Monte Carlo chain")
+        digests: list[bytes] = []
+        for index, value in enumerate(values):
+            if not isinstance(value, str):
+                raise HarnessProtocolError(f"harness returned a non-string md at index {index}")
+            try:
+                digests.append(bytes.fromhex(value))
+            except ValueError:
+                raise HarnessProtocolError(
+                    f"harness returned invalid hex md at index {index}"
+                ) from None
+        return digests
+
+
+class SubprocessMacProvider(HarnessClient):
+    """Keyed MACs computed by an external harness."""
+
+    def __init__(self, algorithm: str, command: Sequence[str], **kwargs: float) -> None:
+        super().__init__(command, **kwargs)
+        self._algorithm = algorithm
+
+    def mac(self, *, key: bytes, message: bytes, mac_length_bits: int) -> bytes:
+        """Compute a MAC through the harness, truncated to the requested length."""
+        response = self.invoke(
+            {
+                "operation": "mac",
+                "algorithm": self._algorithm,
+                "key": key.hex().upper(),
+                "message": message.hex().upper(),
+                "macLen": mac_length_bits,
+            }
+        )
+        return decode_hex(response, "mac")

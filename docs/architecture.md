@@ -39,5 +39,10 @@ A group is classified UNSUPPORTED, not executed, when its `ivGen` is not `extern
 - Provider exceptions become safe, structured case errors; raw key material is never logged. `TestCaseResult.diagnostic` enforces this for ERROR results: it can only hold one of the closed `SafeDiagnostic` values, never raw exception text.
 - Expected ciphertext and authentication tags are compared as separate fields.
 - Machine-readable results are the source of truth for human-readable summaries.
+- Capability belongs to the implementation. Every family is reachable through
+  `--provider-command`, and a harness declines what it lacks with
+  `{"error": "unsupported"}`, which is reported UNSUPPORTED rather than as a
+  failure. The built-in providers declare their own capability the same way,
+  through `supports()`, so no runner hard-codes what an implementation offers.
 
 The baseline includes UTF-8 JSON file loading and validation for both vector and expected-results documents, immutable typed models, a replaceable provider interface, OpenSSL-backed AES-GCM operations, bounded comparison, deterministic JSON case/summary reporting with provider versions, and the `run` CLI command described above with clean-checkout Linux CI coverage, including one intentionally corrupted fixture that proves failures surface rather than get swallowed (`fixtures/README.md`).

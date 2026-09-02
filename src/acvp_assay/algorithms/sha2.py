@@ -32,6 +32,7 @@ from acvp_assay.parser import (
     string_field,
 )
 from acvp_assay.providers.digest import HASHLIB_ALGORITHMS, HashProvider
+from acvp_assay.providers.subprocess_harness import HarnessUnsupportedError
 
 SUPPORTED_MCT_VERSIONS = ("standard", "alternate")
 
@@ -295,18 +296,24 @@ def run_vector_set(
                     _unsupported(group.tg_id, case.tc_id, "bit-oriented messages are not supported")
                 )
                 continue
-            if group.test_type is Sha2TestType.MCT:
-                results.append(_run_mct(group, case, expected_case, provider))
-                continue
-            if expected_case.digest is None:
+            if expected_case.digest is None and group.test_type is not Sha2TestType.MCT:
                 results.append(_unsupported(group.tg_id, case.tc_id, "no expected digest recorded"))
                 continue
-            assert case.message is not None
-            results.append(
-                _compare(
-                    group.tg_id, case.tc_id, expected_case.digest, provider.digest(case.message)
+            try:
+                if group.test_type is Sha2TestType.MCT:
+                    results.append(_run_mct(group, case, expected_case, provider))
+                    continue
+                assert case.message is not None
+                assert expected_case.digest is not None
+                results.append(
+                    _compare(
+                        group.tg_id, case.tc_id, expected_case.digest, provider.digest(case.message)
+                    )
                 )
-            )
+            except HarnessUnsupportedError:
+                results.append(
+                    _unsupported(group.tg_id, case.tc_id, "the harness declined this case")
+                )
     return results
 
 

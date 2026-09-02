@@ -22,6 +22,7 @@ from acvp_assay.parser import (
     string_field,
 )
 from acvp_assay.providers.digest import HASHLIB_ALGORITHMS, MacProvider
+from acvp_assay.providers.subprocess_harness import HarnessUnsupportedError
 
 
 @dataclass(frozen=True, slots=True)
@@ -160,11 +161,24 @@ def run_vector_set(
                     )
                 )
                 continue
-            got = provider.mac(
-                key=case.key,
-                message=case.message,
-                mac_length_bits=group.mac_length_bits,
-            )
+            try:
+                got = provider.mac(
+                    key=case.key,
+                    message=case.message,
+                    mac_length_bits=group.mac_length_bits,
+                )
+            except HarnessUnsupportedError:
+                results.append(
+                    TestCaseResult(
+                        tg_id=group.tg_id,
+                        tc_id=case.tc_id,
+                        status=ResultStatus.UNSUPPORTED,
+                        expected=None,
+                        actual=None,
+                        diagnostic="the harness declined this case",
+                    )
+                )
+                continue
             status = ResultStatus.PASS if want == got else ResultStatus.FAIL
             results.append(
                 TestCaseResult(

@@ -12,6 +12,7 @@ Adding a family means writing its module and adding one entry here.
 from __future__ import annotations
 
 import json
+import shlex
 from collections.abc import Callable
 from pathlib import Path
 
@@ -24,8 +25,13 @@ from acvp_assay.providers.digest import (
     HASHLIB_ALGORITHMS,
     HashlibHashProvider,
     HashlibMacProvider,
+    SubprocessHashProvider,
+    SubprocessMacProvider,
 )
-from acvp_assay.providers.ecdsa import CryptographyEcdsaProvider
+from acvp_assay.providers.digest import HashProvider as HashProviderProtocol
+from acvp_assay.providers.digest import MacProvider as MacProviderProtocol
+from acvp_assay.providers.ecdsa import CryptographyEcdsaProvider, SubprocessEcdsaProvider
+from acvp_assay.providers.ecdsa import EcdsaProvider as EcdsaProviderProtocol
 from acvp_assay.providers.pqc import SubprocessMlDsaProvider, SubprocessMlKemProvider
 from acvp_assay.providers.subprocess_harness import SubprocessAesGcmProvider
 
@@ -84,12 +90,15 @@ def _run_sha2(
     provider_command: str | None,
     provider_timeout: float,
 ) -> tuple[list[TestCaseResult], ProviderMetadata]:
-    if provider_command is not None:
-        raise UnsupportedAlgorithmError(
-            "--provider-command does not yet support hash algorithms; "
-            "the harness contract currently covers AES-GCM only"
+    provider: HashProviderProtocol = (
+        HashlibHashProvider(algorithm)
+        if provider_command is None
+        else SubprocessHashProvider(
+            algorithm,
+            shlex.split(provider_command),
+            timeout_seconds=provider_timeout,
         )
-    provider = HashlibHashProvider(algorithm)
+    )
     metadata = provider.metadata()
     vector_set = sha2.load_vector_set(vector_file)
     expected = sha2.load_expected_results(expected_file)
@@ -103,12 +112,15 @@ def _run_hmac(
     provider_command: str | None,
     provider_timeout: float,
 ) -> tuple[list[TestCaseResult], ProviderMetadata]:
-    if provider_command is not None:
-        raise UnsupportedAlgorithmError(
-            "--provider-command does not yet support MAC algorithms; "
-            "the harness contract currently covers AES-GCM only"
+    provider: MacProviderProtocol = (
+        HashlibMacProvider(algorithm)
+        if provider_command is None
+        else SubprocessMacProvider(
+            algorithm,
+            shlex.split(provider_command),
+            timeout_seconds=provider_timeout,
         )
-    provider = HashlibMacProvider(algorithm)
+    )
     metadata = provider.metadata()
     vector_set = hmac_mac.load_vector_set(vector_file)
     expected = hmac_mac.load_expected_results(expected_file)
@@ -121,12 +133,13 @@ def _run_ecdsa(
     provider_command: str | None,
     provider_timeout: float,
 ) -> tuple[list[TestCaseResult], ProviderMetadata]:
-    if provider_command is not None:
-        raise UnsupportedAlgorithmError(
-            "--provider-command does not yet support ECDSA; "
-            "the harness contract currently covers AES-GCM only"
+    provider: EcdsaProviderProtocol = (
+        CryptographyEcdsaProvider()
+        if provider_command is None
+        else SubprocessEcdsaProvider.from_command_string(
+            provider_command, timeout_seconds=provider_timeout
         )
-    provider = CryptographyEcdsaProvider()
+    )
     metadata = provider.metadata()
     vector_set = ecdsa.load_vector_set(vector_file)
     expected = ecdsa.load_expected_results(expected_file)

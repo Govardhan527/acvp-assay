@@ -440,19 +440,6 @@ def test_dispatch_rejects_an_unimplemented_algorithm(tmp_path: Path) -> None:
         run_vector_file(prompt, tmp_path / "expectedResults.json")
 
 
-@pytest.mark.parametrize("directory", ["sha2-256-known-answers", "hmac-sha2-256-known-answers"])
-def test_external_harness_is_refused_for_hash_families(directory: str) -> None:
-    """The harness contract covers AES-GCM only, and says so rather than misbehaving."""
-    prompt = FIXTURES / directory / "prompt.json"
-
-    with pytest.raises(UnsupportedAlgorithmError, match="does not yet support"):
-        run_vector_file(
-            prompt,
-            prompt.parent / "expectedResults.json",
-            provider_command="python3 harness.py",
-        )
-
-
 @pytest.mark.parametrize(
     ("content", "message"),
     [
@@ -468,19 +455,3 @@ def test_peek_algorithm_reports_malformed_files(tmp_path: Path, content: str, me
 
     with pytest.raises(AcvpValidationError, match=message):
         peek_algorithm(prompt)
-
-
-def test_external_harness_is_refused_for_ecdsa() -> None:
-    """The harness contract does not yet cover ECDSA, and says so."""
-    prompt = FIXTURES / "aes-gcm-valid-encrypt/prompt.json"
-    document = json.loads(prompt.read_text())
-    document["algorithm"] = "ECDSA"
-    import tempfile
-
-    with tempfile.TemporaryDirectory() as directory:
-        path = Path(directory) / "prompt.json"
-        path.write_text(json.dumps(document), encoding="utf-8")
-        with pytest.raises(UnsupportedAlgorithmError, match="does not yet support ECDSA"):
-            run_vector_file(
-                path, path.parent / "expectedResults.json", provider_command="python3 h.py"
-            )
