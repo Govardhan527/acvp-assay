@@ -39,3 +39,13 @@
 - Commit/link/path: `src/acvp_runner/models.py` and `tests/unit/test_models.py`.
 - Blocker, if any: none.
 - Next unchecked ID: A05 - validate required fields, types, invalid hexadecimal values, and unsupported directions.
+
+## 2026-09-02 - A05 input validation
+
+- Project and task ID: ACVP Runner/Adapter - A05
+- Done condition: required top-level, group, and case fields are checked with safe paths; wrong JSON types, malformed hexadecimal data, unsupported direction/test type, algorithm, and revision are rejected.
+- Evidence produced: `src/acvp_runner/parser.py` separates boundary validation from immutable domain models and raises `AcvpValidationError` with an exact JSON-style path and non-secret diagnostic.
+- Tests run and result: 35 negative validation cases cover missing fields at every level, booleans masquerading as integers, wrong scalar/container types, non-object nodes, odd/invalid/separated hex, direction-specific fields, and unsupported contract values. The full gate passed Ruff, strict mypy, 48 pytest tests with 98.95% coverage, and wheel/sdist builds.
+- Commit/link/path: `src/acvp_runner/parser.py` and `tests/unit/test_parser_validation.py`.
+- Blocker, if any: none.
+- Next unchecked ID: A06 - load and parse one complete group without losing `vsId`, `tgId`, or `tcId`.
