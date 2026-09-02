@@ -89,3 +89,13 @@
 - Commit/link/path: `src/acvp_runner/providers/cryptography_aesgcm.py` and `tests/unit/test_cryptography_provider.py`.
 - Blocker, if any: none.
 - Next unchecked ID: A10 - implement per-case PASS/FAIL/ERROR comparison output with expected and actual values plus a safe diagnostic.
+
+## 2026-09-02 - A10 per-case comparison
+
+- Project and task ID: ACVP Runner/Adapter - A10
+- Done condition: every compared case retains its IDs, expected/actual values, PASS/FAIL/ERROR status, and a safe diagnostic that does not echo secrets or raw exceptions.
+- Evidence produced: `compare_values()` names only mismatched output fields; `error_result()` accepts a closed `SafeDiagnostic` enum and never receives an exception object or free-form exception text.
+- Tests run and result: exact matches, each individual output mismatch, combined ciphertext/tag mismatch, and all closed error diagnostics were covered. The full gate passed Ruff, strict mypy, 80 pytest tests with 100% coverage, and wheel/sdist builds.
+- Commit/link/path: `src/acvp_runner/comparator.py` and `tests/unit/test_comparator.py`.
+- Blocker, if any: none.
+- Next unchecked ID: A11 - generate JSON totals for passed, failed, errored, skipped/unsupported, and provider version.

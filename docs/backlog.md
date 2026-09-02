@@ -10,7 +10,9 @@
 - [x] A07: define a provider interface for encrypt, decrypt, and implementation metadata.
 - [x] A08: implement and verify OpenSSL-backed AES-GCM encryption.
 - [x] A09: implement and verify OpenSSL-backed AES-GCM decryption and authentication failures.
-- [ ] A10-A12: comparison, JSON summaries, CLI, and exit codes.
+- [x] A10: compare cases into PASS/FAIL/ERROR with expected, actual, and safe diagnostics.
+- [ ] A11: produce JSON totals and provider-version summaries.
+- [ ] A12: add `run VECTOR_FILE`, `--output`, `--strict`, and meaningful exit codes.
 - [ ] A13-A15: deterministic end-to-end tests, clean CI, documentation, and v0.1.0.
 
 Tasks are taken in order. A second algorithm/provider, live ACVP session, dashboard, and performance work remain outside the MVP.

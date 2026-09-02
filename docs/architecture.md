@@ -26,4 +26,4 @@ The parser owns external JSON interpretation and must preserve ACVP identifiers.
 - Expected ciphertext and authentication tags are compared as separate fields.
 - Machine-readable results are the source of truth for human-readable summaries.
 
-The current baseline includes UTF-8 JSON file loading, path-specific validation, normalization into immutable typed models, a replaceable provider interface, OpenSSL-backed AES-GCM encrypt/decrypt operations, and runtime/provider metadata. Comparison and reporting remain isolated behind their numbered backlog tasks.
+The current baseline includes UTF-8 JSON file loading, path-specific validation, normalization into immutable typed models, a replaceable provider interface, OpenSSL-backed AES-GCM encrypt/decrypt operations, runtime/provider metadata, and bounded per-case comparison. Summary reporting and CLI execution remain isolated behind their numbered backlog tasks.
