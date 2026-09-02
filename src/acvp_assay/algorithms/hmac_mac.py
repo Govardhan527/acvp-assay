@@ -12,8 +12,8 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
-from acvp_runner.models import DigestValues, ResultStatus, TestCaseResult
-from acvp_runner.parser import (
+from acvp_assay.models import DigestValues, ResultStatus, TestCaseResult
+from acvp_assay.parser import (
     AcvpValidationError,
     hex_bytes,
     integer,
@@ -21,7 +21,7 @@ from acvp_runner.parser import (
     mapping,
     string_field,
 )
-from acvp_runner.providers.digest import HASHLIB_ALGORITHMS, MacProvider
+from acvp_assay.providers.digest import HASHLIB_ALGORITHMS, MacProvider
 
 
 @dataclass(frozen=True, slots=True)

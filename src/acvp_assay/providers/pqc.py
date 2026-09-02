@@ -17,8 +17,8 @@ from __future__ import annotations
 
 from typing import Protocol, runtime_checkable
 
-from acvp_runner.models import ProviderMetadata
-from acvp_runner.providers.subprocess_harness import HarnessClient, decode_hex
+from acvp_assay.models import ProviderMetadata
+from acvp_assay.providers.subprocess_harness import HarnessClient, decode_hex
 
 ML_KEM_PARAMETER_SETS = ("ML-KEM-512", "ML-KEM-768", "ML-KEM-1024")
 ML_DSA_PARAMETER_SETS = ("ML-DSA-44", "ML-DSA-65", "ML-DSA-87")
@@ -85,7 +85,7 @@ def _verdict(response: object, field: str = "testPassed") -> bool:
         raise TypeError("expected a mapping response")
     value = response.get(field)
     if not isinstance(value, bool):
-        from acvp_runner.providers.subprocess_harness import HarnessProtocolError
+        from acvp_assay.providers.subprocess_harness import HarnessProtocolError
 
         raise HarnessProtocolError(f"harness response is missing a boolean {field!r}")
     return value

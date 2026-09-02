@@ -8,13 +8,13 @@ import sys
 from collections.abc import Sequence
 from pathlib import Path
 
-from acvp_runner.algorithms import UnsupportedAlgorithmError, run_vector_file
-from acvp_runner.diff import compare, diff_json, load_report, summarize_text
-from acvp_runner.metadata import runtime_metadata
-from acvp_runner.parser import AcvpValidationError
-from acvp_runner.providers.subprocess_harness import DEFAULT_TIMEOUT_SECONDS
-from acvp_runner.reporter import report_json, summarize
-from acvp_runner.runner import ExpectedResultsMismatchError
+from acvp_assay.algorithms import UnsupportedAlgorithmError, run_vector_file
+from acvp_assay.diff import compare, diff_json, load_report, summarize_text
+from acvp_assay.metadata import runtime_metadata
+from acvp_assay.parser import AcvpValidationError
+from acvp_assay.providers.subprocess_harness import DEFAULT_TIMEOUT_SECONDS
+from acvp_assay.reporter import report_json, summarize
+from acvp_assay.runner import ExpectedResultsMismatchError
 
 EXIT_SUCCESS = 0
 EXIT_CASE_FAILURES = 1
@@ -24,7 +24,7 @@ EXIT_INPUT_ERROR = 2
 def build_parser() -> argparse.ArgumentParser:
     """Build the top-level argument parser."""
     parser = argparse.ArgumentParser(
-        prog="acvp-runner",
+        prog="acvp-assay",
         description="Run offline ACVP vectors through a cryptographic provider.",
     )
     subparsers = parser.add_subparsers(dest="command", required=True)

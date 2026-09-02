@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from acvp_runner.models import (
+from acvp_assay.models import (
     AesGcmTestCase,
     AesGcmTestGroup,
     AesGcmValues,
@@ -17,10 +17,10 @@ from acvp_runner.models import (
     ExpectedResultSet,
     ResultStatus,
 )
-from acvp_runner.models import TestType as AcvpTestType
-from acvp_runner.parser import load_expected_results, load_vector_set
-from acvp_runner.providers.cryptography_aesgcm import CryptographyAesGcmProvider
-from acvp_runner.runner import ExpectedResultsMismatchError, run_vector_set
+from acvp_assay.models import TestType as AcvpTestType
+from acvp_assay.parser import load_expected_results, load_vector_set
+from acvp_assay.providers.cryptography_aesgcm import CryptographyAesGcmProvider
+from acvp_assay.runner import ExpectedResultsMismatchError, run_vector_set
 
 FIXTURES = Path(__file__).resolve().parents[2] / "fixtures"
 

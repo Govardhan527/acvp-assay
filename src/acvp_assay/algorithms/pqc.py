@@ -19,13 +19,13 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from acvp_runner.models import (
+from acvp_assay.models import (
     DigestValues,
     ResultStatus,
     TestCaseResult,
     VerdictValues,
 )
-from acvp_runner.parser import (
+from acvp_assay.parser import (
     AcvpValidationError,
     integer,
     list_field,
@@ -34,7 +34,7 @@ from acvp_runner.parser import (
     optional_string,
     string_field,
 )
-from acvp_runner.providers.pqc import (
+from acvp_assay.providers.pqc import (
     ML_DSA_PARAMETER_SETS,
     ML_KEM_PARAMETER_SETS,
     MlDsaProvider,

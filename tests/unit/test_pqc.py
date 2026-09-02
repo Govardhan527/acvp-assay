@@ -18,10 +18,10 @@ from typing import Any
 
 import pytest
 
-from acvp_runner.algorithms import UnsupportedAlgorithmError, pqc, run_vector_file
-from acvp_runner.models import ResultStatus
-from acvp_runner.parser import AcvpValidationError
-from acvp_runner.providers.pqc import (
+from acvp_assay.algorithms import UnsupportedAlgorithmError, pqc, run_vector_file
+from acvp_assay.models import ResultStatus
+from acvp_assay.parser import AcvpValidationError
+from acvp_assay.providers.pqc import (
     MlDsaProvider,
     MlKemProvider,
     SubprocessMlDsaProvider,
@@ -75,7 +75,7 @@ class ReplayingKemProvider:
 
     @staticmethod
     def metadata() -> Any:
-        from acvp_runner.models import ProviderMetadata
+        from acvp_assay.models import ProviderMetadata
 
         return ProviderMetadata("stub", "stub", "0", "stub", "0")
 
@@ -102,7 +102,7 @@ class UnusedKemProvider:
     """KEM stub for paths that must decline before any operation is attempted."""
 
     def metadata(self) -> Any:
-        from acvp_runner.models import ProviderMetadata
+        from acvp_assay.models import ProviderMetadata
 
         return ProviderMetadata("stub", "stub", "0", "stub", "0")
 
@@ -127,7 +127,7 @@ class FixedDsaProvider:
         self._verdict = verdict
 
     def metadata(self) -> Any:
-        from acvp_runner.models import ProviderMetadata
+        from acvp_assay.models import ProviderMetadata
 
         return ProviderMetadata("stub", "stub", "0", "stub", "0")
 
@@ -402,7 +402,7 @@ def test_subprocess_dsa_provider_speaks_the_wire_contract(tmp_path: Path) -> Non
 
 def test_non_boolean_verdict_is_a_protocol_error(tmp_path: Path) -> None:
     """A harness must answer a verdict question with a real boolean."""
-    from acvp_runner.providers.subprocess_harness import HarnessProtocolError
+    from acvp_assay.providers.subprocess_harness import HarnessProtocolError
 
     command = harness(tmp_path, 'sys.stdout.write(json.dumps({"testPassed": "yes"}))')
 

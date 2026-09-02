@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from acvp_runner.models import AesGcmValues, ProviderMetadata
-from acvp_runner.providers import AesGcmProvider
+from acvp_assay.models import AesGcmValues, ProviderMetadata
+from acvp_assay.providers import AesGcmProvider
 
 
 @dataclass(frozen=True)

@@ -8,7 +8,7 @@ from typing import Any
 
 import pytest
 
-from acvp_runner.algorithms import (
+from acvp_assay.algorithms import (
     UnsupportedAlgorithmError,
     hmac_mac,
     peek_algorithm,
@@ -16,9 +16,9 @@ from acvp_runner.algorithms import (
     sha2,
     supported_algorithms,
 )
-from acvp_runner.models import ResultStatus
-from acvp_runner.parser import AcvpValidationError
-from acvp_runner.providers.digest import HashlibHashProvider, HashlibMacProvider
+from acvp_assay.models import ResultStatus
+from acvp_assay.parser import AcvpValidationError
+from acvp_assay.providers.digest import HashlibHashProvider, HashlibMacProvider
 
 FIXTURES = Path(__file__).resolve().parents[2] / "fixtures"
 SHA2 = FIXTURES / "sha2-256-known-answers"
@@ -309,7 +309,7 @@ def test_aft_case_without_a_digest_is_unsupported() -> None:
 
 def test_digest_and_mac_results_serialize_with_acvp_field_names() -> None:
     """Reports render digests as ``md`` and MACs as ``mac``, in uppercase hex."""
-    from acvp_runner.reporter import build_report
+    from acvp_assay.reporter import build_report
 
     sha_results, sha_metadata = run_vector_file(SHA2 / "prompt.json", SHA2 / "expectedResults.json")
     mac_results, _ = run_vector_file(HMAC / "prompt.json", HMAC / "expectedResults.json")

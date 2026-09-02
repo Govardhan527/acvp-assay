@@ -1,6 +1,13 @@
-# ACVP Runner/Adapter
+# ACVP Assay
 
-ACVP Runner/Adapter is a small, offline command-line tool for executing AES-GCM test vectors through a provider boundary and reporting case-level results. It is intended to make parsing, execution, comparison, and diagnostics reproducible without claiming ACVP protocol conformance or cryptographic-module validation.
+Run NIST ACVP test vectors against any implementation — including ones you cannot link against — and catch conformance regressions between runs.
+
+An *assay* measures composition, it does not certify it. This tool produces reproducible test evidence: it parses ACVP vector sets, executes them through a replaceable provider boundary, compares results case by case, and diffs one run against the next. It is **not** an ACVP protocol client, and it does **not** perform or substitute for CAVP algorithm validation or FIPS 140-3 cryptographic-module validation — only accredited CST and 17ACVT laboratories can do that.
+
+Two things distinguish it from `libacvp` and ACVP Proxy, which cover more algorithms and speak the live protocol:
+
+- **It reaches implementations they cannot.** A harness reads one JSON request on stdin and writes one on stdout, so an HSM, a smartcard, an embedded device over a serial link, or a library in any language can be tested without linking anything.
+- **It answers "are we *still* conformant?"** `acvp-assay diff` compares two runs and reports regressions, including coverage that silently disappeared. With re-validation running well over a year, that is the failure mode that costs a cycle.
 
 ## MVP scope
 
@@ -29,7 +36,7 @@ On Debian or Ubuntu, `venv` may be a separate package such as `python3.12-venv`.
 python3.12 scripts/dev.py setup
 python3.12 scripts/dev.py test
 python3.12 scripts/dev.py demo
-.venv/bin/python -m acvp_runner run fixtures/aes-gcm-valid-encrypt/prompt.json
+.venv/bin/python -m acvp_assay run fixtures/aes-gcm-valid-encrypt/prompt.json
 ```
 
 The demo prints machine-readable runtime metadata, including the `cryptography` and OpenSSL versions that identify the provider. The last command executes a tiny local fixture end to end and prints a JSON report.
@@ -37,7 +44,7 @@ The demo prints machine-readable runtime metadata, including the `cryptography` 
 ## Running vectors
 
 ```bash
-acvp-runner run VECTOR_FILE [--output RESULT_FILE] [--strict]
+acvp-assay run VECTOR_FILE [--output RESULT_FILE] [--strict]
 ```
 
 The algorithm is read from the vector file itself and routed automatically. Currently implemented:
@@ -60,7 +67,7 @@ PQC has no built-in provider on purpose. `cryptography` 50.0.1 implements neithe
 The built-in provider exercises OpenSSL through Python's `cryptography`. To test something else — an HSM behind PKCS#11, a smartcard, an embedded device over a serial link, or a library in another language — write a small harness program and point the runner at it:
 
 ```bash
-acvp-runner run VECTOR_FILE --provider-command "python3 examples/reference_harness.py"
+acvp-assay run VECTOR_FILE --provider-command "python3 examples/reference_harness.py"
 ```
 
 The harness reads one JSON request on stdin and writes one JSON response on stdout. That is the whole contract, so it can be written in any language:
@@ -81,7 +88,7 @@ A rejected authentication tag is reported as `{"error": "authentication failed"}
 ### Sample output — PASS
 
 ```bash
-$ acvp-runner run fixtures/aes-gcm-valid-encrypt/prompt.json; echo "exit: $?"
+$ acvp-assay run fixtures/aes-gcm-valid-encrypt/prompt.json; echo "exit: $?"
 ```
 
 ```json
@@ -106,7 +113,7 @@ exit: 0
 ### Sample output — failure
 
 ```bash
-$ acvp-runner run fixtures/aes-gcm-invalid-decrypt-tag/prompt.json; echo "exit: $?"
+$ acvp-assay run fixtures/aes-gcm-invalid-decrypt-tag/prompt.json; echo "exit: $?"
 ```
 
 ```json
@@ -137,11 +144,11 @@ Getting a certificate is one question; *staying* conformant is another, and with
 running well over a year a silent break can survive to the next cycle. Compare two reports:
 
 ```bash
-acvp-runner run vectors/ACVP-AES-GCM-1.0/prompt.json --output baseline.json
+acvp-assay run vectors/ACVP-AES-GCM-1.0/prompt.json --output baseline.json
 # ... upgrade a library, change firmware, bump a container base image ...
-acvp-runner run vectors/ACVP-AES-GCM-1.0/prompt.json --output current.json
+acvp-assay run vectors/ACVP-AES-GCM-1.0/prompt.json --output current.json
 
-acvp-runner diff baseline.json current.json
+acvp-assay diff baseline.json current.json
 ```
 
 ```text
@@ -157,7 +164,7 @@ coverage lost: 10
 ```
 
 Exit codes: 0 when nothing got worse, 1 on a regression, 2 when a report cannot be read — so
-`acvp-runner diff` drops straight into CI. `--output` writes the machine-readable diff.
+`acvp-assay diff` drops straight into CI. `--output` writes the machine-readable diff.
 
 **Coverage loss counts as a regression.** A case that used to run and is now `UNSUPPORTED`,
 `SKIPPED`, or simply absent is reported as loudly as an outright failure, because that is the
@@ -183,7 +190,7 @@ python3.12 scripts/dev.py demo
 
 ## Repository map
 
-- `src/acvp_runner/`: application package
+- `src/acvp_assay/`: application package
 - `tests/unit/`: focused unit tests
 - `tests/integration/`: subprocess and full-path tests
 - `fixtures/`: small, rights-safe local test vectors

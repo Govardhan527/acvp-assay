@@ -9,7 +9,7 @@ import sys
 from collections.abc import Callable
 from typing import Protocol, runtime_checkable
 
-from acvp_runner.models import ProviderMetadata
+from acvp_assay.models import ProviderMetadata
 
 MCT_OUTER_ITERATIONS = 100
 MCT_INNER_ITERATIONS = 1000

@@ -8,7 +8,7 @@ from typing import Any, cast
 
 import pytest
 
-from acvp_runner.parser import AcvpValidationError, load_expected_results, parse_expected_results
+from acvp_assay.parser import AcvpValidationError, load_expected_results, parse_expected_results
 
 FIXTURE = (
     Path(__file__).resolve().parents[2] / "fixtures/aes-gcm-valid-encrypt/expectedResults.json"

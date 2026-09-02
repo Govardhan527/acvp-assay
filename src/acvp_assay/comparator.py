@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from acvp_runner.models import AesGcmValues, ResultStatus, SafeDiagnostic, TestCaseResult
+from acvp_assay.models import AesGcmValues, ResultStatus, SafeDiagnostic, TestCaseResult
 
 
 def compare_values(

@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 from cryptography.exceptions import InvalidTag
 
-from acvp_runner.providers.subprocess_harness import (
+from acvp_assay.providers.subprocess_harness import (
     HarnessProtocolError,
     SubprocessAesGcmProvider,
 )

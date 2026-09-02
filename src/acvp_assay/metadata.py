@@ -7,7 +7,7 @@ import platform
 import cryptography
 from cryptography.hazmat.backends.openssl.backend import backend
 
-from acvp_runner import __version__
+from acvp_assay import __version__
 
 
 def runtime_metadata() -> dict[str, str]:

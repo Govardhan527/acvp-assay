@@ -21,8 +21,8 @@ from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 
-from acvp_runner.models import DigestValues, ResultStatus, TestCaseResult
-from acvp_runner.parser import (
+from acvp_assay.models import DigestValues, ResultStatus, TestCaseResult
+from acvp_assay.parser import (
     AcvpValidationError,
     hex_bytes,
     integer,
@@ -31,7 +31,7 @@ from acvp_runner.parser import (
     optional_string,
     string_field,
 )
-from acvp_runner.providers.digest import HASHLIB_ALGORITHMS, HashProvider
+from acvp_assay.providers.digest import HASHLIB_ALGORITHMS, HashProvider
 
 SUPPORTED_MCT_VERSIONS = ("standard", "alternate")
 

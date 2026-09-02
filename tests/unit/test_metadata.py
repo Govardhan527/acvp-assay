@@ -1,6 +1,6 @@
 """Unit tests for provider metadata."""
 
-from acvp_runner.metadata import runtime_metadata
+from acvp_assay.metadata import runtime_metadata
 
 
 def test_runtime_metadata_has_stable_schema() -> None:

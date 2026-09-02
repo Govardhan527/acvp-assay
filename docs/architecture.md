@@ -21,7 +21,7 @@ The parser owns external JSON interpretation for both files and must preserve AC
 
 ## The `run` command
 
-`acvp-runner run VECTOR_FILE [--output RESULT_FILE] [--strict]` loads `VECTOR_FILE` as the prompt document and requires a sibling `expectedResults.json` in the same directory (the layout every fixture under `fixtures/` already uses). This sibling-file convention is deliberate: v0.1.0 only supports offline sample vector sets that ship both files together, and it avoids a second required CLI argument for the common case.
+`acvp-assay run VECTOR_FILE [--output RESULT_FILE] [--strict]` loads `VECTOR_FILE` as the prompt document and requires a sibling `expectedResults.json` in the same directory (the layout every fixture under `fixtures/` already uses). This sibling-file convention is deliberate: v0.1.0 only supports offline sample vector sets that ship both files together, and it avoids a second required CLI argument for the common case.
 
 Exit codes:
 

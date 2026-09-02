@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from acvp_runner.comparator import SafeDiagnostic, compare_values, error_result
-from acvp_runner.models import AesGcmValues, ResultStatus
+from acvp_assay.comparator import SafeDiagnostic, compare_values, error_result
+from acvp_assay.models import AesGcmValues, ResultStatus
 
 
 def test_equal_values_pass_without_a_diagnostic() -> None:

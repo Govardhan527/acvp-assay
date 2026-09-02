@@ -6,7 +6,7 @@ import hashlib
 
 import pytest
 
-from acvp_runner.providers.digest import (
+from acvp_assay.providers.digest import (
     MCT_OUTER_ITERATIONS,
     HashlibHashProvider,
     HashlibMacProvider,

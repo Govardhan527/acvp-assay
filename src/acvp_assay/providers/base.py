@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Protocol, runtime_checkable
 
-from acvp_runner.models import AesGcmValues, ProviderMetadata
+from acvp_assay.models import AesGcmValues, ProviderMetadata
 
 
 @runtime_checkable

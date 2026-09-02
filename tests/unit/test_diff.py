@@ -8,8 +8,8 @@ from typing import Any
 
 import pytest
 
-from acvp_runner.cli import main
-from acvp_runner.diff import (
+from acvp_assay.cli import main
+from acvp_assay.diff import (
     VERDICT_IMPROVED,
     VERDICT_REGRESSED,
     VERDICT_UNCHANGED,
@@ -21,7 +21,7 @@ from acvp_runner.diff import (
     provider_identity,
     summarize_text,
 )
-from acvp_runner.parser import AcvpValidationError
+from acvp_assay.parser import AcvpValidationError
 
 type Case = tuple[int, int, str, str | None]
 

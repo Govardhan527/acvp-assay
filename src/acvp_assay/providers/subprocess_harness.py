@@ -49,7 +49,7 @@ from typing import Self
 
 from cryptography.exceptions import InvalidTag
 
-from acvp_runner.models import AesGcmValues, ProviderMetadata
+from acvp_assay.models import AesGcmValues, ProviderMetadata
 
 DEFAULT_TIMEOUT_SECONDS = 30.0
 AUTHENTICATION_FAILED = "authentication failed"

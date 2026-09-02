@@ -35,7 +35,7 @@ def test_full_nist_vector_set_passes(tmp_path: Path) -> None:
     output = tmp_path / "result.json"
 
     completed = subprocess.run(
-        [sys.executable, "-m", "acvp_runner", "run", str(PROMPT), "--output", str(output)],
+        [sys.executable, "-m", "acvp_assay", "run", str(PROMPT), "--output", str(output)],
         check=False,
         capture_output=True,
         text=True,
@@ -87,7 +87,7 @@ def test_full_sha2_vector_set(tmp_path: Path) -> None:
         [
             sys.executable,
             "-m",
-            "acvp_runner",
+            "acvp_assay",
             "run",
             str(VECTORS / "SHA2-256-1.0/prompt.json"),
             "--output",
@@ -122,7 +122,7 @@ def test_full_hmac_vector_set(tmp_path: Path) -> None:
         [
             sys.executable,
             "-m",
-            "acvp_runner",
+            "acvp_assay",
             "run",
             str(VECTORS / "HMAC-SHA2-256-1.0/prompt.json"),
             "--output",

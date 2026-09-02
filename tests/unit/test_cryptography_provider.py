@@ -10,8 +10,8 @@ import pytest
 from cryptography.exceptions import InvalidTag
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
-from acvp_runner.parser import load_vector_set
-from acvp_runner.providers import AesGcmProvider, CryptographyAesGcmProvider
+from acvp_assay.parser import load_vector_set
+from acvp_assay.providers import AesGcmProvider, CryptographyAesGcmProvider
 
 FIXTURES = Path(__file__).resolve().parents[2] / "fixtures"
 

@@ -6,7 +6,7 @@ import cryptography
 from cryptography.hazmat.backends.openssl.backend import backend
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 
-from acvp_runner.models import AesGcmValues, ProviderMetadata
+from acvp_assay.models import AesGcmValues, ProviderMetadata
 
 MINIMUM_TAG_LENGTH_BITS = 32
 MAXIMUM_TAG_LENGTH_BITS = 128

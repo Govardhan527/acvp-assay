@@ -7,7 +7,7 @@ from collections import Counter
 from collections.abc import Sequence
 from dataclasses import asdict, dataclass
 
-from acvp_runner.models import (
+from acvp_assay.models import (
     CaseValues,
     ProviderMetadata,
     ResultStatus,

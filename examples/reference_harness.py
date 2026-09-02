@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
-"""Reference AES-GCM harness for acvp-runner's subprocess provider.
+"""Reference AES-GCM harness for acvp-assay's subprocess provider.
 
 This is a worked example of the wire contract, not part of the package: it
-imports nothing from ``acvp_runner``, which is the point — a harness is an
+imports nothing from ``acvp_assay``, which is the point — a harness is an
 independent program and can be written in any language.
 
 Run it with::
 
-    acvp-runner run fixtures/aes-gcm-valid-encrypt/prompt.json \\
+    acvp-assay run fixtures/aes-gcm-valid-encrypt/prompt.json \\
         --provider-command "python3 examples/reference_harness.py"
 
 Contract: read one JSON request on stdin, write one JSON response on stdout,

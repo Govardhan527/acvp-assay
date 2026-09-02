@@ -4,7 +4,7 @@ from dataclasses import FrozenInstanceError
 
 import pytest
 
-from acvp_runner.models import (
+from acvp_assay.models import (
     AesGcmTestCase,
     AesGcmTestGroup,
     AesGcmValues,
@@ -13,8 +13,8 @@ from acvp_runner.models import (
     ResultStatus,
     SafeDiagnostic,
 )
-from acvp_runner.models import TestCaseResult as CaseResult
-from acvp_runner.models import TestType as AcvpTestType
+from acvp_assay.models import TestCaseResult as CaseResult
+from acvp_assay.models import TestType as AcvpTestType
 
 
 def make_vector_set() -> AesGcmVectorSet:

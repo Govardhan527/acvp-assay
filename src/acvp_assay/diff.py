@@ -28,7 +28,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
-from acvp_runner.parser import (
+from acvp_assay.parser import (
     AcvpValidationError,
     integer,
     list_field,
@@ -96,7 +96,7 @@ class DiffResult:
 
 
 def parse_report(value: object) -> Report:
-    """Validate one report document produced by ``acvp-runner run``."""
+    """Validate one report document produced by ``acvp-assay run``."""
     document = mapping(value, "$")
     provider = mapping(document.get("provider", {}), "$.provider")
     summary_document = mapping(document.get("summary", {}), "$.summary")

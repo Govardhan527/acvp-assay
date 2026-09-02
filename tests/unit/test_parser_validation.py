@@ -9,7 +9,7 @@ from typing import Any, cast
 
 import pytest
 
-from acvp_runner.parser import AcvpValidationError, parse_vector_set
+from acvp_assay.parser import AcvpValidationError, parse_vector_set
 
 FIXTURE = Path(__file__).resolve().parents[2] / "fixtures/aes-gcm-valid-encrypt/prompt.json"
 

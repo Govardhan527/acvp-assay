@@ -7,10 +7,10 @@ from typing import Any
 
 import pytest
 
-from acvp_runner.algorithms import ecdsa
-from acvp_runner.models import ResultStatus
-from acvp_runner.parser import AcvpValidationError
-from acvp_runner.providers.ecdsa import CryptographyEcdsaProvider
+from acvp_assay.algorithms import ecdsa
+from acvp_assay.models import ResultStatus
+from acvp_assay.parser import AcvpValidationError
+from acvp_assay.providers.ecdsa import CryptographyEcdsaProvider
 
 CURVE = "P-256"
 HASH = "SHA2-256"

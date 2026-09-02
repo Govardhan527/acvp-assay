@@ -8,7 +8,7 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import cast
 
-from acvp_runner.models import (
+from acvp_assay.models import (
     AesGcmTestCase,
     AesGcmTestGroup,
     AesGcmValues,

@@ -6,9 +6,9 @@ from pathlib import Path
 
 import pytest
 
-from acvp_runner.models import Direction
-from acvp_runner.models import TestType as AcvpTestType
-from acvp_runner.parser import AcvpValidationError, load_vector_set
+from acvp_assay.models import Direction
+from acvp_assay.models import TestType as AcvpTestType
+from acvp_assay.parser import AcvpValidationError, load_vector_set
 
 FIXTURES = Path(__file__).resolve().parents[2] / "fixtures"
 

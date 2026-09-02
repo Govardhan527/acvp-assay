@@ -57,7 +57,7 @@ def verify() -> None:
 
 def demo() -> None:
     """Run the smallest executable package demonstration."""
-    _run([require_environment(), "-m", "acvp_runner", "info"])
+    _run([require_environment(), "-m", "acvp_assay", "info"])
 
 
 def vectors() -> None:

@@ -3,20 +3,23 @@ requires = ["hatchling>=1.32.0,<2"]
 build-backend = "hatchling.build"
 
 [project]
-name = "acvp-runner"
+name = "acvp-assay"
 version = "0.1.0"
-description = "Offline AES-GCM ACVP vector runner with an OpenSSL-backed provider boundary"
+description = "Run NIST ACVP vectors against any implementation and catch conformance regressions"
 readme = "README.md"
 requires-python = ">=3.12"
 license = "MIT"
-authors = [{ name = "ACVP Runner contributors" }]
+authors = [{ name = "ACVP Assay contributors" }]
 classifiers = [
-  "Development Status :: 2 - Pre-Alpha",
+  "Development Status :: 3 - Alpha",
   "License :: OSI Approved :: MIT License",
   "Programming Language :: Python :: 3",
   "Programming Language :: Python :: 3.12",
   "Typing :: Typed",
+  "Topic :: Security :: Cryptography",
+  "Intended Audience :: Developers",
 ]
+keywords = ["acvp", "cavp", "fips-140-3", "cryptography", "test-vectors", "conformance"]
 dependencies = [
   "cryptography>=50.0.1,<51",
 ]
@@ -31,16 +34,16 @@ dev = [
 ]
 
 [project.scripts]
-acvp-runner = "acvp_runner.cli:main"
+acvp-assay = "acvp_assay.cli:main"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/acvp_runner"]
+packages = ["src/acvp_assay"]
 
 [tool.pytest.ini_options]
 addopts = [
   "--strict-config",
   "--strict-markers",
-  "--cov=acvp_runner",
+  "--cov=acvp_assay",
   "--cov-report=term-missing",
   "--cov-fail-under=90",
 ]
@@ -60,4 +63,4 @@ files = ["src", "scripts", "tests"]
 
 [tool.coverage.run]
 branch = true
-source = ["acvp_runner"]
+source = ["acvp_assay"]

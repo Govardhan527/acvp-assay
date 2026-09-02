@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from acvp_runner.cli import build_parser, main
+from acvp_assay.cli import build_parser, main
 
 FIXTURES = Path(__file__).resolve().parents[2] / "fixtures"
 
@@ -166,10 +166,10 @@ def test_module_entry_point(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     """The module entry point delegates to the CLI and exits successfully."""
-    monkeypatch.setattr(sys, "argv", ["acvp-runner", "info"])
+    monkeypatch.setattr(sys, "argv", ["acvp-assay", "info"])
 
     with pytest.raises(SystemExit) as error:
-        runpy.run_module("acvp_runner", run_name="__main__")
+        runpy.run_module("acvp_assay", run_name="__main__")
 
     assert error.value.code == 0
     assert json.loads(capsys.readouterr().out)["provider"] == "OpenSSL (via cryptography)"

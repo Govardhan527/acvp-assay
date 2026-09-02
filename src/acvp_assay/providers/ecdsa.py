@@ -11,7 +11,7 @@ from cryptography.hazmat.backends.openssl.backend import backend
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec, utils
 
-from acvp_runner.models import ProviderMetadata
+from acvp_assay.models import ProviderMetadata
 
 #: ACVP curve name to the ``cryptography`` curve implementing it. Binary (B-)
 #: and Koblitz (K-) curves are deliberately absent: OpenSSL does not offer them

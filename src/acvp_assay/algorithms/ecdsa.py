@@ -23,13 +23,13 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
-from acvp_runner.models import (
+from acvp_assay.models import (
     ResultStatus,
     SignatureValues,
     TestCaseResult,
     VerdictValues,
 )
-from acvp_runner.parser import (
+from acvp_assay.parser import (
     AcvpValidationError,
     hex_bytes,
     integer,
@@ -38,7 +38,7 @@ from acvp_runner.parser import (
     optional_hex_bytes,
     string_field,
 )
-from acvp_runner.providers.ecdsa import CURVES, HASHES, EcdsaProvider
+from acvp_assay.providers.ecdsa import CURVES, HASHES, EcdsaProvider
 
 SIG_GEN = "sigGen"
 SIG_VER = "sigVer"

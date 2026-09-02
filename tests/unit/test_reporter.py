@@ -5,13 +5,13 @@ from __future__ import annotations
 import json
 from typing import cast
 
-from acvp_runner.models import (
+from acvp_assay.models import (
     AesGcmValues,
     ProviderMetadata,
     ResultStatus,
 )
-from acvp_runner.models import TestCaseResult as CaseResult
-from acvp_runner.reporter import ReportSummary, build_report, report_json, summarize
+from acvp_assay.models import TestCaseResult as CaseResult
+from acvp_assay.reporter import ReportSummary, build_report, report_json, summarize
 
 
 def provider_metadata() -> ProviderMetadata:

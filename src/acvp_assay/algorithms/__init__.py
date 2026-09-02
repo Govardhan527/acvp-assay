@@ -15,19 +15,19 @@ import json
 from collections.abc import Callable
 from pathlib import Path
 
-from acvp_runner import parser as aes_parser
-from acvp_runner import runner as aes_runner
-from acvp_runner.algorithms import ecdsa, hmac_mac, pqc, sha2
-from acvp_runner.models import ProviderMetadata, TestCaseResult
-from acvp_runner.providers.cryptography_aesgcm import CryptographyAesGcmProvider
-from acvp_runner.providers.digest import (
+from acvp_assay import parser as aes_parser
+from acvp_assay import runner as aes_runner
+from acvp_assay.algorithms import ecdsa, hmac_mac, pqc, sha2
+from acvp_assay.models import ProviderMetadata, TestCaseResult
+from acvp_assay.providers.cryptography_aesgcm import CryptographyAesGcmProvider
+from acvp_assay.providers.digest import (
     HASHLIB_ALGORITHMS,
     HashlibHashProvider,
     HashlibMacProvider,
 )
-from acvp_runner.providers.ecdsa import CryptographyEcdsaProvider
-from acvp_runner.providers.pqc import SubprocessMlDsaProvider, SubprocessMlKemProvider
-from acvp_runner.providers.subprocess_harness import SubprocessAesGcmProvider
+from acvp_assay.providers.ecdsa import CryptographyEcdsaProvider
+from acvp_assay.providers.pqc import SubprocessMlDsaProvider, SubprocessMlKemProvider
+from acvp_assay.providers.subprocess_harness import SubprocessAesGcmProvider
 
 
 class UnsupportedAlgorithmError(ValueError):

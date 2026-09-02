@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from cryptography.exceptions import InvalidTag
 
-from acvp_runner.comparator import compare_values, error_result
-from acvp_runner.models import (
+from acvp_assay.comparator import compare_values, error_result
+from acvp_assay.models import (
     AesGcmTestCase,
     AesGcmTestGroup,
     AesGcmValues,
@@ -17,7 +17,7 @@ from acvp_runner.models import (
     SafeDiagnostic,
     TestCaseResult,
 )
-from acvp_runner.providers.base import AesGcmProvider
+from acvp_assay.providers.base import AesGcmProvider
 
 SUPPORTED_IV_GENERATION = "external"
 

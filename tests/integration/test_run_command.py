@@ -17,7 +17,7 @@ def test_run_command_passes_against_the_tiny_encrypt_fixture() -> None:
         [
             sys.executable,
             "-m",
-            "acvp_runner",
+            "acvp_assay",
             "run",
             str(FIXTURES / "aes-gcm-valid-encrypt/prompt.json"),
         ],
@@ -41,7 +41,7 @@ def test_run_command_writes_output_file(tmp_path: Path) -> None:
         [
             sys.executable,
             "-m",
-            "acvp_runner",
+            "acvp_assay",
             "run",
             str(FIXTURES / "aes-gcm-valid-decrypt/prompt.json"),
             "--output",
@@ -70,7 +70,7 @@ def test_run_command_drives_an_external_harness() -> None:
         [
             sys.executable,
             "-m",
-            "acvp_runner",
+            "acvp_assay",
             "run",
             str(FIXTURES / "aes-gcm-valid-encrypt/prompt.json"),
             "--provider-command",
@@ -93,7 +93,7 @@ def test_run_command_reports_a_broken_harness_without_crashing(tmp_path: Path) -
         [
             sys.executable,
             "-m",
-            "acvp_runner",
+            "acvp_assay",
             "run",
             str(FIXTURES / "aes-gcm-valid-encrypt/prompt.json"),
             "--provider-command",
@@ -120,7 +120,7 @@ def test_run_command_fails_visibly_on_the_intentionally_bad_fixture() -> None:
         [
             sys.executable,
             "-m",
-            "acvp_runner",
+            "acvp_assay",
             "run",
             str(FIXTURES / "aes-gcm-invalid-decrypt-tag/prompt.json"),
         ],

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Reference ML-KEM / ML-DSA harness for acvp-runner's subprocess provider.
+"""Reference ML-KEM / ML-DSA harness for acvp-assay's subprocess provider.
 
 This exists to prove the PQC path end to end and to demonstrate it, **not** as
 an implementation anyone should validate or ship. It is backed by
@@ -18,7 +18,7 @@ Install the references (development only, never a runtime dependency)::
 
 Then::
 
-    acvp-runner run vectors/ML-KEM-encapDecap-FIPS203/prompt.json \\
+    acvp-assay run vectors/ML-KEM-encapDecap-FIPS203/prompt.json \\
         --provider-command "python3 examples/pqc_reference_harness.py"
 """
 
