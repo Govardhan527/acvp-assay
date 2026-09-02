@@ -1,0 +1,28 @@
+{
+  "vsId": 900011,
+  "algorithm": "HMAC-SHA2-256",
+  "revision": "1.0",
+  "isSample": true,
+  "testGroups": [
+    {
+      "tgId": 1,
+      "testType": "AFT",
+      "keyLen": 160,
+      "msgLen": 64,
+      "macLen": 256,
+      "tests": [
+        { "tcId": 1, "key": "0B0B0B0B0B0B0B0B0B0B0B0B0B0B0B0B0B0B0B0B", "msg": "4869205468657265" }
+      ]
+    },
+    {
+      "tgId": 2,
+      "testType": "AFT",
+      "keyLen": 160,
+      "msgLen": 64,
+      "macLen": 80,
+      "tests": [
+        { "tcId": 2, "key": "0B0B0B0B0B0B0B0B0B0B0B0B0B0B0B0B0B0B0B0B", "msg": "4869205468657265" }
+      ]
+    }
+  ]
+}

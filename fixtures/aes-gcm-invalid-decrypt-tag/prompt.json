@@ -1,0 +1,30 @@
+{
+  "vsId": 900003,
+  "algorithm": "ACVP-AES-GCM",
+  "revision": "1.0",
+  "isSample": true,
+  "testGroups": [
+    {
+      "tgId": 1,
+      "testType": "AFT",
+      "direction": "decrypt",
+      "keyLen": 128,
+      "ivLen": 96,
+      "ivGen": "external",
+      "ivGenMode": "8.2.2",
+      "payloadLen": 80,
+      "aadLen": 120,
+      "tagLen": 128,
+      "tests": [
+        {
+          "tcId": 1,
+          "key": "F0F1F2F3F4F5F6F7F8F9FAFBFCFDFEFF",
+          "aad": "696E746567726974792D636865636B",
+          "iv": "A0A1A2A3A4A5A6A7A8A9AAAB",
+          "ct": "8997ABE975B757B994EB",
+          "tag": "5333DD8833E1A1D0961819670A9A9FFB"
+        }
+      ]
+    }
+  ]
+}

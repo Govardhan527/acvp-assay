@@ -29,9 +29,141 @@ On Debian or Ubuntu, `venv` may be a separate package such as `python3.12-venv`.
 python3.12 scripts/dev.py setup
 python3.12 scripts/dev.py test
 python3.12 scripts/dev.py demo
+.venv/bin/python -m acvp_runner run fixtures/aes-gcm-valid-encrypt/prompt.json
 ```
 
-The demo prints machine-readable runtime metadata, including the `cryptography` and OpenSSL versions that will identify the first provider implementation.
+The demo prints machine-readable runtime metadata, including the `cryptography` and OpenSSL versions that identify the provider. The last command executes a tiny local fixture end to end and prints a JSON report.
+
+## Running vectors
+
+```bash
+acvp-runner run VECTOR_FILE [--output RESULT_FILE] [--strict]
+```
+
+The algorithm is read from the vector file itself and routed automatically. Currently implemented:
+
+| Family | Test types | Notes |
+| --- | --- | --- |
+| `ACVP-AES-GCM` | AFT | Encrypt and decrypt, including ACVP's deliberate authentication-failure cases |
+| `SHA2-224/256/384/512`, `SHA2-512/224`, `SHA2-512/256` | AFT, MCT | Both `standard` and `alternate` Monte Carlo chains; LDT is reported UNSUPPORTED |
+| `HMAC-SHA2-*` | AFT | Honours per-group `macLen` truncation |
+| `ECDSA` | sigGen, sigVer | P-224/256/384/521; sigVer is verdict-only, sigGen is verified against its own key |
+| `ML-KEM` | encap, decap, key checks | Requires `--provider-command`: no built-in PQC implementation |
+| `ML-DSA` | sigVer | Requires `--provider-command`; external and internal interfaces |
+
+PQC has no built-in provider on purpose. `cryptography` 50.0.1 implements neither ML-KEM nor ML-DSA, and in a real engagement the implementation under test is the customer's — OpenSSL 3.5+, liboqs, an HSM, or their own module. `examples/pqc_reference_harness.py` drives the pinned NIST ML-KEM and ML-DSA sets end to end using `kyber-py` and `dilithium-py`, which are educational, **not constant-time**, and exist here to verify this runner and to demonstrate it, never as an implementation to ship or validate.
+
+`VECTOR_FILE` is an ACVP-shaped `prompt.json`; an `expectedResults.json` must sit next to it in the same directory (every directory under `fixtures/` already follows this layout). Without `--output`, the JSON report is printed to stdout; with it, the report is written to `RESULT_FILE` instead. `--strict` also fails the run if any case is `SKIPPED` or `UNSUPPORTED`. See `docs/architecture.md` for the full exit-code table.
+
+## Testing your own implementation
+
+The built-in provider exercises OpenSSL through Python's `cryptography`. To test something else — an HSM behind PKCS#11, a smartcard, an embedded device over a serial link, or a library in another language — write a small harness program and point the runner at it:
+
+```bash
+acvp-runner run VECTOR_FILE --provider-command "python3 examples/reference_harness.py"
+```
+
+The harness reads one JSON request on stdin and writes one JSON response on stdout. That is the whole contract, so it can be written in any language:
+
+```json
+→ {"operation": "encrypt", "key": "000102…", "iv": "1011…", "aad": "", "pt": "4865…", "tagLen": 128}
+← {"ct": "8C4B6FC3606396AE548B0DD4", "tag": "CEA4303CA9132112C1D14AE589AD15AF"}
+
+→ {"operation": "decrypt", "key": "F0F1…", "iv": "A0A1…", "aad": "696E…", "ct": "8997…", "tag": "5333…"}
+← {"pt": "646563727970742D6D65"}
+← {"error": "authentication failed"}
+```
+
+A rejected authentication tag is reported as `{"error": "authentication failed"}`, **not** as a crash or a non-zero exit. This matters: roughly a third of NIST's own AES-GCM decrypt cases are deliberate failures where rejecting the tag is the correct answer, and a harness that dies on them will score a conforming implementation as broken.
+
+`examples/reference_harness.py` is a complete worked implementation that imports nothing from this package. `--provider-timeout SECONDS` bounds each call, so a wedged device cannot hang the run. The harness is invoked once per case; its stderr passes through to your terminal for debugging but never enters the JSON report, since a crashing harness may print key material.
+
+### Sample output — PASS
+
+```bash
+$ acvp-runner run fixtures/aes-gcm-valid-encrypt/prompt.json; echo "exit: $?"
+```
+
+```json
+{
+  "cases": [
+    {
+      "actual": { "ct": "8C4B6FC3606396AE548B0DD4", "tag": "CEA4303CA9132112C1D14AE589AD15AF" },
+      "expected": { "ct": "8C4B6FC3606396AE548B0DD4", "tag": "CEA4303CA9132112C1D14AE589AD15AF" },
+      "status": "PASS",
+      "tcId": 1,
+      "tgId": 1
+    }
+  ],
+  "provider": { "name": "cryptography-aes-gcm", "...": "..." },
+  "summary": { "total": 1, "passed": 1, "failed": 0, "errored": 0, "skipped": 0, "unsupported": 0 }
+}
+```
+```text
+exit: 0
+```
+
+### Sample output — failure
+
+```bash
+$ acvp-runner run fixtures/aes-gcm-invalid-decrypt-tag/prompt.json; echo "exit: $?"
+```
+
+```json
+{
+  "cases": [
+    {
+      "actual": null,
+      "diagnostic": "authentication failed",
+      "expected": {},
+      "status": "ERROR",
+      "tcId": 1,
+      "tgId": 1
+    }
+  ],
+  "provider": { "name": "cryptography-aes-gcm", "...": "..." },
+  "summary": { "total": 1, "passed": 0, "failed": 0, "errored": 1, "skipped": 0, "unsupported": 0 }
+}
+```
+```text
+exit: 1
+```
+
+This second fixture's tag is deliberately corrupted (see `fixtures/README.md`); it exists to prove the tool surfaces a real, deterministic failure instead of swallowing it.
+
+## Catching regressions between runs
+
+Getting a certificate is one question; *staying* conformant is another, and with re-validation
+running well over a year a silent break can survive to the next cycle. Compare two reports:
+
+```bash
+acvp-runner run vectors/ACVP-AES-GCM-1.0/prompt.json --output baseline.json
+# ... upgrade a library, change firmware, bump a container base image ...
+acvp-runner run vectors/ACVP-AES-GCM-1.0/prompt.json --output current.json
+
+acvp-runner diff baseline.json current.json
+```
+
+```text
+verdict: REGRESSED
+provider changed between runs:
+  baseline: cryptography-aes-gcm, cryptography 50.0.1, OpenSSL OpenSSL 4.0.2 25 Aug 2026
+  current : cryptography-aes-gcm, cryptography 50.0.1, OpenSSL OpenSSL 3.5.0 8 Apr 2025
+regressed: 1
+  tgId 1 tcId 1: PASS -> FAIL (tag mismatch)
+coverage lost: 10
+  tgId 2 tcId 16: PASS -> UNSUPPORTED (ivGen 'internal' is not supported)
+  ... and 5 more
+```
+
+Exit codes: 0 when nothing got worse, 1 on a regression, 2 when a report cannot be read — so
+`acvp-runner diff` drops straight into CI. `--output` writes the machine-readable diff.
+
+**Coverage loss counts as a regression.** A case that used to run and is now `UNSUPPORTED`,
+`SKIPPED`, or simply absent is reported as loudly as an outright failure, because that is the
+failure mode that hides: the totals still look clean, since the case has stopped being counted.
+Provider identity is diffed alongside the cases, since a changed library or backend is usually the
+cause rather than a detail.
 
 ## Development commands
 

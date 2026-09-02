@@ -2,17 +2,7 @@
 
 from __future__ import annotations
 
-from enum import StrEnum
-
-from acvp_runner.models import AesGcmValues, ResultStatus, TestCaseResult
-
-
-class SafeDiagnostic(StrEnum):
-    """Non-secret diagnostics allowed in machine-readable case output."""
-
-    AUTHENTICATION_FAILED = "authentication failed"
-    INVALID_CASE = "invalid case"
-    PROVIDER_ERROR = "provider error"
+from acvp_runner.models import AesGcmValues, ResultStatus, SafeDiagnostic, TestCaseResult
 
 
 def compare_values(

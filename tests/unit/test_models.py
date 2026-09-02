@@ -11,6 +11,7 @@ from acvp_runner.models import (
     AesGcmVectorSet,
     Direction,
     ResultStatus,
+    SafeDiagnostic,
 )
 from acvp_runner.models import TestCaseResult as CaseResult
 from acvp_runner.models import TestType as AcvpTestType
@@ -89,6 +90,33 @@ def test_result_preserves_identity_values_and_diagnostic() -> None:
     assert result.expected == expected
     assert result.actual == actual
     assert result.diagnostic == "ciphertext mismatch"
+
+
+def test_error_result_rejects_diagnostics_outside_the_safe_vocabulary() -> None:
+    """A future caller cannot smuggle raw exception text into an ERROR result."""
+    with pytest.raises(ValueError, match="ERROR diagnostic must be one of"):
+        CaseResult(
+            tg_id=1,
+            tc_id=1,
+            status=ResultStatus.ERROR,
+            expected=None,
+            actual=None,
+            diagnostic="InvalidTag: some raw exception text",
+        )
+
+
+def test_error_result_accepts_every_safe_diagnostic() -> None:
+    """Every closed SafeDiagnostic value is a valid ERROR diagnostic."""
+    for diagnostic in SafeDiagnostic:
+        result = CaseResult(
+            tg_id=1,
+            tc_id=1,
+            status=ResultStatus.ERROR,
+            expected=None,
+            actual=None,
+            diagnostic=diagnostic.value,
+        )
+        assert result.diagnostic == diagnostic.value
 
 
 def test_enum_values_match_external_wire_values() -> None:

@@ -12,3 +12,10 @@ dist/
 .DS_Store
 .idea/
 .vscode/
+
+# Downloaded upstream vectors are never committed (see docs/vector-sources.md)
+vectors/
+
+# Credentials: ACVTS client key must never be committed
+*.key
+*.csr

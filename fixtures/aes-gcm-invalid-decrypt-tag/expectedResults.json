@@ -1,0 +1,17 @@
+{
+  "vsId": 900003,
+  "algorithm": "ACVP-AES-GCM",
+  "revision": "1.0",
+  "isSample": true,
+  "testGroups": [
+    {
+      "tgId": 1,
+      "tests": [
+        {
+          "tcId": 1,
+          "pt": "646563727970742D6D65"
+        }
+      ]
+    }
+  ]
+}

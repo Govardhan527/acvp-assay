@@ -1,0 +1,20 @@
+{
+  "vsId": 900011,
+  "algorithm": "HMAC-SHA2-256",
+  "revision": "1.0",
+  "isSample": true,
+  "testGroups": [
+    {
+      "tgId": 1,
+      "tests": [
+        { "tcId": 1, "mac": "B0344C61D8DB38535CA8AFCEAF0BF12B881DC200C9833DA726E9376C2E32CFF7" }
+      ]
+    },
+    {
+      "tgId": 2,
+      "tests": [
+        { "tcId": 2, "mac": "B0344C61D8DB38535CA8" }
+      ]
+    }
+  ]
+}

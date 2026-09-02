@@ -60,12 +60,23 @@ def demo() -> None:
     _run([require_environment(), "-m", "acvp_runner", "info"])
 
 
+def vectors() -> None:
+    """Download and verify the pinned upstream NIST vector files."""
+    _run([require_environment(), ROOT / "scripts/fetch_vectors.py"])
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     """Dispatch a development command."""
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=("setup", "test", "verify", "demo"))
+    parser.add_argument("command", choices=("setup", "test", "verify", "demo", "vectors"))
     command = parser.parse_args(argv).command
-    commands = {"setup": setup, "test": test, "verify": verify, "demo": demo}
+    commands = {
+        "setup": setup,
+        "test": test,
+        "verify": verify,
+        "demo": demo,
+        "vectors": vectors,
+    }
     commands[command]()
     return 0
 

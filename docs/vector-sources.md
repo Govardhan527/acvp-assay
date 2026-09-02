@@ -22,6 +22,19 @@ The exact upstream inputs selected for later compatibility tests are:
 
 `internalProjection.json` and `validation.json` are not selected as runner inputs. They are server-side generation/validation artifacts and are unnecessary for the first adapter contract.
 
+### Additional algorithm sets (M03)
+
+Pinned at the same commit, under the same `gen-val/json-files` root and the same licensing decision below.
+
+| File | Purpose | Size | SHA-256 |
+| --- | --- | ---: | --- |
+| [`SHA2-256-1.0/prompt.json`](https://github.com/usnistgov/ACVP-Server/blob/975de31eb83d87039ec88934fdc47d8c312b892d/gen-val/json-files/SHA2-256-1.0/prompt.json) | 512 AFT cases, one `alternate` MCT group, four LDT cases | 948,259 bytes | `9c4ec74e526cced84cd6dfdf130f2908e2d340b45ea5d9ea0a4019987ee49dac` |
+| [`SHA2-256-1.0/expectedResults.json`](https://github.com/usnistgov/ACVP-Server/blob/975de31eb83d87039ec88934fdc47d8c312b892d/gen-val/json-files/SHA2-256-1.0/expectedResults.json) | Expected digests and the 100-entry MCT `resultsArray` | 77,375 bytes | `776688ef7b6e4dd18ce203ee7d9ee45c6c597248f6c00ec70bdbd59176109e05` |
+| [`HMAC-SHA2-256-1.0/prompt.json`](https://github.com/usnistgov/ACVP-Server/blob/975de31eb83d87039ec88934fdc47d8c312b892d/gen-val/json-files/HMAC-SHA2-256-1.0/prompt.json) | 975 AFT cases across 13 groups, `macLen` 80/88/96/160 | 347,221 bytes | `efb49edda31524c8fe9ffdb4fc92120f041b01ca06f6496f97939240bf1cdcf9` |
+| [`HMAC-SHA2-256-1.0/expectedResults.json`](https://github.com/usnistgov/ACVP-Server/blob/975de31eb83d87039ec88934fdc47d8c312b892d/gen-val/json-files/HMAC-SHA2-256-1.0/expectedResults.json) | Expected MACs, truncated to each group's `macLen` | 88,459 bytes | `dae3412189dfe11a63b40780f16c6c3304b5d9c2dff5351f653711903cf09e1f` |
+
+The SHA-2 set is the one that pinned down two behaviours guesswork would have got wrong: `mctVersion` is `alternate`, which normalises every Monte Carlo message to the *original* seed length rather than hashing three digests directly, and the LDT cases expand to as much as 8 GiB, which this runner reports UNSUPPORTED rather than approximating.
+
 ## Suitability and limits
 
 The selected `prompt.json` identifies `ACVP-AES-GCM`, revision `1.0`. It contains four AFT groups and 60 cases covering encrypt and decrypt, 128-bit keys, externally supplied IVs, 96-bit and 120-bit IVs, zero/nonzero payload and AAD combinations, and 32-bit and 128-bit tags.

@@ -1,0 +1,20 @@
+{
+  "vsId": 900020,
+  "algorithm": "ECDSA",
+  "revision": "FIPS186-5",
+  "testGroups": [
+    {
+      "tgId": 1,
+      "tests": [
+        {
+          "tcId": 1,
+          "testPassed": true
+        },
+        {
+          "tcId": 2,
+          "testPassed": false
+        }
+      ]
+    }
+  ]
+}
