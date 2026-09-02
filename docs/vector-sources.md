@@ -71,6 +71,21 @@ recorded in `scripts/fetch_vectors.py`, so nothing checked they had not drifted.
 | [`ACVP-AES-KWP-1.0/expectedResults.json`](https://github.com/usnistgov/ACVP-Server/blob/975de31eb83d87039ec88934fdc47d8c312b892d/gen-val/json-files/ACVP-AES-KWP-1.0/expectedResults.json) | 4,001,079 bytes | `114774bb317bc6fdb2491fa41e1c5d3b2b27f23ccb4d2b004d8610abc5689751` |
 | *ACVP-AES-KWP-1.0* | | 3,600 executed; same `inverse` split |
 
+| [`ctrDRBG-1.0/prompt.json`](https://github.com/usnistgov/ACVP-Server/blob/975de31eb83d87039ec88934fdc47d8c312b892d/gen-val/json-files/ctrDRBG-1.0/prompt.json) | 244,292 bytes | `35a2fda242abd3e8e9c6c89a2878ee1d4d499c48c7458d67025bc8b5ff361420` |
+| [`ctrDRBG-1.0/expectedResults.json`](https://github.com/usnistgov/ACVP-Server/blob/975de31eb83d87039ec88934fdc47d8c312b892d/gen-val/json-files/ctrDRBG-1.0/expectedResults.json) | 264,148 bytes | `46608d7bbcaf0f6408a1905f81a77d3e2e90bfd5cee5a84dd78d4c51de1c6143` |
+| *ctrDRBG-1.0* | | 240 cases: 180 AES executed, 60 TDES declared UNSUPPORTED |
+| [`ctrDRBG-SP800-90Ar1/prompt.json`](https://github.com/usnistgov/ACVP-Server/blob/975de31eb83d87039ec88934fdc47d8c312b892d/gen-val/json-files/ctrDRBG-SP800-90Ar1/prompt.json) | 371,608 bytes | `7ddb75bdd25bcb6183102146872c0f97a5227603b2ea64c63771ffe2daf938ae` |
+| [`ctrDRBG-SP800-90Ar1/expectedResults.json`](https://github.com/usnistgov/ACVP-Server/blob/975de31eb83d87039ec88934fdc47d8c312b892d/gen-val/json-files/ctrDRBG-SP800-90Ar1/expectedResults.json) | 42,956 bytes | `c805df470563ec6e91413cde1a29b2574b7c33b67fd3a7bf3179b7ac26c77a6e` |
+| *ctrDRBG-SP800-90Ar1* | | 360 cases: 270 AES executed, 90 TDES declared; adds `counterFieldLen` |
+
+### CTR_DRBG (v0.5.0)
+
+Both revisions are pinned. They differ in one field that matters: `SP800-90Ar1`
+adds `counterFieldLen`, which narrows the counter inside V so that only its
+rightmost bits increment. Where it is 128 the two revisions agree; the upstream
+set also exercises 64 and 4, and an implementation that ignores the field passes
+the first and fails the rest.
+
 Every size and SHA-256 is recorded in `scripts/fetch_vectors.py` and checked
 before a file is used. Run `python3 scripts/fetch_vectors.py` to retrieve them;
 `vectors/` is deliberately not committed, because NIST's vectors are theirs to

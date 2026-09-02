@@ -36,10 +36,11 @@ Aimed at demand rather than portfolio scope; supersedes the v0.1.0 non-goals whe
       Monte Carlo key shuffle), GMAC, CMAC-AES, and KW/KWP. Chosen by reading published
       CAVP certificates rather than by guessing: these four names recur far more often
       than anything else still missing.
-- [ ] M08: Counter DRBG (SP 800-90A). Effectively every FIPS module contains an approved
-      DRBG, so this is the widest remaining single gap. It is a state machine with
-      reseed and prediction resistance, not a one-shot transform, so it needs a new
-      provider shape rather than another method on an existing one.
+- [x] M08: Counter DRBG (SP 800-90A), both revisions. Effectively every FIPS module
+      contains an approved DRBG, so this was the widest remaining single gap. It needed a
+      new provider shape — a state machine with reseed and prediction resistance rather
+      than a one-shot transform. TDES is declared UNSUPPORTED: SP 800-131A disallowed it
+      for this use after 2023.
 - [ ] M09: KDF SP 800-108 (counter, feedback, double-pipeline). Large — the pinned set has
       thousands of groups — and the IUT supplies its own `fixedData`, which the runner
       must accept rather than derive.

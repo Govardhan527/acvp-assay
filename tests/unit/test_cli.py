@@ -23,7 +23,7 @@ def test_info_prints_metadata(capsys: pytest.CaptureFixture[str]) -> None:
 
     assert exit_code == 0
     assert payload["provider"] == "OpenSSL (via cryptography)"
-    assert payload["runner_version"] == "0.4.0"
+    assert payload["runner_version"] == "0.5.0"
     assert payload["cryptography_version"]
     assert payload["openssl_version"].startswith("OpenSSL ")
     assert payload["python_version"].startswith("3.12")

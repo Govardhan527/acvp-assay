@@ -92,6 +92,15 @@ def _optional_boolean(document: Mapping[str, object], key: str, path: str) -> bo
     return value
 
 
+def _optional_integer(document: Mapping[str, object], key: str, path: str) -> int | None:
+    if key not in document:
+        return None
+    value = document[key]
+    if type(value) is not int:
+        raise AcvpValidationError(f"{path}.{key}", "expected an integer")
+    return value
+
+
 def _optional_hex_bytes(document: Mapping[str, object], key: str, path: str) -> bytes | None:
     if key not in document:
         return None
@@ -288,6 +297,7 @@ string_field = _string
 list_field = _list
 hex_bytes = _hex_bytes
 optional_hex_bytes = _optional_hex_bytes
+optional_integer = _optional_integer
 
 __all__ = [
     "AcvpValidationError",
@@ -299,6 +309,7 @@ __all__ = [
     "load_vector_set",
     "mapping",
     "optional_hex_bytes",
+    "optional_integer",
     "optional_string",
     "parse_expected_results",
     "parse_vector_set",

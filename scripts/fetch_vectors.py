@@ -61,6 +61,8 @@ AES_ECB = "ACVP-AES-ECB-1.0"
 AES_GMAC = "ACVP-AES-GMAC-1.0"
 AES_KW = "ACVP-AES-KW-1.0"
 AES_KWP = "ACVP-AES-KWP-1.0"
+CTR_DRBG = "ctrDRBG-1.0"
+CTR_DRBG_R1 = "ctrDRBG-SP800-90Ar1"
 
 PINNED_FILES = (
     PinnedFile(
@@ -212,6 +214,30 @@ PINNED_FILES = (
         name="expectedResults.json",
         size_bytes=4001079,
         sha256="114774bb317bc6fdb2491fa41e1c5d3b2b27f23ccb4d2b004d8610abc5689751",
+    ),
+    PinnedFile(
+        directory=CTR_DRBG,
+        name="prompt.json",
+        size_bytes=244292,
+        sha256="35a2fda242abd3e8e9c6c89a2878ee1d4d499c48c7458d67025bc8b5ff361420",
+    ),
+    PinnedFile(
+        directory=CTR_DRBG,
+        name="expectedResults.json",
+        size_bytes=264148,
+        sha256="46608d7bbcaf0f6408a1905f81a77d3e2e90bfd5cee5a84dd78d4c51de1c6143",
+    ),
+    PinnedFile(
+        directory=CTR_DRBG_R1,
+        name="prompt.json",
+        size_bytes=371608,
+        sha256="7ddb75bdd25bcb6183102146872c0f97a5227603b2ea64c63771ffe2daf938ae",
+    ),
+    PinnedFile(
+        directory=CTR_DRBG_R1,
+        name="expectedResults.json",
+        size_bytes=42956,
+        sha256="c805df470563ec6e91413cde1a29b2574b7c33b67fd3a7bf3179b7ac26c77a6e",
     ),
 )
 

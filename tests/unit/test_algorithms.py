@@ -497,3 +497,92 @@ def test_aes_mode_families_are_dispatched_and_refuse_a_harness(tmp_path: Path) -
             tmp_path / "expectedResults.json",
             provider_command="python3 h.py",
         )
+
+
+def test_ctr_drbg_is_dispatched_and_refuses_a_harness(tmp_path: Path) -> None:
+    """ctrDRBG routes to its runner, and declines --provider-command.
+
+    The known answer is NIST's own, from tgId 13 / tcId 181 of the pinned
+    ctrDRBG-SP800-90Ar1 set.
+    """
+    group = {
+        "tgId": 13,
+        "testType": "AFT",
+        "derFunc": True,
+        "predResistance": False,
+        "mode": "AES-128",
+        "returnedBitsLen": 256,
+        "counterFieldLen": 128,
+        "tests": [
+            {
+                "tcId": 181,
+                "entropyInput": (
+                    "7E1D87DBE3C6F31556D9B448AF56F037C5742BAA57A6AF0B208B32C02E714B90"
+                ),
+                "nonce": "8444A76CCC181B71DBDB362B2E5EC07AB6570A05515F9BCD8FF832D428BD3191",
+                "persoString": ("26232C1AB9B6E1555B52EF291A690F9B0B518755ADE1C7F805F14C6D78C62891"),
+                "otherInput": [
+                    {
+                        "intendedUse": "reSeed",
+                        "additionalInput": (
+                            "3151EE933DB69C6E07BA99FC7D6699074CF4AA02F6AA53C9B341BFB418A0C682"
+                        ),
+                        "entropyInput": (
+                            "757C3540F4757708DCAB50C7EF6268AD4EE1CF5859D07D6791E209B4BE791A58"
+                        ),
+                    },
+                    {
+                        "intendedUse": "generate",
+                        "additionalInput": (
+                            "DA1F030818A9990BE878FFCFA6EC28825EDAB5A67326AF27EE9AC92F92D75A01"
+                        ),
+                        "entropyInput": "",
+                    },
+                    {
+                        "intendedUse": "generate",
+                        "additionalInput": (
+                            "24E6811F9586EEE10162AB016BBB58C1B86146734D5577FF3D1D62D2A7F57802"
+                        ),
+                        "entropyInput": "",
+                    },
+                ],
+            }
+        ],
+    }
+    prompt = {
+        "vsId": 1,
+        "algorithm": "ctrDRBG",
+        "revision": "SP800-90Ar1",
+        "testGroups": [group],
+    }
+    expected = {
+        "vsId": 1,
+        "testGroups": [
+            {
+                "tgId": 13,
+                "tests": [
+                    {
+                        "tcId": 181,
+                        "returnedBits": (
+                            "F67D256063A2483D4425FB71D68725EB3AFF060B3BF7918052534FEBC3B98DDF"
+                        ),
+                    }
+                ],
+            }
+        ],
+    }
+    (tmp_path / "prompt.json").write_text(json.dumps(prompt), encoding="utf-8")
+    (tmp_path / "expectedResults.json").write_text(json.dumps(expected), encoding="utf-8")
+
+    results, metadata = run_vector_file(tmp_path / "prompt.json", tmp_path / "expectedResults.json")
+
+    assert metadata.name == "cryptography-ctr-drbg"
+    assert [r.status for r in results] == [ResultStatus.PASS]
+    assert "ctrDRBG" in supported_algorithms()
+
+    with pytest.raises(UnsupportedAlgorithmError, match="ctrDRBG"):
+        run_vector_file(
+            tmp_path / "prompt.json",
+            tmp_path / "expectedResults.json",
+            provider_command="python3 h.py",
+        )

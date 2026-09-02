@@ -5,6 +5,35 @@ All notable changes to this project are recorded here. The format follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Before 1.0.0 the
 provider protocols may change between minor versions.
 
+## [0.5.0] - 2026-09-02
+
+### Added
+
+- `ctrDRBG`, revisions `1.0` and `SP800-90Ar1`. A DRBG sits in effectively every
+  FIPS module, which made it the widest remaining single gap. It is also the
+  first algorithm here that needed a genuinely new provider shape: a case
+  instantiates a state machine, optionally reseeds it, and generates twice,
+  rather than performing one transform.
+- 450 cases executed against both pinned upstream sets, zero failures, covering
+  AES-128/192/256, the derivation function both ways, prediction resistance both
+  ways, and counter field widths of 128 and 64 bits.
+- `optional_integer` in the parser, for fields like `counterFieldLen` that exist
+  in one revision of an algorithm and not the other.
+
+### Notes
+
+- Two details in the operation sequence are silently wrong if you get them
+  wrong, and both are now covered by tests. Prediction resistance turns a
+  `generate` carrying entropy into a reseed followed by a generation, with the
+  additional input consumed by the reseed rather than the generation. And every
+  case generates twice while only the second output is compared — comparing the
+  first would pass a DRBG that never updates its state.
+- Three-key TDES is reported UNSUPPORTED rather than answered. SP 800-131A
+  disallowed it for this use after 2023, so 150 of the 750 upstream cases are
+  declared rather than executed.
+- KDF SP 800-108 is now the last gap on the reference certificate this work has
+  been tracking.
+
 ## [0.4.0] - 2026-09-02
 
 Broadens algorithm coverage toward what a real module actually validates.
