@@ -26,4 +26,4 @@ The parser owns external JSON interpretation and must preserve ACVP identifiers.
 - Expected ciphertext and authentication tags are compared as separate fields.
 - Machine-readable results are the source of truth for human-readable summaries.
 
-Only the runtime-metadata seam exists in the current baseline. Parsing, models, provider operations, comparison, and reporting are deliberately deferred to their numbered backlog tasks.
+The current baseline includes immutable typed models and the runtime-metadata seam. Parsing, field validation, provider operations, comparison, and reporting remain isolated behind their numbered backlog tasks.

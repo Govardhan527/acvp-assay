@@ -29,3 +29,13 @@
 - Commit/link/path: the two fixture directories and `tests/unit/test_fixtures.py` in this repository.
 - Blocker, if any: none.
 - Next unchecked ID: A04 - define typed internal models for vector set, test group, test case, and result while preserving ACVP IDs.
+
+## 2026-09-02 - A04 typed internal models
+
+- Project and task ID: ACVP Runner/Adapter - A04
+- Done condition: immutable typed models represent vector sets, test groups, test cases, comparable values, and classified results while retaining `vsId`, `tgId`, and `tcId`.
+- Evidence produced: `src/acvp_runner/models.py` defines explicit direction, test-type, and result-status wire values plus frozen, slotted dataclasses for the AES-GCM domain.
+- Tests run and result: model tests passed for ID preservation, immutability, hashability, result values, diagnostics, and stable enum wire values. The full gate passed Ruff, strict mypy, 13 pytest tests with 100% coverage, and wheel/sdist builds without warnings.
+- Commit/link/path: `src/acvp_runner/models.py` and `tests/unit/test_models.py`.
+- Blocker, if any: none.
+- Next unchecked ID: A05 - validate required fields, types, invalid hexadecimal values, and unsupported directions.
