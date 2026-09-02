@@ -1,5 +1,7 @@
 # ACVP Assay
 
+[![CI](https://github.com/Govardhan527/acvp-assay/actions/workflows/ci.yml/badge.svg)](https://github.com/Govardhan527/acvp-assay/actions/workflows/ci.yml)
+
 Run NIST ACVP test vectors against any implementation — including ones you cannot link against — and catch conformance regressions between runs.
 
 An *assay* measures composition, it does not certify it. This tool produces reproducible test evidence: it parses ACVP vector sets, executes them through a replaceable provider boundary, compares results case by case, and diffs one run against the next. It is **not** an ACVP protocol client, and it does **not** perform or substitute for CAVP algorithm validation or FIPS 140-3 cryptographic-module validation — only accredited CST and 17ACVT laboratories can do that.
