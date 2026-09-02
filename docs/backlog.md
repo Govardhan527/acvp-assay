@@ -1,7 +1,7 @@
 # Build backlog
 
 - [x] A01 / R01-R06: freeze the MVP and establish the repository baseline.
-- [ ] A01 / R07: verify setup, tests, demo, and build from a clean checkout.
+- [x] A01 / R07: verify setup, tests, demo, and build from a clean checkout.
 - [ ] A02: select and document the exact AES-GCM vector source, revision, retrieval date, and license.
 - [ ] A03: add one tiny valid encrypt fixture and one valid decrypt fixture.
 - [ ] A04-A06: typed models, validation, and one lossless group parse.
