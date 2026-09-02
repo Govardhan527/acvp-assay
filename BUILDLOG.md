@@ -79,3 +79,13 @@
 - Commit/link/path: `src/acvp_runner/providers/cryptography_aesgcm.py` and `tests/unit/test_cryptography_provider.py`.
 - Blocker, if any: none.
 - Next unchecked ID: A09 - implement authenticated decryption and negative cases for modified inputs and wrong keys.
+
+## 2026-09-02 - A09 authenticated decryption
+
+- Project and task ID: ACVP Runner/Adapter - A09
+- Done condition: valid AES-GCM ciphertext/tag decrypts through the OpenSSL-backed provider; modified tag, wrong key, wrong IV, and modified ciphertext fail authentication.
+- Evidence produced: `CryptographyAesGcmProvider.decrypt()` configures GCM with the supplied tag and an explicit 32-128-bit minimum, authenticates AAD, and exposes plaintext only after finalization succeeds.
+- Tests run and result: the valid decrypt fixture recovered the expected plaintext; modified tag, wrong key, wrong IV, and modified ciphertext each raised `InvalidTag`; supported truncated tags and invalid tag lengths were covered. The full gate passed Ruff, strict mypy, 72 pytest tests with 100% coverage, and wheel/sdist builds.
+- Commit/link/path: `src/acvp_runner/providers/cryptography_aesgcm.py` and `tests/unit/test_cryptography_provider.py`.
+- Blocker, if any: none.
+- Next unchecked ID: A10 - implement per-case PASS/FAIL/ERROR comparison output with expected and actual values plus a safe diagnostic.

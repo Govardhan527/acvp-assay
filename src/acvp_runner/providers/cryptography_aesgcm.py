@@ -64,8 +64,15 @@ class CryptographyAesGcmProvider:
         aad: bytes,
         tag: bytes,
     ) -> AesGcmValues:
-        """Authenticate and decrypt; implemented in A09."""
-        raise NotImplementedError
+        """Authenticate and decrypt, raising InvalidTag on authentication failure."""
+        tag_length_bytes = _tag_length_bytes(len(tag) * 8)
+        decryptor = Cipher(
+            algorithms.AES(key),
+            modes.GCM(iv, tag, min_tag_length=tag_length_bytes),
+        ).decryptor()
+        decryptor.authenticate_additional_data(aad)
+        plaintext = decryptor.update(ciphertext) + decryptor.finalize()
+        return AesGcmValues(plaintext=plaintext)
 
 
 __all__ = ["CryptographyAesGcmProvider"]

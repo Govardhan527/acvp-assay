@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any, cast
 
 import pytest
+from cryptography.exceptions import InvalidTag
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
 from acvp_runner.parser import load_vector_set
@@ -119,13 +120,97 @@ def test_encrypt_rejects_invalid_tag_lengths(tag_length_bits: int) -> None:
         )
 
 
-def test_decrypt_is_explicitly_deferred_to_a09() -> None:
-    """The concrete adapter cannot silently pretend decryption exists yet."""
-    with pytest.raises(NotImplementedError):
+def test_decrypt_fixture_recovers_authenticated_plaintext() -> None:
+    """The stored decrypt fixture authenticates and recovers plaintext."""
+    vector_set = load_vector_set(FIXTURES / "aes-gcm-valid-decrypt/prompt.json")
+    case = vector_set.test_groups[0].tests[0]
+    expected_path = FIXTURES / "aes-gcm-valid-decrypt/expectedResults.json"
+    expected_document = cast(dict[str, Any], json.loads(expected_path.read_text()))
+    expected = expected_document["testGroups"][0]["tests"][0]
+    assert case.ciphertext is not None
+    assert case.tag is not None
+
+    result = CryptographyAesGcmProvider().decrypt(
+        key=case.key,
+        iv=case.iv,
+        ciphertext=case.ciphertext,
+        aad=case.aad,
+        tag=case.tag,
+    )
+
+    assert result.plaintext == bytes.fromhex(expected["pt"])
+    assert result.ciphertext is None
+    assert result.tag is None
+
+
+@pytest.mark.parametrize("mutation", ["tag", "key", "iv", "ciphertext"])
+def test_decrypt_rejects_modified_or_mismatched_inputs(mutation: str) -> None:
+    """Every authenticated input change produces InvalidTag rather than plaintext."""
+    vector_set = load_vector_set(FIXTURES / "aes-gcm-valid-decrypt/prompt.json")
+    case = vector_set.test_groups[0].tests[0]
+    assert case.ciphertext is not None
+    assert case.tag is not None
+    key = case.key
+    iv = case.iv
+    ciphertext = case.ciphertext
+    tag = case.tag
+
+    if mutation == "tag":
+        tag = bytes([tag[0] ^ 1]) + tag[1:]
+    elif mutation == "key":
+        key = bytes([key[0] ^ 1]) + key[1:]
+    elif mutation == "iv":
+        iv = bytes([iv[0] ^ 1]) + iv[1:]
+    else:
+        ciphertext = bytes([ciphertext[0] ^ 1]) + ciphertext[1:]
+
+    with pytest.raises(InvalidTag):
+        CryptographyAesGcmProvider().decrypt(
+            key=key,
+            iv=iv,
+            ciphertext=ciphertext,
+            aad=case.aad,
+            tag=tag,
+        )
+
+
+def test_decrypt_accepts_supported_truncated_tag() -> None:
+    """A generated 32-bit tag is accepted with an explicit minimum length."""
+    provider = CryptographyAesGcmProvider()
+    key = bytes.fromhex("00112233445566778899AABBCCDDEEFF")
+    iv = bytes.fromhex("0102030405060708090A0B0C")
+    encrypted = provider.encrypt(
+        key=key,
+        iv=iv,
+        plaintext=b"payload",
+        aad=b"aad",
+        tag_length_bits=32,
+    )
+    assert encrypted.ciphertext is not None
+    assert encrypted.tag is not None
+
+    decrypted = provider.decrypt(
+        key=key,
+        iv=iv,
+        ciphertext=encrypted.ciphertext,
+        aad=b"aad",
+        tag=encrypted.tag,
+    )
+
+    assert decrypted.plaintext == b"payload"
+
+
+@pytest.mark.parametrize("tag", [b"", bytes(3), bytes(17)])
+def test_decrypt_rejects_invalid_tag_lengths(tag: bytes) -> None:
+    """Invalid tags fail before creating a backend decryptor."""
+    with pytest.raises(
+        ValueError,
+        match="tag_length_bits must be a multiple of 8 from 32 through 128",
+    ):
         CryptographyAesGcmProvider().decrypt(
             key=bytes(16),
             iv=bytes(12),
             ciphertext=b"",
             aad=b"",
-            tag=bytes(16),
+            tag=tag,
         )
