@@ -19,3 +19,6 @@ vectors/
 # Credentials: ACVTS client key must never be committed
 *.key
 *.csr
+
+# Operational credential notes stay local (contains the ACVTS mailbox)
+docs/acvts-demo-access-request.md
