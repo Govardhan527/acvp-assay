@@ -6,7 +6,7 @@
 - [x] A03: add one tiny valid encrypt fixture and one valid decrypt fixture.
 - [x] A04: define typed vector-set, group, case, value, and result models that preserve ACVP IDs.
 - [x] A05: validate required fields, types, hexadecimal values, and supported directions.
-- [ ] A06: parse one group end to end without losing IDs.
+- [x] A06: parse one group end to end without losing IDs.
 - [ ] A07-A09: provider interface plus AES-GCM encrypt/decrypt paths.
 - [ ] A10-A12: comparison, JSON summaries, CLI, and exit codes.
 - [ ] A13-A15: deterministic end-to-end tests, clean CI, documentation, and v0.1.0.

@@ -49,3 +49,13 @@
 - Commit/link/path: `src/acvp_runner/parser.py` and `tests/unit/test_parser_validation.py`.
 - Blocker, if any: none.
 - Next unchecked ID: A06 - load and parse one complete group without losing `vsId`, `tgId`, or `tcId`.
+
+## 2026-09-02 - A06 lossless group parsing
+
+- Project and task ID: ACVP Runner/Adapter - A06
+- Done condition: an ACVP-shaped JSON file is loaded and normalized through validation into the internal model without losing vector, group, or case IDs.
+- Evidence produced: `load_vector_set()` performs UTF-8 JSON loading with bounded parse diagnostics; integration tests load both tiny prompt files and assert IDs, metadata, direction, declared lengths, and normalized direction-specific byte fields.
+- Tests run and result: both encrypt and decrypt fixtures passed end-to-end loading and normalization checks; malformed JSON produced a bounded location-only diagnostic. The full gate passed Ruff, strict mypy, 52 pytest tests with 100% coverage, and wheel/sdist builds.
+- Commit/link/path: `src/acvp_runner/parser.py` and `tests/integration/test_parser.py`.
+- Blocker, if any: none.
+- Next unchecked ID: A07 - define a provider interface for encrypt, decrypt, and provider/version metadata.

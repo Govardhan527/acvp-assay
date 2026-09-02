@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import json
 import string
 from collections.abc import Mapping
+from pathlib import Path
 from typing import cast
 
 from acvp_runner.models import (
@@ -176,4 +178,17 @@ def parse_vector_set(value: object) -> AesGcmVectorSet:
     )
 
 
-__all__ = ["AcvpValidationError", "parse_vector_set"]
+def load_vector_set(path: str | Path) -> AesGcmVectorSet:
+    """Load one UTF-8 JSON file and normalize it into the internal model."""
+    source = Path(path)
+    try:
+        value: object = json.loads(source.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as error:
+        raise AcvpValidationError(
+            "$",
+            f"invalid JSON at line {error.lineno}, column {error.colno}",
+        ) from None
+    return parse_vector_set(value)
+
+
+__all__ = ["AcvpValidationError", "load_vector_set", "parse_vector_set"]
