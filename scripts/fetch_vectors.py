@@ -1,4 +1,4 @@
-"""Download and verify the pinned upstream NIST AES-GCM vector files.
+"""Download and verify the pinned upstream NIST vector files.
 
 The files are fetched into a git-ignored directory and are never committed:
 ``docs/vector-sources.md`` records the decision not to redistribute them. This

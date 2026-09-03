@@ -1,18 +1,59 @@
 # Limitations
 
-This is the frozen v0.1.0 MVP: it parses one ACVP-shaped vector/expected-results file pair, executes AES-GCM encrypt or decrypt through the OpenSSL-backed `cryptography` provider, compares results, and reports case-level and summary JSON with a process exit code.
+What this tool does **not** tell you, stated plainly. The README's
+[Coverage](../README.md#coverage) section says what it does.
 
-The tool:
+## It is evidence, not validation
 
-- exercises the OpenSSL backend exposed by `cryptography`, and does not validate OpenSSL itself;
-- runs offline vector files and does not communicate with a live ACVP server;
-- supports only AES-GCM, `ACVP-AES-GCM` revision `1.0`, `AFT` test type, and externally supplied IVs (`ivGen: external`) — groups with internally generated IVs are reported as UNSUPPORTED, not silently skipped or approximated;
-- requires the expected-results file to sit next to the vector file and to identify the same `vsId`/`algorithm`/`revision`;
-- provides test evidence, not FIPS 140-3 validation, certification, or a complete security assessment;
-- treats malformed, unsupported, failed, and errored cases as distinct outcomes, and never places raw exception text in a report (`ERROR` diagnostics are drawn from a closed, non-secret vocabulary);
-- avoids redistributing third-party vectors unless their license permits it.
+This produces reproducible test evidence. It does not perform, substitute for, or confer
+CAVP algorithm validation or FIPS 140-3 module validation — only accredited CST and 17ACVT
+laboratories do that. Passing every vector here is necessary, not sufficient:
 
-Do not use this tool as evidence that a cryptographic module is production-ready, FIPS 140-3 validated, or otherwise compliant.
+- it exercises the algorithm implementation, not the module boundary, its self-tests, its
+  key management, its entropy source, or its physical security;
+- the live sessions used NIST's **Demo** server (`demo.acvts.nist.gov`), which is for
+  development. Production ACVTS access is granted to laboratories, not to tool authors;
+- a passing run says the implementation agreed with NIST's vectors on the cases NIST sent.
+  It says nothing about constant-time behaviour, side channels, or fault resistance.
+
+Do not cite a report from this tool as evidence that a module is FIPS 140-3 validated,
+production-ready, or otherwise compliant.
+
+## The built-in provider is a reference, not a subject
+
+Without `--provider-command`, the runner exercises the OpenSSL backend exposed by Python's
+`cryptography`. That checks the *runner*, not your product, and it does not validate OpenSSL
+either. Any result meant to say something about a vendor's implementation must come from a
+harness.
+
+## Coverage boundaries
+
+- 40 algorithm names are implemented; the README lists what is [not covered](../README.md#not-covered).
+  An unrecognised algorithm exits non-zero rather than reporting a pass.
+- 22 of those 40 names have been judged by NIST's live server. The rest are verified against
+  pinned NIST vectors only.
+- Within supported families, some parameters are declined rather than approximated, and are
+  reported UNSUPPORTED: AES-GCM `ivGen: internal`, AES-KW/KWP `kwCipher: inverse`, SHA large
+  data tests (LDT), RSA SHAKE mask functions, ctrDRBG TDES, KDF `CMAC-TDES`, and ECDSA
+  component tests. With `--provider-command` the mode-capability decisions among these are
+  deferred to your implementation; the ones that are not on the wire at all (LDT, `inverse`,
+  internal IV generation) are declined regardless.
+- `--strict` turns UNSUPPORTED and SKIPPED into a failing exit code, so a coverage gap cannot
+  pass quietly in CI.
+
+## Reporting boundaries
+
+- Malformed, unsupported, failed and errored cases are distinct outcomes, never merged.
+- Raw exception text never enters a report. `ERROR` diagnostics come from a closed,
+  non-secret vocabulary, and a harness's own error text is never echoed back — a failure
+  message commonly quotes the key it failed on, and reports get shared as evidence.
+- A harness's stderr passes through to your terminal for debugging but never enters the
+  JSON report, for the same reason.
+
+## Vectors
+
+Upstream NIST vectors are referenced by pinned SHA-256 and fetched on demand; they are never
+redistributed here. See `vector-sources.md` for the source, hashes and licensing position.
 
 ## AES chaining-mode Monte Carlo tests
 

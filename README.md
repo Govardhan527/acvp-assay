@@ -2,18 +2,23 @@
 
 [![CI](https://github.com/Govardhan527/acvp-assay/actions/workflows/ci.yml/badge.svg)](https://github.com/Govardhan527/acvp-assay/actions/workflows/ci.yml)
 [![Verified against NIST ACVTS](https://img.shields.io/badge/NIST%20ACVTS%20Demo-27%20vector%20sets%20passed-2ea44f)](#verified-against-nists-own-server)
-[![Coverage](https://img.shields.io/badge/coverage-100%25-2ea44f)](#development-commands)
+[![Coverage](https://img.shields.io/badge/coverage-99.7%25-2ea44f)](#development-commands)
 
-> ## ✅ Verified against NIST's own server
+> ## ✅ Judged by NIST's own server
 >
-> Every algorithm listed below has been run against **vectors NIST generated live**, and the
-> answers submitted back for NIST to judge. Across **7 test sessions** on
+> **22 of the 40 supported algorithm names** have been run against **vectors NIST generated
+> live** and submitted back for NIST to judge. Across **7 test sessions** on
 > `demo.acvts.nist.gov`, **27 vector sets and 19,237 cases returned `"passed"`** — that verdict
-> is the server's, not this project's.
+> is the server's, not this project's. [Exactly which, per algorithm](#coverage).
 >
-> Most tools of this kind are checked against static files. This one is checked by the same
-> system that issues the vectors, which is what caught the defects listed in
-> [Verified against NIST's own server](#verified-against-nists-own-server) below.
+> The other 18 names are digest-size variants of the same code paths (`SHA2-384` differs from
+> the live-verified `SHA2-256` only in which digest is selected), plus AES-GMAC and the two PQC
+> families. They run against pinned NIST vectors, and are marked *not yet submitted* in the
+> coverage table rather than counted as verified.
+>
+> Most tools of this kind are checked against static files only. Being checked by the system
+> that issues the vectors is what caught the four defects listed under
+> [What this caught that fixtures did not](#what-this-caught-that-fixtures-did-not).
 >
 > **This is test evidence, not a certificate.** It confers no validation status: only an
 > accredited CST or 17ACVT laboratory performs CAVP or FIPS 140-3 validation, and Demo is not
@@ -35,11 +40,16 @@ Implemented today:
 - **40 algorithm names across 22 families** — AES in GCM, ECB, CBC, CTR, OFB, CFB128, GMAC,
   KW and KWP; CMAC-AES; all three SP 800-90A DRBGs; KDF SP 800-108; SHA-1, SHA-2 and SHA-3;
   HMAC over each; RSA; ECDSA; ML-KEM and ML-DSA
-- a replaceable provider boundary, in-process or an external harness over JSON
+- a replaceable provider boundary, in-process or an external harness over JSON — **all 40
+  names reach a harness**, so nothing silently tests this project's OpenSSL binding when you
+  asked for your own implementation
+- **live ACVTS submission from your implementation**: `acvts_client.py submit
+  --provider-command ...` answers NIST-generated vectors from your code and returns NIST's
+  verdict (38 of the 40 names; ML-KEM and ML-DSA have no response builder yet)
 - run-over-run regression diffing, including coverage that silently disappeared
 - typed parsing that preserves `vsId`, `tgId`, and `tcId`
-- deterministic tests on Linux, verified against pinned NIST vectors **and against
-  vectors generated live by NIST's ACVTS server**
+- deterministic tests on Linux, verified against pinned NIST vectors, and for 22 of the 40
+  names **against vectors generated live by NIST's ACVTS server** — see [Coverage](#coverage)
 
 Deliberately out of scope: a general-purpose ACVP protocol client (`libacvp` and
 ACVP Proxy already do that well), an HTML dashboard, performance benchmarking,
@@ -81,44 +91,148 @@ The demo prints machine-readable runtime metadata, including the `cryptography` 
 acvp-assay run VECTOR_FILE [--output RESULT_FILE] [--strict]
 ```
 
-The algorithm is read from the vector file itself and routed automatically. Currently implemented:
-
-| Family | Test types | Notes |
-| --- | --- | --- |
-| `ACVP-AES-GCM` | AFT | Encrypt and decrypt, including ACVP's deliberate authentication-failure cases |
-| `SHA-1`, `SHA2-224/256/384/512`, `SHA2-512/224`, `SHA2-512/256` | AFT, MCT | Both `standard` and `alternate` Monte Carlo chains; LDT is reported UNSUPPORTED |
-| `SHA3-224/256/384/512` | AFT, MCT | SHA-3 chains a single digest per iteration, not SHA-2's three |
-| `HMAC-SHA-1`, `HMAC-SHA2-*`, `HMAC-SHA3-*` | AFT | Honours per-group `macLen` truncation |
-| `RSA` | sigGen, sigVer, signaturePrimitive, decryptionPrimitive | PKCS#1 v1.5 and PSS over SHA-1/SHA-2/SHA-3; SHAKE masks are reported UNSUPPORTED. `keyGen` is out of scope |
-| `ECDSA` | sigGen, sigVer | P-224/256/384/521; sigVer is verdict-only, sigGen is verified against its own key |
-| `ML-KEM` | encap, decap, key checks | Requires `--provider-command`: no built-in PQC implementation |
-| `ML-DSA` | sigVer | Requires `--provider-command`; external and internal interfaces |
-| `ACVP-AES-ECB` | AFT, MCT | The 100 x 1000 Monte Carlo chain, including the 192/256-bit key shuffle |
-| `ACVP-AES-GMAC` | AFT | Tag generation, and verification including deliberate forgeries |
-| `ACVP-AES-KW`, `ACVP-AES-KWP` | AFT | `kwCipher: cipher`; the `inverse` variant is reported UNSUPPORTED |
-| `CMAC-AES` | AFT (gen and ver) | Honours per-group `macLen` truncation |
-| `ACVP-AES-CBC`, `ACVP-AES-CTR`, `ACVP-AES-OFB`, `ACVP-AES-CFB128` | AFT, MCT, CTR | Both directions of every Monte Carlo chain; CTR defines none. The IV advance differs per mode — see `docs/limitations.md` |
-| `ctrDRBG` | AFT | Both revisions; AES-128/192/256, with and without the derivation function. TDES is reported UNSUPPORTED |
-| `hashDRBG`, `hmacDRBG` | AFT | SHA-1, the SHA-2 family and both truncated SHA-512 variants |
-| `KDF` (SP 800-108) | AFT | Counter, feedback and double-pipeline modes over 14 PRFs. CMAC-TDES is reported UNSUPPORTED |
-
-**Every one of the 40 algorithms reaches a harness** — Monte Carlo chains, DRBG state machines
-and RSA's four modes included. Nothing silently tests this project's OpenSSL binding when you
-asked for your own implementation.
-
-PQC has no built-in provider on purpose. `cryptography` 50.0.1 implements neither ML-KEM nor ML-DSA, and in a real engagement the implementation under test is the customer's — OpenSSL 3.5+, liboqs, an HSM, or their own module. `examples/pqc_reference_harness.py` drives the pinned NIST ML-KEM and ML-DSA sets end to end using `kyber-py` and `dilithium-py`, which are educational, **not constant-time**, and exist here to verify this runner and to demonstrate it, never as an implementation to ship or validate.
+The algorithm is read from the vector file itself and routed automatically.
 
 `VECTOR_FILE` is an ACVP-shaped `prompt.json`; an `expectedResults.json` must sit next to it in the same directory (every directory under `fixtures/` already follows this layout). Without `--output`, the JSON report is printed to stdout; with it, the report is written to `RESULT_FILE` instead. `--strict` also fails the run if any case is `SKIPPED` or `UNSUPPORTED`. See `docs/architecture.md` for the full exit-code table.
 
-## Testing your own implementation
+## Coverage
 
-The built-in provider exercises OpenSSL through Python's `cryptography`. To test something else — an HSM behind PKCS#11, a smartcard, an embedded device over a serial link, or a library in another language — write a small harness program and point the runner at it:
+Three questions a vendor actually needs answered, in one table:
+
+- **Offline** — can this runner execute the family against an ACVP vector file?
+- **Harness** — can *your* implementation answer it over `--provider-command`?
+- **Live NIST verdict** — has NIST itself generated vectors for it, scored our answers, and
+  said `passed`? The session ids are ours on `demo.acvts.nist.gov`; with your own credentials
+  the same flow produces your own. Session state is gitignored, so nothing here is a claim you
+  have to take on trust about *your* module — you run it yourself.
+
+| Algorithm | Test types | Offline | Harness | Live NIST verdict |
+| --- | --- | :---: | :---: | --- |
+| `ACVP-AES-GCM` | AFT | ✅ | ✅ | `passed` — session 765343 |
+| `ACVP-AES-ECB` | AFT, MCT | ✅ | ✅ | `passed` — session 765342 |
+| `ACVP-AES-CBC`, `-CTR`, `-OFB`, `-CFB128` | AFT, MCT, CTR | ✅ | ✅ | `passed` — sessions 765346, 765353 |
+| `ACVP-AES-KW`, `ACVP-AES-KWP` | AFT | ✅ | ✅ | `passed` — session 765342 |
+| `ACVP-AES-GMAC` | AFT | ✅ | ✅ | not yet submitted |
+| `CMAC-AES` | AFT (gen and ver) | ✅ | ✅ | `passed` — session 765342 |
+| `SHA-1` | AFT, MCT | ✅ | ✅ | `passed` — session 765345 |
+| `SHA2-256` | AFT, MCT | ✅ | ✅ | `passed` — sessions 765339, 765342 |
+| `SHA2-224/384/512`, `SHA2-512/224`, `SHA2-512/256` | AFT, MCT | ✅ | ✅ | not yet submitted |
+| `SHA3-256`, `SHA3-512` | AFT, MCT | ✅ | ✅ | `passed` — session 765345 |
+| `SHA3-224`, `SHA3-384` | AFT, MCT | ✅ | ✅ | not yet submitted |
+| `HMAC-SHA-1` | AFT | ✅ | ✅ | `passed` — session 765345 |
+| `HMAC-SHA2-256` | AFT | ✅ | ✅ | `passed` — session 765342 |
+| `HMAC-SHA3-256` | AFT | ✅ | ✅ | `passed` — session 765345 |
+| `HMAC-SHA2-224/384/512`, `-512/224`, `-512/256`, `HMAC-SHA3-224/384/512` | AFT | ✅ | ✅ | not yet submitted |
+| `ctrDRBG` | AFT | ✅ | ✅ | `passed` — session 765342 |
+| `hashDRBG`, `hmacDRBG` | AFT | ✅ | ✅ | `passed` — session 765354 |
+| `KDF` (SP 800-108) | AFT | ✅ | ✅ | `passed` — session 765343 |
+| `ECDSA` | sigGen, sigVer | ✅ | ✅ | `passed` — session 765343 |
+| `RSA` | sigGen, sigVer, signaturePrimitive, decryptionPrimitive | ✅ | ✅ | `passed` — session 765356 |
+| `ML-KEM` | encap, decap, key checks | harness only | ✅ | not yet submitted |
+| `ML-DSA` | sigVer | harness only | ✅ | not yet submitted |
+
+**40 algorithm names across 22 families. All 40 reach a harness; 38 can be submitted to a live
+session** (ML-KEM and ML-DSA have no response builder yet).
+
+The harness path is checked against the built-in one by answering each pinned NIST prompt both
+ways and comparing: **24,048 cases across ten families, byte-identical wherever the answer is
+deterministic**. Where it cannot be, because the implementation invents part of the input, the
+answers were checked for self-consistency instead — 10,950 KDF cases re-derived from the
+`fixedData` the harness reported, and 800 signatures verified under the `qx`/`qy` it reported.
+Groups the *reference* harness itself declines (`kwCipher: inverse`, SHAKE with ECDSA, TDES,
+LDT) are excluded from that count rather than counted as passes, and PQC is not in it at all,
+having no built-in side to compare against.
+
+### Per-family notes
+
+| Family | Detail |
+| --- | --- |
+| SHA-1, SHA-2 | Both `standard` and `alternate` Monte Carlo chains; LDT is reported UNSUPPORTED |
+| SHA-3 | Chains a single digest per iteration, not SHA-2's three |
+| HMAC | Honours per-group `macLen` truncation |
+| AES chaining modes | Both directions of every Monte Carlo chain; CTR defines none. The IV advance differs per mode — see `docs/limitations.md` |
+| AES-ECB | The 100 × 1000 chain, including the 192/256-bit key shuffle |
+| AES-GMAC | Tag generation, and verification including deliberate forgeries |
+| AES-KW/KWP | `kwCipher: cipher`; the `inverse` variant is reported UNSUPPORTED |
+| RSA | PKCS#1 v1.5 and PSS over SHA-1/SHA-2/SHA-3; SHAKE masks reported UNSUPPORTED. `keyGen` is out of scope |
+| ECDSA | P-224/256/384/521; sigVer is verdict-only, sigGen is verified against its own key |
+| ctrDRBG | Both revisions; AES-128/192/256, with and without the derivation function. TDES reported UNSUPPORTED |
+| hashDRBG, hmacDRBG | SHA-1, the SHA-2 family and both truncated SHA-512 variants |
+| KDF SP 800-108 | Counter, feedback and double-pipeline modes over 14 PRFs. CMAC-TDES reported UNSUPPORTED |
+| ML-KEM, ML-DSA | Require `--provider-command`: no built-in PQC implementation |
+
+PQC has no built-in provider on purpose. `cryptography` 50.0.1 implements neither ML-KEM nor ML-DSA, and in a real engagement the implementation under test is the customer's — OpenSSL 3.5+, liboqs, an HSM, or their own module. `examples/pqc_reference_harness.py` drives the pinned NIST ML-KEM and ML-DSA sets end to end using `kyber-py` and `dilithium-py`, which are educational, **not constant-time**, and exist here to verify this runner and to demonstrate it, never as an implementation to ship or validate.
+
+### Not covered
+
+Named plainly so you can tell before you install whether this fits. None of these are
+implemented, and none are silently mis-reported — an unrecognised algorithm exits with an
+error rather than a pass:
+
+AES-CCM, AES-XTS, AES-XPN and the FPE modes; every TDES family; SHAKE, cSHAKE, KMAC,
+ParallelHash and TupleHash; the KAS/KTS and KDA families; the protocol KDFs (TLS, SSH, IKE,
+SRTP, ANSI X9.42/X9.63) and PBKDF; DSA, EdDSA, safe primes, and key generation for RSA or
+ECDSA; LMS/HSS and SLH-DSA; ML-KEM and ML-DSA key generation and signature generation.
+
+`acvp-assay run` on any of these reports the algorithm as unsupported and exits non-zero.
+
+## How vendors use this
+
+The built-in provider exercises OpenSSL through Python's `cryptography`, which is only useful
+for checking the runner itself. **Testing *your* product means supplying it as a harness.**
+Four stages, each independently useful — most vendors stop after stage 2:
+
+### Stage 1 — see it work, no integration (5 minutes)
 
 ```bash
-acvp-assay run VECTOR_FILE --provider-command "python3 examples/reference_harness.py"
+python3.12 scripts/dev.py setup
+.venv/bin/python -m acvp_assay run fixtures/aes-gcm-valid-encrypt/prompt.json
 ```
 
-The harness reads JSON requests on stdin, one per line, and writes one JSON response per line on stdout. That is the whole contract, so it can be written in any language. **`docs/harness-protocol.md` is the full specification** — every operation, the reserved errors, and worked patterns for HSMs, serial devices and network appliances. AES-GCM, the hash families (including the Monte Carlo chain), HMAC, ECDSA, ML-KEM and ML-DSA all go through it:
+Nothing of yours is involved yet. This confirms the tool runs and shows the report shape.
+
+### Stage 2 — run NIST vectors against your implementation
+
+Write a harness: a program that reads one JSON request per line on stdin and writes one JSON
+response per line on stdout. That is the entire contract, so it can be a C binary talking to an
+HSM, a shell script with `jq`, a Go service in front of a network appliance, or a Python script
+driving a serial port. Nothing links against this project.
+
+```bash
+acvp-assay run vectors/SHA2-256-1.0/prompt.json \
+    --provider-command "./my-harness --device /dev/hsm0" \
+    --provider-timeout 30
+```
+
+Start from `examples/reference_harness.py` — a complete worked implementation of the 20
+non-PQC operations, which imports nothing from this package. (`examples/pqc_reference_harness.py`
+covers the four ML-KEM and ML-DSA operations separately, since it needs different dependencies.)
+Implement only the families you are testing; decline the rest with `{"error": "unsupported"}`
+and they are reported UNSUPPORTED rather than as failures.
+
+You supply the vectors. Either use your own ACVTS-issued prompt files, or run
+`python3 scripts/fetch_vectors.py` to pull the pinned upstream sets this project tests against.
+
+### Stage 3 — submit your answers to NIST and let NIST judge
+
+With ACVTS Demo credentials, the same harness answers vectors NIST generated for your session,
+and NIST returns the verdict. See
+[Submitting *your* implementation's answers](#submitting-your-implementations-answers).
+
+```bash
+python3 scripts/acvts_client.py submit --provider-command "./my-harness" --dry-run
+```
+
+### Stage 4 — keep it from breaking
+
+`acvp-assay diff` compares two runs and fails CI on regressions, including coverage that
+silently disappeared. See [Catching regressions between runs](#catching-regressions-between-runs).
+With re-validation running well over a year, that is the failure mode that costs a cycle.
+
+### The harness contract
+
+**`docs/harness-protocol.md` is the full specification** — every operation, the reserved errors,
+and worked integration patterns for HSMs, serial devices and network appliances.
 
 ```json
 → {"operation": "encrypt", "key": "000102…", "iv": "1011…", "aad": "", "pt": "4865…", "tagLen": 128}
@@ -129,7 +243,34 @@ The harness reads JSON requests on stdin, one per line, and writes one JSON resp
 ← {"error": "authentication failed"}
 ```
 
-Operations: `metadata`, `encrypt`, `decrypt`, `digest`, `digest-mct`, `mac`, `ecdsa-sign`, `ecdsa-verify`, `block-transform`, `block-mct`, `cmac`, `gmac`, `key-wrap`, `rsa-sign-group`, `rsa-verify`, `rsa-primitive-sign`, `rsa-primitive-decrypt`, `drbg`, `kdf-108`, `ml-kem-encapsulate`, `ml-kem-decapsulate`, `ml-kem-key-check`, `ml-dsa-verify`. A harness need only implement the families you are testing.
+```json
+→ {"operation": "encrypt", "key": "000102…", "iv": "1011…", "aad": "", "pt": "4865…", "tagLen": 128}
+← {"ct": "8C4B6FC3606396AE548B0DD4", "tag": "CEA4303CA9132112C1D14AE589AD15AF"}
+
+→ {"operation": "decrypt", "key": "F0F1…", "iv": "A0A1…", "aad": "696E…", "ct": "8997…", "tag": "5333…"}
+← {"pt": "646563727970742D6D65"}
+← {"error": "authentication failed"}
+```
+
+The 24 operations, by family — implement only the rows you are testing:
+
+| Family | Operations |
+| --- | --- |
+| Always | `metadata` |
+| AES-GCM | `encrypt`, `decrypt` |
+| Hashes | `digest`, `digest-mct` |
+| HMAC | `mac` |
+| AES block modes, ECB | `block-transform`, `block-mct` |
+| CMAC, GMAC, KW/KWP | `cmac`, `gmac`, `key-wrap` |
+| ECDSA | `ecdsa-sign`, `ecdsa-verify`, `ecdsa-sign-group` |
+| RSA | `rsa-sign-group`, `rsa-verify`, `rsa-primitive-sign`, `rsa-primitive-decrypt` |
+| DRBGs | `drbg` |
+| KDF SP 800-108 | `kdf-108` |
+| ML-KEM, ML-DSA | `ml-kem-encapsulate`, `ml-kem-decapsulate`, `ml-kem-key-check`, `ml-dsa-verify` |
+
+`ecdsa-sign-group` and `rsa-sign-group` are needed only if you intend to *submit* sigGen to a
+live session: ACVP reports the public key once per group, so every case in a group must share
+one key, which per-case signing cannot express.
 
 Two error values are reserved. `{"error": "unsupported"}` declines a case the implementation does not offer — a curve, a parameter set, a mode — and is reported UNSUPPORTED rather than as a failure, because capability is yours to declare, not ours to assume. (An HSM's binary curves are not "unsupported" merely because Python's `cryptography` lacks them.)
 
