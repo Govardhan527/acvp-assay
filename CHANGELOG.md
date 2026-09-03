@@ -389,4 +389,7 @@ Initial release: an offline AES-GCM vector runner.
 [0.4.0]: https://github.com/Govardhan527/acvp-assay/releases/tag/v0.4.0
 [0.3.0]: https://github.com/Govardhan527/acvp-assay/releases/tag/v0.3.0
 [0.2.0]: https://github.com/Govardhan527/acvp-assay/releases/tag/v0.2.0
-[0.1.0]: https://github.com/Govardhan527/acvp-assay/releases/tag/v0.1.0
+<!-- 0.1.0 was never tagged: development continued past it on the same version,
+     so b174d92 is the last commit that carried it. Linked to the commit rather
+     than to a release tag that does not exist. -->
+[0.1.0]: https://github.com/Govardhan527/acvp-assay/commit/b174d92
