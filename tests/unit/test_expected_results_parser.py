@@ -130,7 +130,7 @@ def test_missing_group_and_case_fields_are_rejected() -> None:
     ],
 )
 def test_unsupported_contract_is_rejected(field: str, value: str, message: str) -> None:
-    """Expected results outside the frozen MVP contract are rejected."""
+    """Expected results outside the AES-GCM contract are rejected."""
     document = valid_document()
     document[field] = value
 

@@ -123,7 +123,7 @@ def test_unsupported_group_modes_are_rejected(
     value: str,
     message: str,
 ) -> None:
-    """The MVP rejects modes outside its frozen contract."""
+    """The AES-GCM parser rejects modes outside its contract."""
     document = valid_document()
     document["testGroups"][0][field] = value
 

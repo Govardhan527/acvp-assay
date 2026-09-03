@@ -246,4 +246,98 @@
 - Tests run and result: `scripts/dev.py verify` passed Ruff, strict mypy, 268 pytest tests with 100% branch coverage, and wheel/sdist builds.
 - Commit/link/path: `src/acvp_assay/diff.py`, `src/acvp_assay/cli.py`, `tests/unit/test_diff.py`.
 - Blocker, if any: none.
-- Next unchecked ID: M07 - publish to PyPI, deferred until the version reflects six algorithm families and there is someone to install it.
+- Next unchecked ID: M07 - the AES mode families surrounding GCM. (Publishing to PyPI was M07 at the time of writing; inserting the algorithm-coverage milestones renumbered it, and it is M13 below.)
+
+## 2026-09-02 - M07 the AES mode families a real module validates beside GCM
+
+- Project and task ID: ACVP Assay - M07
+- Done condition: the AES names that recur on published CAVP certificates alongside GCM are runnable - `ACVP-AES-ECB`, `ACVP-AES-GMAC`, `ACVP-AES-KW`, `ACVP-AES-KWP` and `CMAC-AES`.
+- Why these five: AES-GCM alone covers very few real validations. Reviewing published certificates showed a module that validates GCM almost always validates a key wrap and a CMAC beside it, so these four names recur far more often than anything else still missing.
+- Evidence produced: `src/acvp_assay/algorithms/aes_modes.py` and `src/acvp_assay/providers/aes_modes.py`, plus twelve more pinned files in `scripts/fetch_vectors.py` covering the five new families and - a pre-existing gap - the ECDSA, ML-KEM and ML-DSA sets, which had been fetched by hand but never pinned.
+- The detail that carries the work: the AES Monte Carlo key shuffle differs by key length. A 128-bit key is refreshed from the final ciphertext block alone; 192- and 256-bit keys reach back into the previous block, because one 128-bit output is not enough key material. All 2,144 ECB cases reproduce the pinned arrays.
+- Honest total: `kwCipher: inverse` is reported UNSUPPORTED rather than guessed at. It is half of each pinned KW and KWP set, so the honest figure is 3,600 executed and 3,600 declared per set, not a quiet 7,200.
+- Tests run and result: `scripts/dev.py verify` passed the full gate - Ruff, strict mypy, pytest with branch coverage, and wheel/sdist builds.
+- Commit/link/path: released as v0.4.0.
+- Blocker, if any: none.
+- Next unchecked ID: M08 - Counter DRBG.
+
+## 2026-09-02 - M08 Counter DRBG, and the first stateful provider shape
+
+- Project and task ID: ACVP Assay - M08
+- Done condition: `ctrDRBG` runs at both revisions, `1.0` and `SP800-90Ar1`.
+- Why here: a DRBG sits in effectively every FIPS module, which made it the widest remaining single gap. It is also the first algorithm needing a genuinely new provider shape - a case instantiates a state machine, optionally reseeds it, and generates twice, rather than performing one transform.
+- Evidence produced: 450 cases against both pinned sets, zero failures, covering AES-128/192/256, the derivation function both ways, prediction resistance both ways, and counter widths of 128 and 64 bits. `optional_integer` was added to the parser for fields like `counterFieldLen` that exist in one revision and not the other.
+- Two details that are silently wrong if you get them wrong, both now covered by tests: prediction resistance turns a `generate` carrying entropy into a reseed followed by a generation, with the additional input consumed by the *reseed* rather than the generation; and every case generates twice while only the second output is compared - comparing the first would pass a DRBG that never updates its state.
+- Three-key TDES is reported UNSUPPORTED rather than answered: SP 800-131A disallowed it for this use after 2023, so 150 of the 750 pinned cases are declared.
+- Tests run and result: `scripts/dev.py verify` passed the full gate.
+- Commit/link/path: released as v0.5.0.
+- Blocker, if any: none.
+- Next unchecked ID: M09 - KDF SP 800-108.
+
+## 2026-09-02 - M09 KDF SP 800-108, and a bit offset mistaken for a byte offset
+
+- Project and task ID: ACVP Assay - M09
+- Done condition: `KDF` revision 1.0 runs in counter, feedback and double-pipeline modes across the 14 PRFs - HMAC over SHA-1, the SHA-2 family and the SHA-3 family, plus CMAC-AES128/192/256.
+- Evidence produced: 10,950 cases executed against the pinned set with zero failures, and a further 806 CMAC-TDES cases declared UNSUPPORTED.
+- What this set uniquely exposes: it is the only pinned set whose *expected results file carries an input*. The prompt gives only `keyIn`, because a conforming implementation chooses its own `fixedData`; the runner reads NIST's choice back out of `expectedResults.json` and derives against it. A pass therefore shows the derivation is correct for that fixed data - it does not exercise an implementation's freedom to construct fixed data of its own, which the ACVP server checks and no file-based runner can. `docs/vector-sources.md` says so plainly.
+- Defect the vectors caught: `breakLocation` is a **bit** offset, not a byte offset. Upstream values run 1 to 127 against 128-bit fixed data, so the counter splices mid-byte. Treating it as bytes passes 10,092 cases and fails 858 - the kind of near-miss that looks like success on a summary line. Also, `keyOutLength` is frequently not a multiple of 8 (67, 331, 1003), so the last byte's padding bits must be cleared.
+- Tests run and result: `scripts/dev.py verify` passed the full gate.
+- Commit/link/path: released as v0.6.0.
+- Blocker, if any: none.
+- Next unchecked ID: live validation against NIST's own server.
+
+## 2026-09-03 - Live validation against NIST's ACVTS Demo server
+
+- Project and task ID: ACVP Assay - interleaved with M07-M12, not a numbered milestone
+- Done condition: the runner is checked by the system that *issues* ACVP vectors, not only against static snapshots of them.
+- Evidence produced: `scripts/acvts_client.py` - register, fetch, submit, results - and seven test sessions on `demo.acvts.nist.gov` returning `"passed"` across 27 vector sets and 19,237 cases. Credentials live outside the repository and are read from `ACVTS_CERT`, `ACVTS_KEY` and `ACVTS_SEED`; `.acvts/` is git-ignored.
+- Four defects this caught that the offline suite did not, each of which would have shipped:
+  - **The AES-GCM parser rejected every real vector set.** It required `ivGenMode`, which qualifies *internal* IV construction, so the live server omits it whenever `ivGen` is `external`. The pinned sample file happens to include it, which is exactly why this survived. The test asserting the field was required was encoding the bug.
+  - **The chaining-mode Monte Carlo chains were wrong for decryption.** Read literally, the specification reproduces the encrypt arrays exactly and disagrees from the first block when decrypting. The rules came from `MonteCarloAesCbc.cs` in `usnistgov/ACVP-Server`, where encrypt and decrypt are structurally identical and the asymmetry lives inside the cipher object.
+  - **RSA-PSS ignored `maskFunction`.** FIPS 186-5 lets PSS use SHAKE as its mask generation function, signalled by a field separate from `hashAlg`. Six sigVer cases failed while their group looked perfectly supported.
+  - **ECDSA and RSA sigGen generated a fresh key per case.** ACVP reports the public key once per *group*, so a key per case cannot be expressed in the response document at all.
+- Practical detail worth recording: the ACVTS TOTP is **HMAC-SHA-256 with eight digits**, not the SHA-1 and six digits the public wiki implies. A wrong guess returns a bare 401 naming neither factor. The source of truth is `app/totp/totp.c` in `cisco/libacvp`.
+- Method this established, and kept since: **read NIST's generator source first, the specification second.** Every ambiguity above was settled by the generator, and none of them by the prose.
+- Blocker, if any: none. Production ACVTS remains lab-only and out of reach by design.
+- Next unchecked ID: M10 - keep the harness process alive.
+
+## 2026-09-03 - M10 a persistent harness, and a specification for vendors
+
+- Project and task ID: ACVP Assay - M10
+- Done condition: the harness process is started once and kept alive for a whole run, and the wire contract is written down well enough for a vendor to implement against without reading this project's source.
+- Evidence produced: `HarnessClient` rewritten around a persistent process with polled reads and a bounded reap, plus `docs/harness-protocol.md` - the operations, the reserved errors, the Monte Carlo traps, and worked integration patterns for HSMs, serial devices and network appliances.
+- Measured benefit: 239 SHA3-256 cases take 0.5 s against a persistent harness and 17.9 s against one spawned per case - roughly fifty times.
+- Compatibility kept deliberately: a one-shot harness that reads stdin to end still works and is detected on the first exchange, because a shell script with `jq` naturally takes that shape and reach matters more than the speed lost.
+- Defect fixed in passing: `Popen.wait()` with no timeout defeated `--provider-timeout` entirely - one test took 61 s. A bounded `_reap` took the suite from 129 s to 15.5 s.
+- Tests run and result: `scripts/dev.py verify` passed the full gate.
+- Commit/link/path: `737cd5c`, `src/acvp_assay/providers/subprocess_harness.py`, `docs/harness-protocol.md`.
+- Blocker, if any: none.
+- Next unchecked ID: M11 - harness operations for every family.
+
+## 2026-09-03 - M11 every family reaches a harness
+
+- Project and task ID: ACVP Assay - M11
+- Done condition: all 40 algorithm names accept `--provider-command`. Until this landed, the project's central claim - that an implementation which cannot be linked against can still be tested - held for some families and not others, which is the difference between a coverage number and a claim a vendor can rely on.
+- Evidence produced, in the order it was built: the AES families (`block-transform`, `block-mct`, `cmac`, `gmac`, `key-wrap`) at **13,282 cases, zero failures, Monte Carlo chains included**; RSA in all four modes (`rsa-sign-group`, `rsa-verify`, `rsa-primitive-sign`, `rsa-primitive-decrypt`) with decryptionPrimitive 90/90 and sigVer 126 passed with 144 declined; then the DRBGs and KDF.
+- Design decisions that shaped the wire: a Monte Carlo chain is delegated **whole** rather than driven case by case, because 100 x 1000 round trips per case would take hours and running the chain is what a real implementation does anyway. A DRBG case crosses in **one exchange** carrying its whole `otherInput` sequence, because putting a state machine on a wire makes the two sides agree about a sequence of calls rather than about an answer. An RSA or ECDSA sigGen **group** is signed in one exchange, because ACVP reports the public key once per group.
+- Defect the full vector set caught: `HMAC_FOR_KDF` in the reference harness was hand-listed at five hashes and declined 5,486 of 11,756 pinned KDF cases. Derived from `HASHLIB`, the harness path matches the built-in exactly - 10,950 passed, 806 unsupported, 0 failed.
+- Tests run and result: `scripts/dev.py verify` passed the full gate; 544 pytest tests at the close of the milestone.
+- Commit/link/path: `b5deb61`, `06a1993`, `e8a73b0`, `38a52d0`; `examples/reference_harness.py`, `tests/unit/test_harness_families.py`.
+- Process note worth keeping: an edit addressed by line number ran after the formatter had already shifted the lines and silently broke an import block, and I reported a green gate from a stale task-output file before catching it. Both are why the string-anchored edits with an asserted match count are used now, and why a gate result is read from the file that run wrote.
+- Blocker, if any: none.
+- Next unchecked ID: M12 - the live responder.
+
+## 2026-09-03 - M12 a vendor's own answers reach NIST
+
+- Project and task ID: ACVP Assay - M12
+- Done condition: `scripts/acvts_client.py submit --provider-command ...` answers a live ACVTS session from the vendor's implementation rather than from this project's OpenSSL binding, which is the configuration that says anything about their product.
+- Evidence produced: `Harness` in `responder.py`, threaded through every response builder, plus `--provider-command`, `--provider-timeout` and `--dry-run` on the submit subcommand. The submitted document is identical in shape either way - the server is told what was computed, never how.
+- Two rules this forced, which verification never had to decide:
+  - **A declined case refuses the whole document.** Offline, UNSUPPORTED is a verdict worth recording. In a submission there is no such verdict - ACVP scores a missing case as a wrong answer - so a partial document would record a failure the implementation never earned. The error names the operation declined.
+  - **Capability belongs to the implementation.** The responder was raising the built-in provider's limits - ctrDRBG `TDES`, KDF `CMAC-TDES` - on the vendor's behalf, which would make a submission impossible for a product that offers them. Both already travel on the wire, so the implementation now answers or declines them itself. This is the rule `supports()` states everywhere else; the responder was the one place not following it.
+- Gap this exposed: `SubprocessEcdsaProvider` had only per-case `sign`, which generates a fresh key each time, so ECDSA sigGen could not be submitted through a harness at all. `ecdsa-sign-group` mirrors `rsa-sign-group`.
+- Verified: each pinned prompt answered both ways and compared - **24,048 cases across ten families, byte-identical wherever the answer is deterministic**. Where it cannot be, because the implementation invents part of the input, the answers were checked for self-consistency: 10,950 KDF cases re-derived from the `fixedData` the harness reported, and 800 signatures verified under the `qx`/`qy` it reported. Groups the reference harness itself declines are excluded rather than counted as passes.
+- Tests run and result: `scripts/dev.py verify` - 557 pytest tests, 99.73% branch coverage, wheel and sdist built.
+- Commit/link/path: `924c197`, `src/acvp_assay/responder.py`, `scripts/acvts_client.py`, `tests/unit/test_responder_harness.py`.
+- Blocker, if any: none.
+- Next unchecked ID: M13 - publish to PyPI.

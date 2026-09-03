@@ -1,5 +1,5 @@
-"""Offline ACVP vector runner."""
+"""ACVP vector runner: offline verification, and live ACVTS submission."""
 
-__version__ = "0.10.0"
+__version__ = "0.11.0"
 
 __all__ = ["__version__"]

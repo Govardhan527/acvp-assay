@@ -106,7 +106,7 @@ def test_encrypt_returns_requested_truncated_tag() -> None:
 
 @pytest.mark.parametrize("tag_length_bits", [0, 31, 33, 136])
 def test_encrypt_rejects_invalid_tag_lengths(tag_length_bits: int) -> None:
-    """Tag lengths outside the MVP byte-aligned range fail before execution."""
+    """Tag lengths outside the byte-aligned range fail before execution."""
     with pytest.raises(
         ValueError,
         match="tag_length_bits must be a multiple of 8 from 32 through 128",

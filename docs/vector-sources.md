@@ -2,7 +2,9 @@
 
 ## Selected upstream source
 
-Status: selected and pinned for the AES-GCM v0.1.0 MVP.
+Status: 31 files across 15 vector sets are pinned to the commit below and verified by
+size and SHA-256 before use. Sets added after the first are recorded in their own
+sections; families with no pinned set are listed near the end.
 
 - Publisher: National Institute of Standards and Technology (NIST)
 - Repository: [`usnistgov/ACVP-Server`](https://github.com/usnistgov/ACVP-Server)
@@ -117,11 +119,32 @@ set is `kwCipher: inverse`, which this runner does not implement, and reporting
 those 3,600 cases as UNSUPPORTED rather than quietly dropping them is the
 difference between an honest total and a flattering one.
 
+### Families with no pinned set
+
+Not every supported family has an upstream sample set worth pinning. `SHA-1`, the
+`SHA3-*` family, the AES chaining modes (`CBC`, `CTR`, `OFB`, `CFB128`), `RSA`,
+`hashDRBG` and `hmacDRBG` are verified against vectors **NIST generated live** for
+a Demo test session instead, and the server's own verdict is the evidence. That is
+stronger than a pinned file for those families, and it is also why the README's
+coverage table distinguishes the two: a pinned set proves agreement with a
+snapshot, a live session proves agreement with the system that issues the vectors.
+
+Live session state is git-ignored under `.acvts/`, so those vectors are no more
+redistributed than the pinned ones.
+
 ## Suitability and limits
 
-The selected `prompt.json` identifies `ACVP-AES-GCM`, revision `1.0`. It contains four AFT groups and 60 cases covering encrypt and decrypt, 128-bit keys, externally supplied IVs, 96-bit and 120-bit IVs, zero/nonzero payload and AAD combinations, and 32-bit and 128-bit tags.
+Fifteen sets are pinned, covering AES-GCM, AES-ECB/GMAC/KW/KWP, CMAC-AES, SHA2-256,
+HMAC-SHA2-256, ECDSA sigGen and sigVer, ML-KEM, ML-DSA sigVer, both ctrDRBG
+revisions, and KDF SP 800-108.
 
-The set is useful for schema and execution compatibility, but it is not the complete AES-GCM capability space. In particular, it does not cover every permitted key, IV, payload, AAD, tag, test-type, or IV-generation combination.
+These are useful for schema and execution compatibility; none of them is the
+complete capability space of its algorithm. The AES-GCM set, for example, is four
+AFT groups and 60 cases covering encrypt and decrypt, 128-bit keys, externally
+supplied IVs of 96 and 120 bits, zero and nonzero payload and AAD combinations,
+and 32-bit and 128-bit tags — but not every permitted key, IV, payload, AAD, tag,
+test-type or IV-generation combination. A passing run against a pinned set is
+evidence of compatibility, not of coverage.
 
 The repository README describes `gen-val/json-files` as sample JSON files. The selected files themselves declare `"isSample": false`, so this project will call them the "pinned NIST example set" and preserve the field exactly. It will not rewrite the field to fit local terminology.
 
@@ -129,10 +152,10 @@ The repository README describes `gen-val/json-files` as sample JSON files. The s
 
 The pinned repository README contains a NIST software notice that permits use, copying, modification, and distribution, requires the notice to remain intact, asks modified works to record their changes, and requests explicit NIST attribution. It also states that software developed by NIST employees is not subject to United States copyright protection. The notice is embedded in [`README.md`](https://github.com/usnistgov/ACVP-Server/blob/975de31eb83d87039ec88934fdc47d8c312b892d/README.md#license); the repository has no standalone license file or SPDX license identifier at this commit.
 
-The notice discusses NIST-developed software but does not separately classify the generated JSON artifacts. Therefore this repository will not redistribute the three upstream JSON files in v0.1.0. Compatibility tests that need the full NIST set must fetch the exact pinned files and verify the SHA-256 values above. The tiny committed fixtures planned for A03 will be independently generated, clearly labeled local test data rather than copied subsets of the NIST files.
+The notice discusses NIST-developed software but does not separately classify the generated JSON artifacts. Therefore this repository does not redistribute any upstream JSON file — 31 files across 15 sets at the time of writing. Compatibility tests that need them fetch the exact pinned files and verify the recorded sizes and SHA-256 values before use. The committed fixtures under `fixtures/` are independently generated or drawn from published standards, and are labelled as local test data rather than copied subsets of the NIST files.
 
 If upstream vector files or extracts are ever committed later, that requires a new decision: preserve the entire upstream notice, add NIST attribution, record the date and nature of modifications, and confirm that the notice applies to the artifacts being redistributed.
 
 ## Change control
 
-The commit and hashes above are part of the v0.1.0 test contract. A newer upstream commit is not adopted automatically. Changing the source requires reviewing schema changes, licensing, vector coverage, and expected results, then updating this file in a dedicated commit.
+The commit and hashes above are part of the test contract. A newer upstream commit is not adopted automatically. Changing the source requires reviewing schema changes, licensing, vector coverage, and expected results, then updating this file in a dedicated commit.

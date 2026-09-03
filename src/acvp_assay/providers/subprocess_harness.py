@@ -1,9 +1,15 @@
-"""Provider that delegates AES-GCM operations to an external program.
+"""The harness transport: delegate any operation to an external program.
 
 The external program — the "harness" — reads one JSON request on stdin and
 writes one JSON response on stdout. That is the entire contract, so a harness
 can be written in any language and can front an HSM, a smartcard, an embedded
 device, or a library this project cannot link against.
+
+``HarnessClient`` here owns the transport -- process lifetime, framing,
+timeouts, and the reserved errors -- and every family's provider subclasses it
+to add its own operations. All 24 operations are specified in
+``docs/harness-protocol.md``; AES-GCM's are shown below as the shape they all
+follow.
 
 Requests::
 
@@ -34,9 +40,12 @@ NIST's decrypt cases. It is translated into the same ``InvalidTag`` the
 in-process provider raises, so verdict handling upstream is identical for every
 provider. Any other error becomes a bounded invalid-case failure.
 
-The harness is invoked once per operation. That keeps the contract trivial to
-implement — read stdin, write stdout, exit — at the cost of one process spawn
-per case; a persistent mode can be added later without changing the wire format.
+The harness is started once and kept alive for the whole run, so expensive
+setup -- a PKCS#11 login, a serial port, an SSH session -- happens once rather
+than once per case. That is worth roughly fifty times the run time on a small
+set. A one-shot harness that reads stdin to end still works and is detected on
+the first exchange, because a shell script with ``jq`` naturally takes that
+shape and reach matters more than the speed lost.
 
 The harness's stderr is inherited rather than captured, so a developer sees
 diagnostics live while nothing from it can reach the machine-readable report.

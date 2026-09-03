@@ -9,6 +9,7 @@ from pathlib import Path
 
 import pytest
 
+from acvp_assay import __version__
 from acvp_assay.cli import build_parser, main
 
 FIXTURES = Path(__file__).resolve().parents[2] / "fixtures"
@@ -23,7 +24,9 @@ def test_info_prints_metadata(capsys: pytest.CaptureFixture[str]) -> None:
 
     assert exit_code == 0
     assert payload["provider"] == "OpenSSL (via cryptography)"
-    assert payload["runner_version"] == "0.10.0"
+    # Against the package, not a literal: a hard-coded version turns every
+    # release into a test failure that says nothing about behaviour.
+    assert payload["runner_version"] == __version__
     assert payload["cryptography_version"]
     assert payload["openssl_version"].startswith("OpenSSL ")
     assert payload["python_version"].startswith("3.12")

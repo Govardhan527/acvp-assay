@@ -1,4 +1,12 @@
-"""Typed internal models for the AES-GCM MVP."""
+"""Typed internal models.
+
+The result vocabulary every family shares -- ``ResultStatus``,
+``SafeDiagnostic``, ``TestCaseResult``, ``ProviderMetadata`` and the
+``CaseValues`` shapes -- lives here, alongside the AES-GCM vector models.
+Each other family owns its own vector models in ``algorithms/``, because
+their group shapes have little in common; what they share is everything
+downstream of execution.
+"""
 
 from __future__ import annotations
 

@@ -5,6 +5,79 @@ All notable changes to this project are recorded here. The format follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Before 1.0.0 the
 provider protocols may change between minor versions.
 
+## [0.11.0] - 2026-09-03
+
+### Added
+
+- **Every one of the 40 algorithm names now reaches an external harness.** The
+  DRBGs and KDF SP 800-108 were the last holdouts, so the project's central
+  claim -- that an implementation which cannot be linked against can still be
+  tested -- is now true for every family rather than most of them.
+- **A live ACVTS session can be answered from a vendor's implementation.**
+  `scripts/acvts_client.py submit` takes `--provider-command`,
+  `--provider-timeout` and `--dry-run`; with a harness, every value NIST scores
+  comes from the vendor's code rather than from this project's OpenSSL binding.
+  The submitted document is identical in shape either way -- the server is told
+  what was computed, never how.
+- Harness operations `drbg`, `kdf-108` and `ecdsa-sign-group`.
+
+### Changed
+
+- **A declined case now refuses a whole submission.** Offline, UNSUPPORTED is a
+  verdict worth recording. In a submission there is no such verdict: ACVP scores
+  a missing case as a wrong answer, so a partial document would record a failure
+  the implementation never earned. Nothing is sent, and the error names the
+  operation that was declined.
+- **Capability decisions moved to the implementation.** The responder was
+  raising the built-in provider's limits -- ctrDRBG `TDES`, KDF `CMAC-TDES` --
+  on the vendor's behalf, which would make a submission impossible for a product
+  that offers them. Both already travel on the wire, so with a harness the
+  implementation answers or declines them itself. This is the rule `supports()`
+  states everywhere else; the responder was the one place not following it.
+- `run_drbg_case()` is the single driver for a DRBG case. The responder had
+  grown a second copy of the same prediction-resistance and generate-twice
+  logic; the duplicate is gone.
+
+### Fixed
+
+- `SubprocessEcdsaProvider` had only per-case `sign`, which generates a fresh
+  key each time. ACVP reports the public key once per *group*, so ECDSA sigGen
+  could not be submitted through a harness at all. `ecdsa-sign-group` mirrors
+  `rsa-sign-group`.
+- `HMAC_FOR_KDF` in the reference harness was hand-listed at five hashes and
+  declined 5,486 of 11,756 pinned KDF cases. Derived from `HASHLIB` now, the
+  harness path matches the built-in exactly: 10,950 passed, 806 unsupported.
+- A harness failure message is no longer echoed into `HarnessProtocolError`.
+  Such a message commonly quotes the key it failed on, and the error reaches
+  logs and CI output; only the operation is named.
+- A ctrDRBG refusal interpolated nothing, because the second fragment of the
+  message was a plain string rather than an f-string, so it printed a literal
+  brace expression.
+
+### Documentation
+
+- The README banner claimed every algorithm had been judged by NIST's live
+  server. Checking the session records, **22 of the 40** were; the rest are
+  digest-size variants of the same code paths, plus AES-GMAC and the two PQC
+  families. A single Coverage table now carries offline, harness and live-NIST
+  status per algorithm, with the session id for each live claim, followed by a
+  Not-covered list naming the absent families.
+- `docs/limitations.md` still described a "frozen v0.1.0 MVP" supporting "only
+  AES-GCM" -- the most misleading page in the repository, given the README sends
+  vendors to it. Rewritten around what the tool does not tell you.
+- "Testing your own implementation" became a four-stage vendor path, and the
+  harness operation list became a table by family.
+
+### Verified
+
+Each pinned NIST prompt answered both ways and compared: **24,048 cases across
+ten families, byte-identical wherever the answer is deterministic**. Where it
+cannot be -- KDF invents `fixedData`, sigGen invents a key -- the answers were
+checked for self-consistency: 10,950 KDF cases re-derived from the `fixedData`
+the harness reported, and 800 signatures verified under the `qx`/`qy` it
+reported. Groups the reference harness itself declines are excluded rather than
+counted as passes.
+
 ## [0.10.0] - 2026-09-03
 
 ### Added
@@ -306,6 +379,14 @@ Initial release: an offline AES-GCM vector runner.
 - Clean-checkout Linux CI, and a pinned, hash-verified upstream vector source
   that is referenced rather than redistributed.
 
+[0.11.0]: https://github.com/Govardhan527/acvp-assay/releases/tag/v0.11.0
+[0.10.0]: https://github.com/Govardhan527/acvp-assay/releases/tag/v0.10.0
+[0.9.0]: https://github.com/Govardhan527/acvp-assay/releases/tag/v0.9.0
+[0.8.0]: https://github.com/Govardhan527/acvp-assay/releases/tag/v0.8.0
+[0.7.0]: https://github.com/Govardhan527/acvp-assay/releases/tag/v0.7.0
+[0.6.0]: https://github.com/Govardhan527/acvp-assay/releases/tag/v0.6.0
+[0.5.0]: https://github.com/Govardhan527/acvp-assay/releases/tag/v0.5.0
+[0.4.0]: https://github.com/Govardhan527/acvp-assay/releases/tag/v0.4.0
 [0.3.0]: https://github.com/Govardhan527/acvp-assay/releases/tag/v0.3.0
 [0.2.0]: https://github.com/Govardhan527/acvp-assay/releases/tag/v0.2.0
 [0.1.0]: https://github.com/Govardhan527/acvp-assay/releases/tag/v0.1.0
