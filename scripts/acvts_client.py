@@ -202,6 +202,18 @@ def save_session(record: dict[str, object]) -> None:
     path.write_text(json.dumps(record, indent=2))
     path.chmod(0o600)
 
+    # Also beside the session's own vector sets. The single current-session file
+    # is overwritten by the next registration, and once that happens the older
+    # session's scoped token is gone and its verdict can never be read back --
+    # 403, permanently. Seven early sessions were lost that way.
+    identifier = record.get("testSessionId")
+    if identifier:
+        folder = STATE / f"session-{identifier}"
+        folder.mkdir(parents=True, exist_ok=True)
+        scoped = folder / "session.json"
+        scoped.write_text(json.dumps(record, indent=2))
+        scoped.chmod(0o600)
+
 
 def vector_urls(record: dict[str, object]) -> list[str]:
     """The session's vector set URLs, as strings."""
@@ -363,6 +375,18 @@ def _cmd_submit(arguments: argparse.Namespace) -> int:
     return 0
 
 
+def load_session_by_id(identifier: str) -> dict[str, object]:
+    """Load a specific session's record, including its scoped token."""
+    path = STATE / f"session-{identifier}" / "session.json"
+    if not path.exists():
+        raise SystemExit(
+            f"no stored record for session {identifier}: its scoped token was never "
+            "written down, so ACVP will answer 403 and the verdict cannot be recovered"
+        )
+    loaded: dict[str, object] = json.loads(path.read_text())
+    return loaded
+
+
 def _cmd_results(arguments: argparse.Namespace) -> int:
     """Ask the server for its verdict on the session, and keep it.
 
@@ -375,7 +399,8 @@ def _cmd_results(arguments: argparse.Namespace) -> int:
     summarises a session has to say so, rather than multiplying up to a case
     count the server never issued.
     """
-    record = load_session()
+    identifier = getattr(arguments, "session", None)
+    record = load_session_by_id(identifier) if identifier else load_session()
     token = str(record["accessToken"])
     payload = poll(f"{record['url']}/results", token)
 
@@ -389,12 +414,18 @@ def _cmd_results(arguments: argparse.Namespace) -> int:
         for entry in results:
             if not isinstance(entry, dict):
                 continue
-            disposition = str(entry.get("disposition", "unknown"))
+            # The Demo server names this field "status"; the published spec and
+            # some deployments say "disposition". Read either rather than
+            # reporting "unknown" for a verdict that was in fact returned.
+            raw = entry.get("status", entry.get("disposition", "unknown"))
+            disposition = str(raw)
             tally[disposition] = tally.get(disposition, 0) + 1
             url = str(entry.get("vectorSetUrl", "?")).rsplit("/", 1)[-1]
             print(f"  vector set {url}: {disposition}")
         summary = ", ".join(f"{count} {name}" for name, count in sorted(tally.items()))
         print(f"  {len(results)} vector sets -- {summary}")
+        if isinstance(payload.get("passed"), bool):
+            print(f"  session passed: {payload['passed']}")
     else:
         print(json.dumps(payload, indent=2)[:4000])
     print(f"  saved {destination / 'results.json'}")
@@ -486,7 +517,12 @@ def main() -> int:
         help="write response.json for each vector set but do not send anything to NIST",
     )
     submit.set_defaults(run=_cmd_submit)
-    sub.add_parser("results", help="ask the server for its verdict").set_defaults(run=_cmd_results)
+    results = sub.add_parser("results", help="ask the server for its verdict")
+    results.add_argument(
+        "--session",
+        help="an earlier session id, read from its stored record (default: the current session)",
+    )
+    results.set_defaults(run=_cmd_results)
 
     arguments = parser.parse_args()
     try:

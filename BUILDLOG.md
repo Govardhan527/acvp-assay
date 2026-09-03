@@ -342,3 +342,18 @@
 - Commit/link/path: `924c197`, `src/acvp_assay/responder.py`, `scripts/acvts_client.py`, `tests/unit/test_responder_harness.py`.
 - Blocker, if any: none.
 - Next unchecked ID: M13 - publish to PyPI.
+
+## 2026-09-03 - Live coverage from 22 to 38 of 40 algorithm names
+
+- Project and task ID: ACVP Assay - improving NIST coverage
+- Done condition: every algorithm name that *can* be submitted to ACVTS has been, and NIST has returned a verdict on it. The README's headline claim stops being "22 of 40" and becomes the ceiling the code allows.
+- Why this before implementing new families: the 18 unjudged names were already implemented and already passing pinned vectors. Submitting them costs two sessions and converts "agrees with a snapshot" into "judged by the system that issues the vectors" for nearly half the coverage table. Adding a new family buys one more name at many times the cost.
+- Evidence produced: session **765508** - the seven remaining hash names and the eight remaining HMACs, 15 vector sets, 12,867 cases, every one `passed`. Session **765518** - `ACVP-AES-GMAC`, 360 cases, `passed`. Running total across all sessions: **43 vector sets, 32,464 cases, every verdict `passed`**, taking live coverage to **38 of 40 names**. The two that remain, ML-KEM and ML-DSA, have no response builder, so they cannot be submitted at all - that is now the only reason the column is incomplete.
+- Order kept deliberately: every set was verified offline against NIST's expected results *before* submission. All 15 passed locally first, which is why nothing had to be withdrawn.
+- Defect found in my own registration: the GMAC entry declared `payloadLen` as a zero-width range and NIST's generator refused it with `min must be less than max`. GMAC is AAD-only and has no payload to describe. No vectors were generated, so there was nothing to answer; the set is excluded from the 43 and session 765508 therefore reports `passed: false` overall. Re-registered correctly as 765518. Recorded rather than dropped, on the same principle as 765346.
+- Defect found in the new results command, on its first contact with a real reply: it read a `disposition` field and reported every verdict as `unknown`. The Demo server names the field `status`. Both are accepted now. This is precisely the class of bug that only shows up against the live server, and it was visible only because the reply is now saved instead of printed and discarded.
+- Gap closed, and one that cannot be: a session's scoped token was only ever written to the single current-session file, so each registration orphaned the previous session. ACVP answers 403 to any token but the one issued at registration, which means the verdicts from the first seven sessions can never be re-fetched - they are recorded from the runs themselves and that is all the evidence there will be. The record is now written beside each session's own vector sets, and `results --session <id>` reads it back.
+- Tests run and result: `scripts/dev.py verify` - full gate.
+- Commit/link/path: `scripts/acvts_client.py`, `acvts-capabilities/remaining-digests-gmac.json`, `acvts-capabilities/gmac.json`, `README.md`.
+- Blocker, if any: ML-KEM and ML-DSA need a response builder in `responder.py` before they can be submitted. That is the remaining item for live coverage.
+- Next unchecked ID: M13 - publish to PyPI.

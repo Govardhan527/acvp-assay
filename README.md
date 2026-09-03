@@ -1,24 +1,24 @@
 # ACVP Assay
 
 [![CI](https://github.com/Govardhan527/acvp-assay/actions/workflows/ci.yml/badge.svg)](https://github.com/Govardhan527/acvp-assay/actions/workflows/ci.yml)
-[![Verified against NIST ACVTS](https://img.shields.io/badge/NIST%20ACVTS%20Demo-27%20vector%20sets%20passed-2ea44f)](#verified-against-nists-own-server)
+[![Verified against NIST ACVTS](https://img.shields.io/badge/NIST%20ACVTS%20Demo-43%20vector%20sets%20passed-2ea44f)](#verified-against-nists-own-server)
 [![Coverage](https://img.shields.io/badge/coverage-99.7%25-2ea44f)](#development-commands)
 
 > ## ✅ Judged by NIST's own server
 >
-> **22 of the 40 supported algorithm names** have been run against **vectors NIST generated
-> live** and submitted back for NIST to judge. On `demo.acvts.nist.gov`, **27 vector sets —
-> covering 19,237 test cases — each came back `"passed"`**, and that disposition is the
-> server's, not this project's. [Exactly which, per algorithm](#coverage).
+> **38 of the 40 supported algorithm names** — every one that can be submitted — have been run
+> against **vectors NIST generated live** and submitted back for NIST to judge. On
+> `demo.acvts.nist.gov`, **43 vector sets, covering 32,464 test cases, each came back
+> `"passed"`**, and that verdict is the server's, not this project's.
+> [Exactly which, per algorithm](#coverage).
 >
-> Read those two numbers precisely: ACVP issues one disposition **per vector set**, so 27 is
-> the count of verdicts NIST returned and 19,237 is the number of cases inside them. The server
-> never issued 19,237 separate verdicts, and this project does not claim it did.
+> Read those two numbers precisely: ACVP returns one verdict **per vector set**, so 43 is the
+> count of verdicts NIST issued and 32,464 is the number of cases inside them. The server never
+> issued 32,464 separate verdicts, and this project does not claim it did.
 >
-> The other 18 names are digest-size variants of the same code paths (`SHA2-384` differs from
-> the live-verified `SHA2-256` only in which digest is selected), plus AES-GMAC and the two PQC
-> families. They run against pinned NIST vectors, and are marked *not yet submitted* in the
-> coverage table rather than counted as verified.
+> The two remaining names are ML-KEM and ML-DSA, which have no response builder yet and so
+> cannot be submitted at all. They run against pinned NIST vectors and are marked *cannot be
+> submitted* in the coverage table rather than counted as verified.
 >
 > Most tools of this kind are checked against static files only. Being checked by the system
 > that issues the vectors is what caught the four defects listed under
@@ -52,8 +52,9 @@ Implemented today:
   verdict (38 of the 40 names; ML-KEM and ML-DSA have no response builder yet)
 - run-over-run regression diffing, including coverage that silently disappeared
 - typed parsing that preserves `vsId`, `tgId`, and `tcId`
-- deterministic tests on Linux, verified against pinned NIST vectors, and for 22 of the 40
-  names **against vectors generated live by NIST's ACVTS server** — see [Coverage](#coverage)
+- deterministic tests on Linux, verified against pinned NIST vectors, and for 38 of the 40
+  names — every one that can be submitted — **against vectors generated live by NIST's ACVTS
+  server** — see [Coverage](#coverage)
 
 Deliberately out of scope: a general-purpose ACVP protocol client (`libacvp` and
 ACVP Proxy already do that well), an HTML dashboard, performance benchmarking,
@@ -112,31 +113,35 @@ Three questions a vendor actually needs answered, in one table:
 
 | Algorithm | Test types | Offline | Harness | Live NIST verdict |
 | --- | --- | :---: | :---: | --- |
-| `ACVP-AES-GCM` | AFT | ✅ | ✅ | `passed` — session 765343 |
-| `ACVP-AES-ECB` | AFT, MCT | ✅ | ✅ | `passed` — session 765342 |
-| `ACVP-AES-CBC`, `-CTR`, `-OFB`, `-CFB128` | AFT, MCT, CTR | ✅ | ✅ | `passed` — sessions 765346, 765353 |
-| `ACVP-AES-KW`, `ACVP-AES-KWP` | AFT | ✅ | ✅ | `passed` — session 765342 |
-| `ACVP-AES-GMAC` | AFT | ✅ | ✅ | not yet submitted |
-| `CMAC-AES` | AFT (gen and ver) | ✅ | ✅ | `passed` — session 765342 |
-| `SHA-1` | AFT, MCT | ✅ | ✅ | `passed` — session 765345 |
-| `SHA2-256` | AFT, MCT | ✅ | ✅ | `passed` — sessions 765339, 765342 |
-| `SHA2-224/384/512`, `SHA2-512/224`, `SHA2-512/256` | AFT, MCT | ✅ | ✅ | not yet submitted |
-| `SHA3-256`, `SHA3-512` | AFT, MCT | ✅ | ✅ | `passed` — session 765345 |
-| `SHA3-224`, `SHA3-384` | AFT, MCT | ✅ | ✅ | not yet submitted |
-| `HMAC-SHA-1` | AFT | ✅ | ✅ | `passed` — session 765345 |
-| `HMAC-SHA2-256` | AFT | ✅ | ✅ | `passed` — session 765342 |
-| `HMAC-SHA3-256` | AFT | ✅ | ✅ | `passed` — session 765345 |
-| `HMAC-SHA2-224/384/512`, `-512/224`, `-512/256`, `HMAC-SHA3-224/384/512` | AFT | ✅ | ✅ | not yet submitted |
-| `ctrDRBG` | AFT | ✅ | ✅ | `passed` — session 765342 |
-| `hashDRBG`, `hmacDRBG` | AFT | ✅ | ✅ | `passed` — session 765354 |
-| `KDF` (SP 800-108) | AFT | ✅ | ✅ | `passed` — session 765343 |
-| `ECDSA` | sigGen, sigVer | ✅ | ✅ | `passed` — session 765343 |
-| `RSA` | sigGen, sigVer, signaturePrimitive, decryptionPrimitive | ✅ | ✅ | `passed` — session 765356 |
-| `ML-KEM` | encap, decap, key checks | harness only | ✅ | not yet submitted |
-| `ML-DSA` | sigVer | harness only | ✅ | not yet submitted |
+| `ACVP-AES-GCM` | AFT | ✅ | ✅ | `passed` — 765343 |
+| `ACVP-AES-ECB` | AFT, MCT | ✅ | ✅ | `passed` — 765342 |
+| `ACVP-AES-CBC`, `-CTR`, `-OFB`, `-CFB128` | AFT, MCT, CTR | ✅ | ✅ | `passed` — 765353 |
+| `ACVP-AES-KW`, `ACVP-AES-KWP` | AFT | ✅ | ✅ | `passed` — 765342 |
+| `ACVP-AES-GMAC` | AFT | ✅ | ✅ | `passed` — 765518 |
+| `CMAC-AES` | AFT (gen and ver) | ✅ | ✅ | `passed` — 765342 |
+| `SHA-1` | AFT, MCT | ✅ | ✅ | `passed` — 765345 |
+| `SHA2-224` | AFT, MCT | ✅ | ✅ | `passed` — 765508 |
+| `SHA2-256` | AFT, MCT | ✅ | ✅ | `passed` — 765339, 765342 |
+| `SHA2-384`, `SHA2-512` | AFT, MCT | ✅ | ✅ | `passed` — 765508 |
+| `SHA2-512/224`, `SHA2-512/256` | AFT, MCT | ✅ | ✅ | `passed` — 765508 |
+| `SHA3-224`, `SHA3-384` | AFT, MCT | ✅ | ✅ | `passed` — 765508 |
+| `SHA3-256`, `SHA3-512` | AFT, MCT | ✅ | ✅ | `passed` — 765345 |
+| `HMAC-SHA-1` | AFT | ✅ | ✅ | `passed` — 765345 |
+| `HMAC-SHA2-256` | AFT | ✅ | ✅ | `passed` — 765342 |
+| `HMAC-SHA2-224/384/512`, `-512/224`, `-512/256` | AFT | ✅ | ✅ | `passed` — 765508 |
+| `HMAC-SHA3-256` | AFT | ✅ | ✅ | `passed` — 765345 |
+| `HMAC-SHA3-224`, `-384`, `-512` | AFT | ✅ | ✅ | `passed` — 765508 |
+| `ctrDRBG` | AFT | ✅ | ✅ | `passed` — 765342 |
+| `hashDRBG`, `hmacDRBG` | AFT | ✅ | ✅ | `passed` — 765354 |
+| `KDF` (SP 800-108) | AFT | ✅ | ✅ | `passed` — 765343 |
+| `ECDSA` | sigGen, sigVer | ✅ | ✅ | `passed` — 765343 |
+| `RSA` | sigGen, sigVer, signaturePrimitive, decryptionPrimitive | ✅ | ✅ | `passed` — 765356 |
+| `ML-KEM` | encap, decap, key checks | harness only | ✅ | cannot be submitted yet |
+| `ML-DSA` | sigVer | harness only | ✅ | cannot be submitted yet |
 
 **40 algorithm names across 22 families. All 40 reach a harness; 38 can be submitted to a live
-session** (ML-KEM and ML-DSA have no response builder yet).
+session, and all 38 have been** — ML-KEM and ML-DSA are the two that cannot, having no response
+builder yet, which is the only reason the live column is not complete.
 
 The harness path is checked against the built-in one by answering each pinned NIST prompt both
 ways and comparing: **24,048 cases across ten families, byte-identical wherever the answer is
@@ -348,9 +353,10 @@ This second fixture's tag is deliberately corrupted (see `fixtures/README.md`); 
 ## Verified against NIST's own server
 
 Static vector files tell you whether a runner agrees with a snapshot. They cannot tell you whether
-it agrees with the system that issues the vectors. So 22 of the 40 supported algorithm names have
-been through a live test session on NIST's ACVTS Demo server: register capabilities, fetch vectors
-NIST generated for this client, compute answers, submit them, and read back the verdict.
+it agrees with the system that issues the vectors. So 38 of the 40 supported algorithm names — all
+38 that can be submitted — have been through a live test session on NIST's ACVTS Demo server:
+register capabilities, fetch vectors NIST generated for this client, compute answers, submit them,
+and read back the verdict.
 
 Two qualifications, both of which a reader should have without asking. These were **sample**
 sessions, so NIST supplies the expected results alongside the prompt — but the answers submitted
@@ -358,7 +364,7 @@ were computed from the prompt by the same providers the offline runner uses, nev
 NIST's answer key; `responder.py` does not open `expectedResults.json` at all. And Demo is not the
 production ACVTS, which is available to accredited laboratories rather than to tool authors.
 
-| Session | Algorithms | Vector sets | Cases | Disposition |
+| Session | Algorithms | Sets | Cases | Verdict |
 | ---: | --- | ---: | ---: | --- |
 | 765339 | SHA2-256 | 1 | 513 | `passed` |
 | 765342 | SHA2-256, HMAC-SHA2-256, AES-ECB, CMAC-AES, AES-KW, AES-KWP, ctrDRBG | 7 | 8,966 | `passed` |
@@ -368,14 +374,28 @@ production ACVTS, which is available to accredited laboratories rather than to t
 | 765353 | AES-CBC, AES-CTR, AES-OFB, AES-CFB128 | 4 | 6,016 | `passed` |
 | 765354 | hashDRBG, hmacDRBG | 2 | 120 | `passed` |
 | 765356 | RSA sigGen, sigVer, signaturePrimitive, decryptionPrimitive | 4 | 98 | `passed` |
-| | **Completed** | **27** | **19,237** | **all `passed`** |
+| 765508 | SHA2-224/384/512, SHA2-512/224, SHA2-512/256, SHA3-224, SHA3-384, and the eight remaining HMACs | 15 | 12,867 | `passed` ¹ |
+| 765518 | AES-GMAC | 1 | 360 | `passed` |
+| | **Completed** | **43** | **32,464** | **all `passed`** |
+
+¹ Session 765508 registered a sixteenth algorithm, AES-GMAC, whose vector set NIST's generator
+refused with `min must be less than max` — the registration declared a zero-width `payloadLen`,
+and GMAC has no payload to describe. That is a bug in the capability file, not in the runner: no
+vectors were ever produced, so there was nothing to answer. The set is excluded from the 43, the
+session therefore reports `passed: false` overall, and GMAC was re-registered correctly as 765518.
 
 **Session 765346 is listed because it failed.** It is where the Monte Carlo decrypt bug below
 was found: the AES-CTR set was submitted, the other three were not, and the session was
 abandoned rather than finished around a known-wrong answer. 765353 is the re-run after the fix.
-Its cases are excluded from the total, which is why the total is 27 sets and not 31 — a run
-that was abandoned is not evidence, and dropping it from the table without saying so would make
-the total flattering rather than true.
+Its cases are excluded from the total — a run that was abandoned is not evidence, and dropping
+it from the table without saying so would make the total flattering rather than true.
+
+**On evidence.** `acvts_client.py results` now writes the server's reply to `results.json` beside
+the vector sets it judges, so 765508 and 765518 are backed by the stored verdict. The seven
+earlier sessions are not: `results` used to print the reply and discard it, and ACVP scopes a
+session's token to its registration, so re-reading them now returns 403. Those verdicts are
+recorded here from the runs themselves and cannot be re-fetched — which is exactly why they are
+now written down.
 
 ### What this caught that fixtures did not
 

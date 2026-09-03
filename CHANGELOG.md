@@ -5,6 +5,43 @@ All notable changes to this project are recorded here. The format follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Before 1.0.0 the
 provider protocols may change between minor versions.
 
+## [0.12.0] - 2026-09-03
+
+### Added
+
+- **Every algorithm that can be submitted has now been judged by NIST.** Two
+  new sessions on `demo.acvts.nist.gov` took the live-verified count from 22 of
+  40 algorithm names to **38 of 40** — the remaining two, ML-KEM and ML-DSA,
+  have no response builder and so cannot be submitted at all.
+  - Session 765508: the seven remaining hash names (`SHA2-224/384/512`,
+    `SHA2-512/224`, `SHA2-512/256`, `SHA3-224`, `SHA3-384`) and the eight
+    remaining HMACs. 15 vector sets, 12,867 cases, all `passed`.
+  - Session 765518: `ACVP-AES-GMAC`. 360 cases, `passed`.
+  - Running total: **43 vector sets, 32,464 cases, every verdict `passed`.**
+- `acvts-capabilities/remaining-digests-gmac.json` and `gmac.json`.
+- `results --session <id>` re-reads an earlier session's verdict from its
+  stored record.
+
+### Fixed
+
+- **`results` reported every verdict as `unknown`.** It read a `disposition`
+  field; the Demo server names it `status`. Both are accepted now. This was
+  caught the first time the command was run against a real reply, because the
+  reply is now saved rather than printed and discarded.
+- **A session's scoped token was only ever stored for the *current* session**,
+  so registering the next one orphaned the last. ACVP scopes a token to its
+  registration and answers 403 to any other, which is why the verdicts from the
+  first seven sessions can no longer be re-fetched. The record is now written
+  beside the session's own vector sets as well.
+
+### Notes
+
+- The GMAC registration in 765508 declared a zero-width `payloadLen` and NIST's
+  generator refused it with `min must be less than max` — GMAC is AAD-only and
+  has no payload to describe. No vectors were produced, so the set is excluded
+  from the 43 and that session reports `passed: false` overall. Recorded in the
+  README rather than quietly dropped.
+
 ## [0.11.0] - 2026-09-03
 
 ### Added
@@ -379,6 +416,7 @@ Initial release: an offline AES-GCM vector runner.
 - Clean-checkout Linux CI, and a pinned, hash-verified upstream vector source
   that is referenced rather than redistributed.
 
+[0.12.0]: https://github.com/Govardhan527/acvp-assay/releases/tag/v0.12.0
 [0.11.0]: https://github.com/Govardhan527/acvp-assay/releases/tag/v0.11.0
 [0.10.0]: https://github.com/Govardhan527/acvp-assay/releases/tag/v0.10.0
 [0.9.0]: https://github.com/Govardhan527/acvp-assay/releases/tag/v0.9.0
