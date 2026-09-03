@@ -39,7 +39,7 @@ from acvp_assay.providers.aes_block import (
 )
 from acvp_assay.providers.aes_modes import AesModeProvider, CryptographyAesModeProvider
 from acvp_assay.providers.cryptography_aesgcm import CryptographyAesGcmProvider
-from acvp_assay.providers.ctr_drbg import BLOCK_CIPHERS, CryptographyCtrDrbg, CtrDrbgProvider
+from acvp_assay.providers.ctr_drbg import CtrDrbgProvider
 from acvp_assay.providers.digest import (
     HASHLIB_ALGORITHMS,
     HashlibHashProvider,
@@ -354,13 +354,14 @@ def _aes_block_groups(document: dict[str, object]) -> list[dict[str, object]]:
 def _ctr_drbg_groups(document: dict[str, object]) -> list[dict[str, object]]:
     """The bits returned by the second generation of each case."""
     vector_set = ctr_drbg.parse_vector_set(document)
-    provider: CtrDrbgProvider = CryptographyCtrDrbg()
+    provider: CtrDrbgProvider = ctr_drbg.provider_for(vector_set.algorithm)
     groups: list[dict[str, object]] = []
     for group in vector_set.groups:
-        if group.mode not in BLOCK_CIPHERS:
+        if group.mode not in ctr_drbg.SUPPORTED[vector_set.algorithm]:
             raise ResponseError(
                 f"tgId {group.tg_id} uses mode {group.mode!r}, which this runner does not "
-                "implement; three-key TDES has been disallowed for this use since 2023"
+                "implement for {vector_set.algorithm}; three-key TDES has been disallowed "
+                "for this use since 2023"
             )
         cases: list[dict[str, object]] = []
         for case in group.cases:
@@ -524,7 +525,7 @@ def _builder_for(algorithm: str) -> _Builder | None:
         aes_modes.KW: _aes_modes_groups,
         aes_modes.KWP: _aes_modes_groups,
         **dict.fromkeys(aes_block.SUPPORTED, _aes_block_groups),
-        ctr_drbg.ALGORITHM: _ctr_drbg_groups,
+        **dict.fromkeys(ctr_drbg.SUPPORTED, _ctr_drbg_groups),
         kdf.ALGORITHM: _kdf_groups,
         "ECDSA": _ecdsa_groups,
     }.get(algorithm)
@@ -558,7 +559,7 @@ def supported_response_algorithms() -> tuple[str, ...]:
         aes_modes.KW,
         aes_modes.KWP,
         *aes_block.SUPPORTED,
-        ctr_drbg.ALGORITHM,
+        *ctr_drbg.SUPPORTED,
         kdf.ALGORITHM,
         "ECDSA",
         *HASHLIB_ALGORITHMS,

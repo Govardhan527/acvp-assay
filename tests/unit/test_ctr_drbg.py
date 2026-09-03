@@ -235,7 +235,7 @@ def test_an_absent_counter_field_length_means_the_whole_block() -> None:
 @pytest.mark.parametrize(
     ("mutation", "message"),
     [
-        ({"algorithm": "ACVP-AES-GCM"}, "expected 'ctrDRBG'"),
+        ({"algorithm": "ACVP-AES-GCM"}, "expected one of"),
         ({"testGroups": "not-a-list"}, "expected an array"),
     ],
 )

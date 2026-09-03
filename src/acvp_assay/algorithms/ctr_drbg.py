@@ -28,13 +28,40 @@ from acvp_assay.parser import (
     integer,
     list_field,
     mapping,
+    optional_boolean,
     optional_hex_bytes,
     optional_integer,
     string_field,
 )
-from acvp_assay.providers.ctr_drbg import BLOCK_CIPHERS, CtrDrbgProvider
+from acvp_assay.providers.ctr_drbg import BLOCK_CIPHERS, CryptographyCtrDrbg, CtrDrbgProvider
+from acvp_assay.providers.hash_drbg import SEED_LENGTH_BITS, HashDrbg, HmacDrbg
 
 ALGORITHM = "ctrDRBG"
+HASH_DRBG = "hashDRBG"
+HMAC_DRBG = "hmacDRBG"
+
+#: The three SP 800-90A mechanisms, and the modes each one accepts.
+SUPPORTED: dict[str, frozenset[str]] = {
+    ALGORITHM: frozenset(BLOCK_CIPHERS),
+    HASH_DRBG: frozenset(SEED_LENGTH_BITS),
+    HMAC_DRBG: frozenset(SEED_LENGTH_BITS),
+}
+
+
+def provider_for(algorithm: str) -> CtrDrbgProvider:
+    """The built-in provider for one DRBG mechanism.
+
+    All three present the same boundary because all three have the same
+    lifecycle; only ctrDRBG reads the derivation-function and counter-width
+    options, which the other two accept and ignore.
+    """
+    if algorithm == HASH_DRBG:
+        return HashDrbg()
+    if algorithm == HMAC_DRBG:
+        return HmacDrbg()
+    return CryptographyCtrDrbg()
+
+
 RESEED = "reSeed"
 GENERATE = "generate"
 _USES = (RESEED, GENERATE)
@@ -130,7 +157,7 @@ def _parse_group(value: object, *, path: str) -> DrbgGroup:
     return DrbgGroup(
         tg_id=integer(document, "tgId", path=path),
         mode=string_field(document, "mode", path=path),
-        derivation_function=boolean(document, "derFunc", path=path),
+        derivation_function=optional_boolean(document, "derFunc", path=path) or False,
         prediction_resistance=boolean(document, "predResistance", path=path),
         returned_bits=returned,
         counter_field_bits=counter_bits,
@@ -144,8 +171,8 @@ def parse_vector_set(value: object) -> DrbgVectorSet:
     """Parse a ctrDRBG prompt document, rejecting anything malformed."""
     document = mapping(value, path="$")
     algorithm = string_field(document, "algorithm", path="$")
-    if algorithm != ALGORITHM:
-        raise AcvpValidationError("$.algorithm", f"expected {ALGORITHM!r}")
+    if algorithm not in SUPPORTED:
+        raise AcvpValidationError("$.algorithm", f"expected one of {sorted(SUPPORTED)}")
     groups = list_field(document, "testGroups", path="$")
     return DrbgVectorSet(
         vs_id=integer(document, "vsId", path="$"),
@@ -247,7 +274,7 @@ def run_vector_set(
     """Execute every case, declaring the ones this provider cannot answer."""
     results: list[TestCaseResult] = []
     for group in vector_set.groups:
-        supported_mode = group.mode in BLOCK_CIPHERS
+        supported_mode = group.mode in SUPPORTED[vector_set.algorithm]
         for case in group.cases:
             if not supported_mode:
                 results.append(
@@ -266,13 +293,16 @@ def run_vector_set(
     return results
 
 
-def supported_modes() -> Sequence[str]:
-    """Block cipher modes this runner can execute."""
-    return tuple(BLOCK_CIPHERS)
+def supported_modes(algorithm: str = ALGORITHM) -> Sequence[str]:
+    """Modes this runner can execute for one DRBG mechanism."""
+    return tuple(sorted(SUPPORTED.get(algorithm, frozenset())))
 
 
 __all__ = [
     "ALGORITHM",
+    "HASH_DRBG",
+    "HMAC_DRBG",
+    "SUPPORTED",
     "DrbgCase",
     "DrbgExpectedSet",
     "DrbgGroup",
@@ -282,6 +312,7 @@ __all__ = [
     "load_vector_set",
     "parse_expected_results",
     "parse_vector_set",
+    "provider_for",
     "run_vector_set",
     "supported_modes",
 ]

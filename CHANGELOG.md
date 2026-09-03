@@ -5,6 +5,32 @@ All notable changes to this project are recorded here. The format follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Before 1.0.0 the
 provider protocols may change between minor versions.
 
+## [0.9.0] - 2026-09-03
+
+### Added
+
+- `hashDRBG` and `hmacDRBG`, completing the SP 800-90A trio beside `ctrDRBG`.
+  Effectively every FIPS module contains one of the three, so this closes the
+  mechanism rather than a corner of it. Seven hashes each: SHA-1, the SHA-2
+  family and both truncated SHA-512 variants.
+- Both were submitted to demo.acvts.nist.gov and the session returned
+  `"passed"`. 120 cases, and they passed on the first run -- which is what
+  reading NIST's generator first buys.
+
+### Notes
+
+- All three mechanisms now share one runner and one boundary, because all three
+  have the same lifecycle: instantiate, optionally reseed, generate twice, and
+  compare only the second generation. `ctrDRBG`'s derivation-function and
+  counter-width options are accepted and ignored by the other two rather than
+  splitting the code into three paths.
+- The implementations were written from `DrbgHash.cs` and `DrbgHmac.cs` in
+  usnistgov/ACVP-Server rather than from prose. Two details that reading only
+  the standard makes easy to miss: Hash_DRBG folds the *reseed counter* into V
+  alongside H and C after every generation, and HMAC_DRBG runs its trailing
+  update even when there is no additional input -- a single pass rather than
+  two, but skipping it entirely desynchronises every later generation.
+
 ## [0.8.0] - 2026-09-03
 
 ### Added

@@ -1,0 +1,22 @@
+[
+  {"algorithm": "hashDRBG", "revision": "1.0",
+   "predResistanceEnabled": [true, false], "reseedImplemented": true,
+   "capabilities": [
+     {"mode": "SHA2-256", "derFuncEnabled": false,
+      "entropyInputLen": [256], "nonceLen": [128], "persoStringLen": [0],
+      "additionalInputLen": [0], "returnedBitsLen": 1024},
+     {"mode": "SHA2-512", "derFuncEnabled": false,
+      "entropyInputLen": [256], "nonceLen": [128], "persoStringLen": [256],
+      "additionalInputLen": [256], "returnedBitsLen": 2048}
+   ]},
+  {"algorithm": "hmacDRBG", "revision": "1.0",
+   "predResistanceEnabled": [true, false], "reseedImplemented": true,
+   "capabilities": [
+     {"mode": "SHA2-256", "derFuncEnabled": false,
+      "entropyInputLen": [256], "nonceLen": [128], "persoStringLen": [0],
+      "additionalInputLen": [0], "returnedBitsLen": 1024},
+     {"mode": "SHA-1", "derFuncEnabled": false,
+      "entropyInputLen": [160], "nonceLen": [80], "persoStringLen": [160],
+      "additionalInputLen": [160], "returnedBitsLen": 640}
+   ]}
+]

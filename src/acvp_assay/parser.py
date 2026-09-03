@@ -302,6 +302,7 @@ list_field = _list
 hex_bytes = _hex_bytes
 optional_hex_bytes = _optional_hex_bytes
 optional_integer = _optional_integer
+optional_boolean = _optional_boolean
 
 __all__ = [
     "AcvpValidationError",
@@ -313,6 +314,7 @@ __all__ = [
     "load_vector_set",
     "mapping",
     "optional_hex_bytes",
+    "optional_boolean",
     "optional_integer",
     "optional_string",
     "parse_expected_results",

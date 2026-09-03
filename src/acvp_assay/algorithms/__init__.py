@@ -27,7 +27,6 @@ from acvp_assay.providers.aes_modes import (
 )
 from acvp_assay.providers.aes_modes import CryptographyAesModeProvider
 from acvp_assay.providers.cryptography_aesgcm import CryptographyAesGcmProvider
-from acvp_assay.providers.ctr_drbg import CryptographyCtrDrbg
 from acvp_assay.providers.ctr_drbg import CtrDrbgProvider as CtrDrbgProviderProtocol
 from acvp_assay.providers.digest import (
     HASHLIB_ALGORITHMS,
@@ -74,7 +73,7 @@ def supported_algorithms() -> list[str]:
         "ECDSA",
         "ML-DSA",
         "ML-KEM",
-        ctr_drbg.ALGORITHM,
+        *ctr_drbg.SUPPORTED,
         kdf.ALGORITHM,
         *aes_block.SUPPORTED,
         *aes_modes.SUPPORTED,
@@ -226,7 +225,8 @@ def _run_ctr_drbg(
         raise UnsupportedAlgorithmError(
             "--provider-command does not yet cover ctrDRBG; run it with the built-in provider"
         )
-    provider: CtrDrbgProviderProtocol = CryptographyCtrDrbg()
+    algorithm, _ = peek_algorithm(vector_file)
+    provider: CtrDrbgProviderProtocol = ctr_drbg.provider_for(algorithm)
     metadata = provider.metadata()
     vector_set = ctr_drbg.load_vector_set(vector_file)
     expected = ctr_drbg.load_expected_results(expected_file)
@@ -296,7 +296,7 @@ def run_vector_file(
         runners[algorithm] = lambda: _run_kdf(
             vector_file, expected_file, provider_command, provider_timeout
         )
-    elif algorithm == ctr_drbg.ALGORITHM:
+    elif algorithm in ctr_drbg.SUPPORTED:
         runners[algorithm] = lambda: _run_ctr_drbg(
             vector_file, expected_file, provider_command, provider_timeout
         )
