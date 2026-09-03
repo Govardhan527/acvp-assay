@@ -19,6 +19,18 @@ vectors/
 # Credentials: ACVTS client key must never be committed
 *.key
 *.csr
+*.cer
+*.pem
+*.p12
+*totp*
+
+# Live ACVTS session state: session tokens, downloaded vectors, submitted
+# responses. NIST's vectors are theirs to distribute, and the tokens are
+# secrets, so none of this is committed.
+.acvts/
 
 # Operational credential notes stay local (contains the ACVTS mailbox)
 docs/acvts-demo-access-request.md
+
+# Local credential paths (points outside the repo; not a secret, but not shared)
+.acvts-env
