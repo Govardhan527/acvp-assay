@@ -15,7 +15,7 @@ from acvp_assay.providers.aes_modes import (
     MCT_OUTER_ITERATIONS,
     AesModeProvider,
     CryptographyAesModeProvider,
-    _shuffle,
+    key_shuffle,
 )
 
 KEY128 = bytes.fromhex("000102030405060708090A0B0C0D0E0F")
@@ -89,7 +89,7 @@ def test_key_shuffle_preserves_key_length(key_length: int) -> None:
     block because one 128-bit output cannot refresh a wider key.
     """
     key = bytes(range(key_length))
-    shuffled = _shuffle(key, b"\x11" * 16, b"\x22" * 16)
+    shuffled = key_shuffle(key, b"\x11" * 16, b"\x22" * 16)
 
     assert len(shuffled) == key_length
     assert shuffled != key

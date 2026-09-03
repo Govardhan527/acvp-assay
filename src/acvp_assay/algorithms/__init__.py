@@ -18,8 +18,10 @@ from pathlib import Path
 
 from acvp_assay import parser as aes_parser
 from acvp_assay import runner as aes_runner
-from acvp_assay.algorithms import aes_modes, ctr_drbg, ecdsa, hmac_mac, kdf, pqc, sha2
+from acvp_assay.algorithms import aes_block, aes_modes, ctr_drbg, ecdsa, hmac_mac, kdf, pqc, sha2
 from acvp_assay.models import ProviderMetadata, TestCaseResult
+from acvp_assay.providers.aes_block import AesBlockProvider as AesBlockProviderProtocol
+from acvp_assay.providers.aes_block import CryptographyAesBlockProvider
 from acvp_assay.providers.aes_modes import (
     AesModeProvider as AesModeProviderProtocol,
 )
@@ -74,6 +76,7 @@ def supported_algorithms() -> list[str]:
         "ML-KEM",
         ctr_drbg.ALGORITHM,
         kdf.ALGORITHM,
+        *aes_block.SUPPORTED,
         *aes_modes.SUPPORTED,
         *HASHLIB_ALGORITHMS,
     ]
@@ -248,6 +251,24 @@ def _run_kdf(
     return kdf.run_vector_set(vector_set, expected, provider), metadata
 
 
+def _run_aes_block(
+    vector_file: Path,
+    expected_file: Path,
+    provider_command: str | None,
+    provider_timeout: float,
+) -> tuple[list[TestCaseResult], ProviderMetadata]:
+    if provider_command is not None:
+        raise UnsupportedAlgorithmError(
+            "--provider-command does not yet cover the AES chaining modes; "
+            "run them with the built-in provider"
+        )
+    provider: AesBlockProviderProtocol = CryptographyAesBlockProvider()
+    metadata = provider.metadata()
+    vector_set = aes_block.load_vector_set(vector_file)
+    expected = aes_block.load_expected_results(expected_file)
+    return aes_block.run_vector_set(vector_set, expected, provider), metadata
+
+
 def run_vector_file(
     vector_file: Path,
     expected_file: Path,
@@ -277,6 +298,10 @@ def run_vector_file(
         )
     elif algorithm == ctr_drbg.ALGORITHM:
         runners[algorithm] = lambda: _run_ctr_drbg(
+            vector_file, expected_file, provider_command, provider_timeout
+        )
+    elif algorithm in aes_block.SUPPORTED:
+        runners[algorithm] = lambda: _run_aes_block(
             vector_file, expected_file, provider_command, provider_timeout
         )
     elif algorithm in aes_modes.SUPPORTED:

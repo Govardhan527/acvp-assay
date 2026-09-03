@@ -5,6 +5,37 @@ All notable changes to this project are recorded here. The format follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Before 1.0.0 the
 provider protocols may change between minor versions.
 
+## [0.8.0] - 2026-09-03
+
+### Added
+
+- The AES chaining modes: `ACVP-AES-CBC`, `ACVP-AES-CTR`, `ACVP-AES-OFB` and
+  `ACVP-AES-CFB128`. CBC and CTR appear on very nearly every certificate ever
+  issued, which made this the largest remaining commercial gap.
+- 6,008 cases executed against vectors the live server generated, zero
+  failures, with 8 declared.
+
+### Notes
+
+- `ACVP-AES-CTR` has **no Monte Carlo test**. ACVP gives it a `CTR` test type,
+  but that is a server-side distinction: the server back-computes the IVs from
+  an ordinary functional answer. All 1,742 CTR cases pass.
+- Monte Carlo support is deliberately partial, and the table in
+  `docs/limitations.md` says exactly where. The specification gives the encrypt
+  chain as pseudocode and defines decryption as the same pseudocode with PT and
+  CT swapped. Implemented literally, that reproduces the live server's CBC and
+  CFB128 **encrypt** arrays field for field across all 100 outer iterations --
+  and matches nothing for decryption, or for OFB in either direction. A search
+  over 36 candidate feedback rules, at every iteration count to 1200, found no
+  chain that does.
+- Those groups are reported UNSUPPORTED and the responder refuses to submit
+  them. That costs 8 cases of 6,016. A Monte Carlo chain that runs to
+  completion and disagrees is scored as a wrong answer and looks like a working
+  implementation until a laboratory says otherwise, so declaring is the cheaper
+  error by a wide margin.
+- `CFB` and `OFB` are read from `cryptography.hazmat.decrepit`, which is where
+  they move in version 49.
+
 ## [0.7.0] - 2026-09-03
 
 ### Added

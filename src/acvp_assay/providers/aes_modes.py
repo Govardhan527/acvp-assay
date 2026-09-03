@@ -54,7 +54,7 @@ class AesModeProvider(Protocol):
         ...
 
 
-def _shuffle(key: bytes, last: bytes, previous: bytes) -> bytes:
+def key_shuffle(key: bytes, last: bytes, previous: bytes) -> bytes:
     """Derive the next Monte Carlo key, per the ACVP symmetric specification.
 
     ``128: Key ^ CT[j]``,
@@ -109,7 +109,7 @@ class CryptographyAesModeProvider:
                 previous, last = last, produced
                 block = produced
             results.append((key, first, last))
-            key = _shuffle(key, last, previous)
+            key = key_shuffle(key, last, previous)
             data = last
         return results
 
@@ -156,6 +156,7 @@ __all__ = [
     "MCT_INNER_ITERATIONS",
     "MCT_OUTER_ITERATIONS",
     "AesModeProvider",
+    "key_shuffle",
     "CryptographyAesModeProvider",
     "McTriple",
 ]

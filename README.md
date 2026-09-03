@@ -15,7 +15,7 @@ Two things distinguish it from `libacvp` and ACVP Proxy, which cover more algori
 
 Implemented today:
 
-- fifteen algorithm families — AES-GCM, AES-ECB, AES-GMAC, AES-KW/KWP,
+- nineteen algorithm families — AES-GCM, AES-ECB, AES-GMAC, AES-KW/KWP,
   CMAC-AES, CTR_DRBG, KDF SP 800-108, SHA-1, SHA-2, SHA-3, HMAC, ECDSA,
   ML-KEM, ML-DSA
 - a replaceable provider boundary, in-process or an external harness over JSON
@@ -72,6 +72,7 @@ The algorithm is read from the vector file itself and routed automatically. Curr
 | `ACVP-AES-GMAC` | AFT | Tag generation, and verification including deliberate forgeries |
 | `ACVP-AES-KW`, `ACVP-AES-KWP` | AFT | `kwCipher: cipher`; the `inverse` variant is reported UNSUPPORTED |
 | `CMAC-AES` | AFT (gen and ver) | Honours per-group `macLen` truncation |
+| `ACVP-AES-CBC`, `ACVP-AES-CTR`, `ACVP-AES-OFB`, `ACVP-AES-CFB128` | AFT, MCT, CTR | CTR defines no MCT; CBC/CFB128 encrypt chains are verified, the rest are declared (see `docs/limitations.md`) |
 | `ctrDRBG` | AFT | Both revisions; AES-128/192/256, with and without the derivation function. TDES is reported UNSUPPORTED |
 | `KDF` (SP 800-108) | AFT | Counter, feedback and double-pipeline modes over 14 PRFs. CMAC-TDES is reported UNSUPPORTED |
 

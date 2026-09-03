@@ -30,8 +30,14 @@ from pathlib import Path
 from typing import Protocol
 
 from acvp_assay import parser
-from acvp_assay.algorithms import aes_modes, ctr_drbg, ecdsa, hmac_mac, kdf, sha2
+from acvp_assay.algorithms import aes_block, aes_modes, ctr_drbg, ecdsa, hmac_mac, kdf, sha2
 from acvp_assay.models import Direction
+from acvp_assay.providers.aes_block import (
+    CHAINING_MODES,
+    AesBlockProvider,
+    CryptographyAesBlockProvider,
+    monte_carlo_is_verified,
+)
 from acvp_assay.providers.aes_modes import AesModeProvider, CryptographyAesModeProvider
 from acvp_assay.providers.cryptography_aesgcm import CryptographyAesGcmProvider
 from acvp_assay.providers.ctr_drbg import BLOCK_CIPHERS, CryptographyCtrDrbg, CtrDrbgProvider
@@ -285,6 +291,69 @@ def _aes_modes_groups(document: dict[str, object]) -> list[dict[str, object]]:
     return groups
 
 
+# --------------------------------------------------------------------------- AES chaining
+
+
+def _aes_block_groups(document: dict[str, object]) -> list[dict[str, object]]:
+    """CBC, CTR, OFB and CFB128: one transform per case, plus the MCT chain."""
+    vector_set = aes_block.parse_vector_set(document)
+    algorithm = vector_set.algorithm
+    provider: AesBlockProvider = CryptographyAesBlockProvider()
+    groups: list[dict[str, object]] = []
+    for group in vector_set.test_groups:
+        encrypt = group.direction == "encrypt"
+        name = "ct" if encrypt else "pt"
+        source = "pt" if encrypt else "ct"
+        cases: list[dict[str, object]] = []
+        for case in group.tests:
+            if group.test_type == aes_block.MCT:
+                if not CHAINING_MODES[algorithm]:
+                    raise ResponseError(f"{algorithm} has no Monte Carlo test to answer")
+                if not monte_carlo_is_verified(algorithm, encrypt=encrypt):
+                    raise ResponseError(
+                        f"the {algorithm} {group.direction} Monte Carlo chain is not verified "
+                        "against NIST's answers; submitting a guess would be scored as wrong"
+                    )
+                chain = provider.monte_carlo(
+                    algorithm=algorithm,
+                    key=case.fields["key"],
+                    iv=case.fields["iv"],
+                    data=case.fields[source],
+                    encrypt=encrypt,
+                )
+                cases.append(
+                    {
+                        "tcId": case.tc_id,
+                        "resultsArray": [
+                            {
+                                "key": _hex(key),
+                                "iv": _hex(iv),
+                                source: _hex(started),
+                                name: _hex(produced),
+                            }
+                            for key, iv, started, produced in chain
+                        ],
+                    }
+                )
+                continue
+            cases.append(
+                {
+                    "tcId": case.tc_id,
+                    name: _hex(
+                        provider.transform(
+                            algorithm=algorithm,
+                            key=case.fields["key"],
+                            iv=case.fields["iv"],
+                            data=case.fields[source],
+                            encrypt=encrypt,
+                        )
+                    ),
+                }
+            )
+        groups.append({"tgId": group.tg_id, "tests": cases})
+    return groups
+
+
 # --------------------------------------------------------------------------- ctrDRBG
 
 
@@ -460,6 +529,7 @@ def _builder_for(algorithm: str) -> _Builder | None:
         aes_modes.GMAC: _aes_modes_groups,
         aes_modes.KW: _aes_modes_groups,
         aes_modes.KWP: _aes_modes_groups,
+        **dict.fromkeys(aes_block.SUPPORTED, _aes_block_groups),
         ctr_drbg.ALGORITHM: _ctr_drbg_groups,
         kdf.ALGORITHM: _kdf_groups,
         "ECDSA": _ecdsa_groups,
@@ -493,6 +563,7 @@ def supported_response_algorithms() -> tuple[str, ...]:
         aes_modes.GMAC,
         aes_modes.KW,
         aes_modes.KWP,
+        *aes_block.SUPPORTED,
         ctr_drbg.ALGORITHM,
         kdf.ALGORITHM,
         "ECDSA",

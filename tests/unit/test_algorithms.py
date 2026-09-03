@@ -432,7 +432,7 @@ def test_dispatch_rejects_an_unimplemented_algorithm(tmp_path: Path) -> None:
     """An unknown algorithm names what this runner does implement."""
     prompt = tmp_path / "prompt.json"
     prompt.write_text(
-        json.dumps({"vsId": 1, "algorithm": "ACVP-AES-CBC", "revision": "1.0"}),
+        json.dumps({"vsId": 1, "algorithm": "ACVP-AES-XTS", "revision": "1.0"}),
         encoding="utf-8",
     )
 
@@ -636,6 +636,49 @@ def test_kdf_is_dispatched_and_refuses_a_harness(tmp_path: Path) -> None:
     assert "KDF" in supported_algorithms()
 
     with pytest.raises(UnsupportedAlgorithmError, match="KDF SP 800-108"):
+        run_vector_file(
+            tmp_path / "prompt.json",
+            tmp_path / "expectedResults.json",
+            provider_command="python3 h.py",
+        )
+
+
+def test_aes_chaining_modes_are_dispatched_and_refuse_a_harness(tmp_path: Path) -> None:
+    """CBC, CTR, OFB and CFB128 route to their runner and decline --provider-command."""
+    key, iv, block = bytes(range(16)), bytes(range(16, 32)), bytes(range(32, 48))
+    prompt = {
+        "vsId": 1,
+        "algorithm": "ACVP-AES-CBC",
+        "revision": "1.0",
+        "testGroups": [
+            {
+                "tgId": 1,
+                "testType": "AFT",
+                "direction": "encrypt",
+                "keyLen": 128,
+                "tests": [{"tcId": 1, "key": key.hex(), "iv": iv.hex(), "pt": block.hex()}],
+            }
+        ],
+    }
+    from acvp_assay.providers.aes_block import CryptographyAesBlockProvider
+
+    ciphertext = CryptographyAesBlockProvider().transform(
+        algorithm="ACVP-AES-CBC", key=key, iv=iv, data=block, encrypt=True
+    )
+    expected = {
+        "vsId": 1,
+        "testGroups": [{"tgId": 1, "tests": [{"tcId": 1, "ct": ciphertext.hex()}]}],
+    }
+    (tmp_path / "prompt.json").write_text(json.dumps(prompt), encoding="utf-8")
+    (tmp_path / "expectedResults.json").write_text(json.dumps(expected), encoding="utf-8")
+
+    results, metadata = run_vector_file(tmp_path / "prompt.json", tmp_path / "expectedResults.json")
+
+    assert metadata.name == "cryptography-aes-block"
+    assert [r.status for r in results] == [ResultStatus.PASS]
+    assert "ACVP-AES-CTR" in supported_algorithms()
+
+    with pytest.raises(UnsupportedAlgorithmError, match="AES chaining modes"):
         run_vector_file(
             tmp_path / "prompt.json",
             tmp_path / "expectedResults.json",

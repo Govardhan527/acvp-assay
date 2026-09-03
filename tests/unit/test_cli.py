@@ -23,7 +23,7 @@ def test_info_prints_metadata(capsys: pytest.CaptureFixture[str]) -> None:
 
     assert exit_code == 0
     assert payload["provider"] == "OpenSSL (via cryptography)"
-    assert payload["runner_version"] == "0.7.0"
+    assert payload["runner_version"] == "0.8.0"
     assert payload["cryptography_version"]
     assert payload["openssl_version"].startswith("OpenSSL ")
     assert payload["python_version"].startswith("3.12")
@@ -129,7 +129,7 @@ def test_unsupported_algorithm_is_reported_clearly(
     """A vector file for an algorithm we do not implement names what we do."""
     prompt = tmp_path / "prompt.json"
     prompt.write_text(
-        json.dumps({"vsId": 1, "algorithm": "ACVP-AES-CBC", "revision": "1.0", "testGroups": []}),
+        json.dumps({"vsId": 1, "algorithm": "ACVP-AES-XTS", "revision": "1.0", "testGroups": []}),
         encoding="utf-8",
     )
     (tmp_path / "expectedResults.json").write_text("{}", encoding="utf-8")
@@ -138,7 +138,7 @@ def test_unsupported_algorithm_is_reported_clearly(
 
     captured = capsys.readouterr()
     assert exit_code == 2
-    assert "unsupported algorithm 'ACVP-AES-CBC'" in captured.err
+    assert "unsupported algorithm 'ACVP-AES-XTS'" in captured.err
     assert "SHA2-256" in captured.err
 
 

@@ -1,0 +1,12 @@
+[
+  {"algorithm": "ACVP-AES-CBC", "revision": "1.0",
+   "direction": ["encrypt", "decrypt"], "keyLen": [128, 256]},
+  {"algorithm": "ACVP-AES-CTR", "revision": "1.0",
+   "direction": ["encrypt", "decrypt"], "keyLen": [128, 256],
+   "payloadLen": [{"min": 8, "max": 128, "increment": 8}],
+   "incrementalCounter": true, "overflowCounter": false, "performCounterTests": true},
+  {"algorithm": "ACVP-AES-OFB", "revision": "1.0",
+   "direction": ["encrypt", "decrypt"], "keyLen": [128, 256]},
+  {"algorithm": "ACVP-AES-CFB128", "revision": "1.0",
+   "direction": ["encrypt", "decrypt"], "keyLen": [128, 256]}
+]

@@ -164,7 +164,7 @@ def test_an_algorithm_without_a_builder_is_refused(tmp_path: Path) -> None:
     """Silence would be scored as wrong answers, so this raises instead."""
     prompt = write_prompt(
         tmp_path,
-        {"vsId": 1, "algorithm": "ACVP-AES-CBC", "revision": "1.0", "testGroups": []},
+        {"vsId": 1, "algorithm": "ACVP-AES-XTS", "revision": "1.0", "testGroups": []},
     )
 
     with pytest.raises(ResponseError, match="no response builder"):
@@ -1064,3 +1064,116 @@ def test_kdf_without_a_middle_counter_omits_break_location(tmp_path: Path) -> No
     case = build_response(prompt)["testGroups"][0]["tests"][0]  # type: ignore[index]
 
     assert set(case) == {"tcId", "fixedData", "keyOut"}
+
+
+def test_aes_chaining_modes_answer_their_transform(tmp_path: Path) -> None:
+    """CBC, CTR, OFB and CFB128 report the payload named by direction."""
+    key, iv, block = bytes(range(16)), bytes(range(16, 32)), bytes(range(32, 48))
+    for algorithm, direction, name in (
+        ("ACVP-AES-CBC", "encrypt", "ct"),
+        ("ACVP-AES-CTR", "decrypt", "pt"),
+        ("ACVP-AES-OFB", "encrypt", "ct"),
+        ("ACVP-AES-CFB128", "decrypt", "pt"),
+    ):
+        source = "pt" if direction == "encrypt" else "ct"
+        prompt = write_prompt(
+            tmp_path,
+            {
+                "vsId": 1,
+                "algorithm": algorithm,
+                "revision": "1.0",
+                "testGroups": [
+                    {
+                        "tgId": 1,
+                        "testType": "AFT",
+                        "direction": direction,
+                        "keyLen": 128,
+                        "tests": [
+                            {"tcId": 1, "key": key.hex(), "iv": iv.hex(), source: block.hex()}
+                        ],
+                    }
+                ],
+            },
+        )
+
+        case = build_response(prompt)["testGroups"][0]["tests"][0]  # type: ignore[index]
+
+        assert set(case) == {"tcId", name}
+        assert len(bytes.fromhex(case[name])) == 16
+
+
+def test_a_verified_chaining_monte_carlo_is_answered(tmp_path: Path) -> None:
+    """CBC encrypt reproduces NIST's array, so it can be submitted."""
+    key, iv, block = bytes(range(16)), bytes(range(16, 32)), bytes(range(32, 48))
+    prompt = write_prompt(
+        tmp_path,
+        {
+            "vsId": 1,
+            "algorithm": "ACVP-AES-CBC",
+            "revision": "1.0",
+            "testGroups": [
+                {
+                    "tgId": 1,
+                    "testType": "MCT",
+                    "direction": "encrypt",
+                    "keyLen": 128,
+                    "tests": [{"tcId": 1, "key": key.hex(), "iv": iv.hex(), "pt": block.hex()}],
+                }
+            ],
+        },
+    )
+
+    case = build_response(prompt)["testGroups"][0]["tests"][0]  # type: ignore[index]
+
+    assert len(case["resultsArray"]) == 100
+    assert set(case["resultsArray"][0]) == {"key", "iv", "pt", "ct"}
+
+
+def test_an_unverified_chaining_monte_carlo_is_refused(tmp_path: Path) -> None:
+    """Submitting a chain this runner has not reproduced would score as wrong."""
+    key, iv, block = bytes(range(16)), bytes(range(16, 32)), bytes(range(32, 48))
+    prompt = write_prompt(
+        tmp_path,
+        {
+            "vsId": 1,
+            "algorithm": "ACVP-AES-OFB",
+            "revision": "1.0",
+            "testGroups": [
+                {
+                    "tgId": 1,
+                    "testType": "MCT",
+                    "direction": "encrypt",
+                    "keyLen": 128,
+                    "tests": [{"tcId": 1, "key": key.hex(), "iv": iv.hex(), "pt": block.hex()}],
+                }
+            ],
+        },
+    )
+
+    with pytest.raises(ResponseError, match="not verified"):
+        build_response(prompt)
+
+
+def test_counter_mode_has_no_monte_carlo_group_to_answer(tmp_path: Path) -> None:
+    """CTR defines no chain, so an MCT group for it is a contradiction."""
+    key, iv, block = bytes(range(16)), bytes(range(16, 32)), bytes(range(32, 48))
+    prompt = write_prompt(
+        tmp_path,
+        {
+            "vsId": 1,
+            "algorithm": "ACVP-AES-CTR",
+            "revision": "1.0",
+            "testGroups": [
+                {
+                    "tgId": 1,
+                    "testType": "MCT",
+                    "direction": "encrypt",
+                    "keyLen": 128,
+                    "tests": [{"tcId": 1, "key": key.hex(), "iv": iv.hex(), "pt": block.hex()}],
+                }
+            ],
+        },
+    )
+
+    with pytest.raises(ResponseError, match="no Monte Carlo test"):
+        build_response(prompt)
