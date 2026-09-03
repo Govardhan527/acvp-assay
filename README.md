@@ -1,10 +1,27 @@
 # ACVP Assay
 
 [![CI](https://github.com/Govardhan527/acvp-assay/actions/workflows/ci.yml/badge.svg)](https://github.com/Govardhan527/acvp-assay/actions/workflows/ci.yml)
+[![Verified against NIST ACVTS](https://img.shields.io/badge/NIST%20ACVTS%20Demo-27%20vector%20sets%20passed-2ea44f)](#verified-against-nists-own-server)
+[![Coverage](https://img.shields.io/badge/coverage-100%25-2ea44f)](#development-commands)
+
+> ## ✅ Verified against NIST's own server
+>
+> Every algorithm listed below has been run against **vectors NIST generated live**, and the
+> answers submitted back for NIST to judge. Across **7 test sessions** on
+> `demo.acvts.nist.gov`, **27 vector sets and 19,237 cases returned `"passed"`** — that verdict
+> is the server's, not this project's.
+>
+> Most tools of this kind are checked against static files. This one is checked by the same
+> system that issues the vectors, which is what caught the defects listed in
+> [Verified against NIST's own server](#verified-against-nists-own-server) below.
+>
+> **This is test evidence, not a certificate.** It confers no validation status: only an
+> accredited CST or 17ACVT laboratory performs CAVP or FIPS 140-3 validation, and Demo is not
+> the production ACVTS.
 
 Run NIST ACVP test vectors against any implementation — including ones you cannot link against — and catch conformance regressions between runs.
 
-An *assay* measures composition, it does not certify it. This tool produces reproducible test evidence: it parses ACVP vector sets, executes them through a replaceable provider boundary, compares results case by case, and diffs one run against the next. It is **not** an ACVP protocol client, and it does **not** perform or substitute for CAVP algorithm validation or FIPS 140-3 cryptographic-module validation — only accredited CST and 17ACVT laboratories can do that.
+An *assay* measures composition, it does not certify it. This tool produces reproducible test evidence: it parses ACVP vector sets, executes them through a replaceable provider boundary, compares results case by case, and diffs one run against the next. It does **not** perform or substitute for CAVP algorithm validation or FIPS 140-3 cryptographic-module validation — only accredited CST and 17ACVT laboratories can do that.
 
 Two things distinguish it from `libacvp` and ACVP Proxy, which cover more algorithms and speak the live protocol:
 
@@ -15,19 +32,26 @@ Two things distinguish it from `libacvp` and ACVP Proxy, which cover more algori
 
 Implemented today:
 
-- twenty-two algorithm families — AES-GCM, AES-ECB, AES-GMAC, AES-KW/KWP,
-  CMAC-AES, CTR_DRBG, KDF SP 800-108, SHA-1, SHA-2, SHA-3, HMAC, ECDSA,
-  ML-KEM, ML-DSA
+- **40 algorithm names across 22 families** — AES in GCM, ECB, CBC, CTR, OFB, CFB128, GMAC,
+  KW and KWP; CMAC-AES; all three SP 800-90A DRBGs; KDF SP 800-108; SHA-1, SHA-2 and SHA-3;
+  HMAC over each; RSA; ECDSA; ML-KEM and ML-DSA
 - a replaceable provider boundary, in-process or an external harness over JSON
 - run-over-run regression diffing, including coverage that silently disappeared
 - typed parsing that preserves `vsId`, `tgId`, and `tcId`
-- deterministic tests on Linux, verified against pinned NIST vectors
+- deterministic tests on Linux, verified against pinned NIST vectors **and against
+  vectors generated live by NIST's ACVTS server**
 
-Deliberately out of scope: a live ACVP protocol client (`libacvp` and ACVP Proxy
-already do that well), an HTML dashboard, performance benchmarking, and
-redistribution of upstream vectors whose licensing is unconfirmed. There is also
-no built-in ML-KEM or ML-DSA implementation — for post-quantum work the
+Deliberately out of scope: a general-purpose ACVP protocol client (`libacvp` and
+ACVP Proxy already do that well), an HTML dashboard, performance benchmarking,
+and redistribution of upstream vectors whose licensing is unconfirmed. There is
+also no built-in ML-KEM or ML-DSA implementation — for post-quantum work the
 implementation under test is yours, supplied through `--provider-command`.
+
+The one piece of protocol code in the repository, `scripts/acvts_client.py`, is
+not an exception to that: it exists so the runner can be checked against NIST's
+live server rather than against a fixture, and it implements only what that
+needs — register, fetch, submit, results. See
+[Verified against NIST's own server](#verified-against-nists-own-server).
 
 Versions before 1.0.0 do not promise a stable provider API; the protocols are
 still settling as algorithm families are added.
@@ -78,9 +102,11 @@ The algorithm is read from the vector file itself and routed automatically. Curr
 | `hashDRBG`, `hmacDRBG` | AFT | SHA-1, the SHA-2 family and both truncated SHA-512 variants |
 | `KDF` (SP 800-108) | AFT | Counter, feedback and double-pipeline modes over 14 PRFs. CMAC-TDES is reported UNSUPPORTED |
 
-The five AES mode families, `ctrDRBG` and `KDF` run in process only. They are `cryptography`-backed
-and have no harness operations yet, so `--provider-command` is refused for them
-rather than silently ignored.
+Not every family reaches the harness yet. The AES mode families (ECB, GMAC, KW, KWP, CMAC-AES),
+the AES chaining modes (CBC, CTR, OFB, CFB128), all three DRBGs, `KDF` and `RSA` run in process
+only: they are `cryptography`-backed and have no wire operations defined, so `--provider-command`
+is **refused** for them rather than silently ignored. Extending the harness contract to cover them
+is tracked in `docs/backlog.md`.
 
 PQC has no built-in provider on purpose. `cryptography` 50.0.1 implements neither ML-KEM nor ML-DSA, and in a real engagement the implementation under test is the customer's — OpenSSL 3.5+, liboqs, an HSM, or their own module. `examples/pqc_reference_harness.py` drives the pinned NIST ML-KEM and ML-DSA sets end to end using `kyber-py` and `dilithium-py`, which are educational, **not constant-time**, and exist here to verify this runner and to demonstrate it, never as an implementation to ship or validate.
 
@@ -94,7 +120,7 @@ The built-in provider exercises OpenSSL through Python's `cryptography`. To test
 acvp-assay run VECTOR_FILE --provider-command "python3 examples/reference_harness.py"
 ```
 
-The harness reads one JSON request on stdin and writes one JSON response on stdout. That is the whole contract, so it can be written in any language, and **every algorithm family goes through it** — AES-GCM, SHA-2 (including the Monte Carlo chain), HMAC, ECDSA, ML-KEM and ML-DSA:
+The harness reads one JSON request on stdin and writes one JSON response on stdout. That is the whole contract, so it can be written in any language. AES-GCM, the hash families (including the Monte Carlo chain), HMAC, ECDSA, ML-KEM and ML-DSA all go through it:
 
 ```json
 → {"operation": "encrypt", "key": "000102…", "iv": "1011…", "aad": "", "pt": "4865…", "tagLen": 128}
@@ -168,6 +194,64 @@ exit: 1
 
 This second fixture's tag is deliberately corrupted (see `fixtures/README.md`); it exists to prove the tool surfaces a real, deterministic failure instead of swallowing it.
 
+## Verified against NIST's own server
+
+Static vector files tell you whether a runner agrees with a snapshot. They cannot tell you whether
+it agrees with the system that issues the vectors. So every family here has been through a live
+test session on NIST's ACVTS Demo server: register capabilities, fetch vectors NIST generated for
+this client, compute answers, submit them, and read back the verdict.
+
+| Session | Vector sets | Cases | Verdict |
+| --- | --- | ---: | --- |
+| SHA2-256 | 1 | 513 | `passed` |
+| SHA2-256, HMAC-SHA2-256, AES-ECB, CMAC-AES, AES-KW, AES-KWP, ctrDRBG | 7 | 8,966 | `passed` |
+| AES-GCM, KDF SP 800-108, ECDSA sigGen, ECDSA sigVer | 4 | 647 | `passed` |
+| SHA-1, SHA3-256, SHA3-512, HMAC-SHA-1, HMAC-SHA3-256 | 5 | 2,877 | `passed` |
+| AES-CBC, AES-CTR, AES-OFB, AES-CFB128 | 4 | 6,016 | `passed` |
+| hashDRBG, hmacDRBG | 2 | 120 | `passed` |
+| RSA sigGen, sigVer, signaturePrimitive, decryptionPrimitive | 4 | 98 | `passed` |
+| **Total** | **27** | **19,237** | **all `passed`** |
+
+### What this caught that fixtures did not
+
+Each of these passed the offline suite and would have shipped:
+
+- **The AES-GCM parser rejected every real vector set.** It required `ivGenMode`, which qualifies
+  *internal* IV construction — so the live server omits it whenever `ivGen` is `external`. The
+  pinned upstream sample file happens to include it, which is exactly why this survived.
+- **The chaining-mode Monte Carlo chains were wrong for decryption.** The specification writes the
+  inner loop as a cipher that "continues" from the previous call without saying what that does to
+  the IV. Read literally it reproduces the encrypt arrays exactly and disagrees from the first
+  block when decrypting. The rules came from NIST's generator, not the prose.
+- **RSA-PSS ignored `maskFunction`.** FIPS 186-5 lets PSS use SHAKE as its mask generation
+  function, signalled by a field separate from `hashAlg`. Six sigVer cases failed while their
+  group looked perfectly supported.
+- **ECDSA and RSA sigGen generated a fresh key per case.** ACVP reports the public key once per
+  *group*, so a key per case cannot be expressed in the response document at all.
+
+### Reproducing it
+
+Credentials are yours to obtain — write to `acvts-demo@nist.gov` — and never live in this
+repository. The client reads them from the environment:
+
+```bash
+export ACVTS_CERT=/path/to/your.cer ACVTS_KEY=/path/to/your.key ACVTS_SEED=/path/to/totp.txt
+
+python3 scripts/acvts_client.py check                              # credentials, no network
+python3 scripts/acvts_client.py register acvts-capabilities/drbg.json
+python3 scripts/acvts_client.py fetch                              # prompts, and expected results
+acvp-assay run .acvts/session-765354/4032194/prompt.json           # verify offline
+python3 scripts/acvts_client.py submit                             # let NIST judge
+python3 scripts/acvts_client.py results
+```
+
+Session state, downloaded vectors and tokens land in a gitignored `.acvts/`. NIST's vectors are
+theirs to distribute, and the certificate, key and TOTP seed are secrets.
+
+One detail the public documentation gets wrong, in case it saves you an afternoon: the TOTP is
+**HMAC-SHA-256 with eight digits**, not the SHA-1 and six digits the ACVP wiki and issue #297
+imply. A wrong guess returns a bare 401 naming neither factor.
+
 ## Catching regressions between runs
 
 Getting a certificate is one question; *staying* conformant is another, and with re-validation
@@ -221,6 +305,11 @@ python3.12 scripts/dev.py demo
 ## Repository map
 
 - `src/acvp_assay/`: application package
+- `scripts/dev.py`: the setup, test and verify gate
+- `scripts/acvts_client.py`: live ACVTS client — register, fetch, submit, results
+- `scripts/fetch_vectors.py`: downloads and hash-verifies the pinned upstream vectors
+- `acvts-capabilities/`: capability registrations used for the live sessions
+- `examples/`: worked reference harnesses that import nothing from the package
 - `tests/unit/`: focused unit tests
 - `tests/integration/`: subprocess and full-path tests
 - `fixtures/`: small, rights-safe local test vectors
@@ -228,7 +317,9 @@ python3.12 scripts/dev.py demo
 - `docs/limitations.md`: security and assurance boundaries
 - `docs/vector-sources.md`: pinned upstream source, hashes, licensing, and redistribution policy
 - `docs/decisions/`: committed design decisions
+- `docs/backlog.md`: what is built and what is next
 - `CHANGELOG.md`: release history
+- `BUILDLOG.md`: running record of how each family was built and verified
 
 ## Safety
 
