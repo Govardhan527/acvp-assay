@@ -364,11 +364,40 @@ def _cmd_submit(arguments: argparse.Namespace) -> int:
 
 
 def _cmd_results(arguments: argparse.Namespace) -> int:
-    """Ask the server for its verdict on the session."""
+    """Ask the server for its verdict on the session, and keep it.
+
+    The verdict is the only part of a live run that this project cannot
+    reproduce on its own, so printing it and throwing it away leaves any claim
+    about it resting on someone's memory of a terminal. It is written to
+    ``results.json`` beside the vector sets it judges.
+
+    ACVP reports a *disposition per vector set*, not per case. Anything that
+    summarises a session has to say so, rather than multiplying up to a case
+    count the server never issued.
+    """
     record = load_session()
     token = str(record["accessToken"])
     payload = poll(f"{record['url']}/results", token)
-    print(json.dumps(payload, indent=2)[:4000])
+
+    destination = STATE / f"session-{record['testSessionId']}"
+    destination.mkdir(parents=True, exist_ok=True)
+    (destination / "results.json").write_text(json.dumps(payload, indent=2))
+
+    results = payload.get("results") if isinstance(payload, dict) else None
+    if isinstance(results, list):
+        tally: dict[str, int] = {}
+        for entry in results:
+            if not isinstance(entry, dict):
+                continue
+            disposition = str(entry.get("disposition", "unknown"))
+            tally[disposition] = tally.get(disposition, 0) + 1
+            url = str(entry.get("vectorSetUrl", "?")).rsplit("/", 1)[-1]
+            print(f"  vector set {url}: {disposition}")
+        summary = ", ".join(f"{count} {name}" for name, count in sorted(tally.items()))
+        print(f"  {len(results)} vector sets -- {summary}")
+    else:
+        print(json.dumps(payload, indent=2)[:4000])
+    print(f"  saved {destination / 'results.json'}")
     return 0
 
 

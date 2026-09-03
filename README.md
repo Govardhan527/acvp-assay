@@ -7,9 +7,13 @@
 > ## ✅ Judged by NIST's own server
 >
 > **22 of the 40 supported algorithm names** have been run against **vectors NIST generated
-> live** and submitted back for NIST to judge. Across **7 test sessions** on
-> `demo.acvts.nist.gov`, **27 vector sets and 19,237 cases returned `"passed"`** — that verdict
-> is the server's, not this project's. [Exactly which, per algorithm](#coverage).
+> live** and submitted back for NIST to judge. On `demo.acvts.nist.gov`, **27 vector sets —
+> covering 19,237 test cases — each came back `"passed"`**, and that disposition is the
+> server's, not this project's. [Exactly which, per algorithm](#coverage).
+>
+> Read those two numbers precisely: ACVP issues one disposition **per vector set**, so 27 is
+> the count of verdicts NIST returned and 19,237 is the number of cases inside them. The server
+> never issued 19,237 separate verdicts, and this project does not claim it did.
 >
 > The other 18 names are digest-size variants of the same code paths (`SHA2-384` differs from
 > the live-verified `SHA2-256` only in which digest is selected), plus AES-GMAC and the two PQC
@@ -344,20 +348,34 @@ This second fixture's tag is deliberately corrupted (see `fixtures/README.md`); 
 ## Verified against NIST's own server
 
 Static vector files tell you whether a runner agrees with a snapshot. They cannot tell you whether
-it agrees with the system that issues the vectors. So every family here has been through a live
-test session on NIST's ACVTS Demo server: register capabilities, fetch vectors NIST generated for
-this client, compute answers, submit them, and read back the verdict.
+it agrees with the system that issues the vectors. So 22 of the 40 supported algorithm names have
+been through a live test session on NIST's ACVTS Demo server: register capabilities, fetch vectors
+NIST generated for this client, compute answers, submit them, and read back the verdict.
 
-| Session | Vector sets | Cases | Verdict |
-| --- | --- | ---: | --- |
-| SHA2-256 | 1 | 513 | `passed` |
-| SHA2-256, HMAC-SHA2-256, AES-ECB, CMAC-AES, AES-KW, AES-KWP, ctrDRBG | 7 | 8,966 | `passed` |
-| AES-GCM, KDF SP 800-108, ECDSA sigGen, ECDSA sigVer | 4 | 647 | `passed` |
-| SHA-1, SHA3-256, SHA3-512, HMAC-SHA-1, HMAC-SHA3-256 | 5 | 2,877 | `passed` |
-| AES-CBC, AES-CTR, AES-OFB, AES-CFB128 | 4 | 6,016 | `passed` |
-| hashDRBG, hmacDRBG | 2 | 120 | `passed` |
-| RSA sigGen, sigVer, signaturePrimitive, decryptionPrimitive | 4 | 98 | `passed` |
-| **Total** | **27** | **19,237** | **all `passed`** |
+Two qualifications, both of which a reader should have without asking. These were **sample**
+sessions, so NIST supplies the expected results alongside the prompt — but the answers submitted
+were computed from the prompt by the same providers the offline runner uses, never read out of
+NIST's answer key; `responder.py` does not open `expectedResults.json` at all. And Demo is not the
+production ACVTS, which is available to accredited laboratories rather than to tool authors.
+
+| Session | Algorithms | Vector sets | Cases | Disposition |
+| ---: | --- | ---: | ---: | --- |
+| 765339 | SHA2-256 | 1 | 513 | `passed` |
+| 765342 | SHA2-256, HMAC-SHA2-256, AES-ECB, CMAC-AES, AES-KW, AES-KWP, ctrDRBG | 7 | 8,966 | `passed` |
+| 765343 | AES-GCM, KDF SP 800-108, ECDSA sigGen, ECDSA sigVer | 4 | 647 | `passed` |
+| 765345 | SHA-1, SHA3-256, SHA3-512, HMAC-SHA-1, HMAC-SHA3-256 | 5 | 2,877 | `passed` |
+| 765346 | AES-CBC, AES-CTR, AES-OFB, AES-CFB128 | 4 | — | **abandoned**, see below |
+| 765353 | AES-CBC, AES-CTR, AES-OFB, AES-CFB128 | 4 | 6,016 | `passed` |
+| 765354 | hashDRBG, hmacDRBG | 2 | 120 | `passed` |
+| 765356 | RSA sigGen, sigVer, signaturePrimitive, decryptionPrimitive | 4 | 98 | `passed` |
+| | **Completed** | **27** | **19,237** | **all `passed`** |
+
+**Session 765346 is listed because it failed.** It is where the Monte Carlo decrypt bug below
+was found: the AES-CTR set was submitted, the other three were not, and the session was
+abandoned rather than finished around a known-wrong answer. 765353 is the re-run after the fix.
+Its cases are excluded from the total, which is why the total is 27 sets and not 31 — a run
+that was abandoned is not evidence, and dropping it from the table without saying so would make
+the total flattering rather than true.
 
 ### What this caught that fixtures did not
 
