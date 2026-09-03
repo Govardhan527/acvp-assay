@@ -1,0 +1,175 @@
+[
+  {
+    "algorithm": "ACVP-AES-GCM",
+    "revision": "1.0",
+    "direction": [
+      "encrypt",
+      "decrypt"
+    ],
+    "ivGen": "external",
+    "keyLen": [
+      128,
+      256
+    ],
+    "ivLen": [
+      96
+    ],
+    "payloadLen": [
+      {
+        "min": 0,
+        "max": 1024,
+        "increment": 8
+      }
+    ],
+    "aadLen": [
+      {
+        "min": 0,
+        "max": 1024,
+        "increment": 8
+      }
+    ],
+    "tagLen": [
+      96,
+      128
+    ]
+  },
+  {
+    "algorithm": "KDF",
+    "revision": "1.0",
+    "capabilities": [
+      {
+        "kdfMode": "counter",
+        "macMode": [
+          "HMAC-SHA2-256",
+          "CMAC-AES128"
+        ],
+        "supportedLengths": [
+          {
+            "min": 128,
+            "max": 1024,
+            "increment": 8
+          }
+        ],
+        "fixedDataOrder": [
+          "after fixed data",
+          "before fixed data",
+          "middle fixed data"
+        ],
+        "counterLength": [
+          8,
+          32
+        ]
+      },
+      {
+        "kdfMode": "feedback",
+        "macMode": [
+          "HMAC-SHA2-256"
+        ],
+        "supportedLengths": [
+          {
+            "min": 128,
+            "max": 1024,
+            "increment": 8
+          }
+        ],
+        "fixedDataOrder": [
+          "after fixed data"
+        ],
+        "counterLength": [
+          8
+        ],
+        "supportsEmptyIv": false
+      },
+      {
+        "kdfMode": "feedback",
+        "macMode": [
+          "HMAC-SHA2-256"
+        ],
+        "supportedLengths": [
+          {
+            "min": 128,
+            "max": 1024,
+            "increment": 8
+          }
+        ],
+        "fixedDataOrder": [
+          "none"
+        ],
+        "counterLength": [
+          0
+        ],
+        "supportsEmptyIv": false
+      },
+      {
+        "kdfMode": "double pipeline iteration",
+        "macMode": [
+          "HMAC-SHA2-256"
+        ],
+        "supportedLengths": [
+          {
+            "min": 128,
+            "max": 1024,
+            "increment": 8
+          }
+        ],
+        "fixedDataOrder": [
+          "after fixed data"
+        ],
+        "counterLength": [
+          8
+        ]
+      },
+      {
+        "kdfMode": "double pipeline iteration",
+        "macMode": [
+          "HMAC-SHA2-256"
+        ],
+        "supportedLengths": [
+          {
+            "min": 128,
+            "max": 1024,
+            "increment": 8
+          }
+        ],
+        "fixedDataOrder": [
+          "none"
+        ],
+        "counterLength": [
+          0
+        ]
+      }
+    ]
+  },
+  {
+    "algorithm": "ECDSA",
+    "mode": "sigGen",
+    "revision": "FIPS186-5",
+    "capabilities": [
+      {
+        "curve": [
+          "P-256",
+          "P-384"
+        ],
+        "hashAlg": [
+          "SHA2-256",
+          "SHA2-384"
+        ]
+      }
+    ]
+  },
+  {
+    "algorithm": "ECDSA",
+    "mode": "sigVer",
+    "revision": "FIPS186-5",
+    "capabilities": [
+      {
+        "curve": [
+          "P-256"
+        ],
+        "hashAlg": [
+          "SHA2-256"
+        ]
+      }
+    ]
+  }
+]

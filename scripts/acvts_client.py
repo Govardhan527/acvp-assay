@@ -309,7 +309,7 @@ def _cmd_fetch(arguments: argparse.Namespace) -> int:
 def _cmd_submit(arguments: argparse.Namespace) -> int:
     """Compute responses for each downloaded vector set and submit them."""
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
-    from acvp_assay.responder import UnsupportedResponseError, build_response
+    from acvp_assay.responder import ResponseError, build_response
 
     record = load_session()
     token = str(record["accessToken"])
@@ -321,7 +321,7 @@ def _cmd_submit(arguments: argparse.Namespace) -> int:
             raise SystemExit(f"{prompt_file} not downloaded; run `fetch` first")
         try:
             response = build_response(prompt_file)
-        except UnsupportedResponseError as error:
+        except ResponseError as error:
             print(f"  vector set {vs_id}: cannot answer -- {error}")
             continue
         (destination / vs_id / "response.json").write_text(json.dumps(response, indent=2))

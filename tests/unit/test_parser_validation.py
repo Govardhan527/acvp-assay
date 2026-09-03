@@ -46,7 +46,6 @@ def assert_invalid(document: object, path: str, message: str) -> None:
         ("group", "aadLen", "$.testGroups[0].aadLen"),
         ("group", "tagLen", "$.testGroups[0].tagLen"),
         ("group", "ivGen", "$.testGroups[0].ivGen"),
-        ("group", "ivGenMode", "$.testGroups[0].ivGenMode"),
         ("group", "tests", "$.testGroups[0].tests"),
         ("case", "tcId", "$.testGroups[0].tests[0].tcId"),
         ("case", "key", "$.testGroups[0].tests[0].key"),
@@ -180,3 +179,19 @@ def test_decrypt_requires_ciphertext_and_tag() -> None:
         "$.testGroups[0].tests[0].tag",
         "missing required field",
     )
+
+
+def test_iv_generation_mode_is_optional() -> None:
+    """The live ACVTS server omits ivGenMode whenever ivGen is "external".
+
+    It qualifies *internal* IV construction, so it is absent from every real
+    external vector set. The pinned upstream sample file happens to carry it,
+    so requiring it looked correct until a live session rejected all 360 cases.
+    """
+    document = valid_document()
+    del document["testGroups"][0]["ivGenMode"]
+
+    vector_set = parse_vector_set(document)
+
+    assert vector_set.test_groups[0].iv_generation == "external"
+    assert vector_set.test_groups[0].iv_generation_mode == ""

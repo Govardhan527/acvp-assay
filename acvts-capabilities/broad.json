@@ -1,0 +1,33 @@
+[
+  {"algorithm": "SHA2-256", "revision": "1.0",
+   "messageLength": [{"min": 0, "max": 65528, "increment": 8}]},
+
+  {"algorithm": "HMAC-SHA2-256", "revision": "1.0",
+   "keyLen": [{"min": 8, "max": 524288, "increment": 8}],
+   "macLen": [{"min": 32, "max": 256, "increment": 8}]},
+
+  {"algorithm": "ACVP-AES-ECB", "revision": "1.0",
+   "direction": ["encrypt", "decrypt"], "keyLen": [128, 192, 256]},
+
+  {"algorithm": "CMAC-AES", "revision": "1.0",
+   "capabilities": [
+     {"direction": ["gen", "ver"], "msgLen": [{"min": 0, "max": 65536, "increment": 8}],
+      "keyLen": [128, 256], "macLen": [{"min": 32, "max": 128, "increment": 8}]}
+   ]},
+
+  {"algorithm": "ACVP-AES-KW", "revision": "1.0",
+   "direction": ["encrypt", "decrypt"], "kwCipher": ["cipher"],
+   "keyLen": [128, 256], "payloadLen": [{"min": 128, "max": 1024, "increment": 64}]},
+
+  {"algorithm": "ACVP-AES-KWP", "revision": "1.0",
+   "direction": ["encrypt", "decrypt"], "kwCipher": ["cipher"],
+   "keyLen": [128, 256], "payloadLen": [{"min": 8, "max": 1024, "increment": 8}]},
+
+  {"algorithm": "ctrDRBG", "revision": "1.0",
+   "predResistanceEnabled": [true, false], "reseedImplemented": true,
+   "capabilities": [
+     {"mode": "AES-256", "derFuncEnabled": true,
+      "entropyInputLen": [384], "nonceLen": [0], "persoStringLen": [0],
+      "additionalInputLen": [0], "returnedBitsLen": 1024}
+   ]}
+]

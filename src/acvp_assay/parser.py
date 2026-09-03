@@ -184,7 +184,11 @@ def _parse_group(value: object, *, path: str) -> AesGcmTestGroup:
         aad_length_bits=_integer(document, "aadLen", path),
         tag_length_bits=_integer(document, "tagLen", path),
         iv_generation=_string(document, "ivGen", path),
-        iv_generation_mode=_string(document, "ivGenMode", path),
+        # Optional: ivGenMode qualifies *internal* IV construction, so the live
+        # ACVTS server omits it whenever ivGen is "external" -- while the pinned
+        # upstream sample file happens to carry it. Requiring it rejected every
+        # real external vector set, which no static fixture would have revealed.
+        iv_generation_mode=optional_string(document, "ivGenMode", path) or "",
         tests=tests,
     )
 

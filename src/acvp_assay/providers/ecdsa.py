@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Protocol, runtime_checkable
 
@@ -40,6 +41,20 @@ HASHES: dict[str, type[hashes.HashAlgorithm]] = {
     "SHA3-384": hashes.SHA3_384,
     "SHA3-512": hashes.SHA3_512,
 }
+
+
+@dataclass(frozen=True, slots=True)
+class GroupSignatures:
+    """Signatures over several messages, all under one key pair.
+
+    ACVP reports ``qx``/``qy`` once per sigGen *group*, so every case in that
+    group must be signed with the same key. Calling ``sign`` per case generates
+    a fresh key each time, which cannot be reported in that shape.
+    """
+
+    qx: bytes
+    qy: bytes
+    signatures: tuple[tuple[bytes, bytes], ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -142,6 +157,28 @@ class CryptographyEcdsaProvider:
             s=_field_bytes(s, curve_instance),
         )
 
+    def sign_group(
+        self, *, curve: str, hash_algorithm: str, messages: Sequence[bytes]
+    ) -> GroupSignatures:
+        """Sign every message in a group under one freshly generated key.
+
+        This is what a submission needs: ACVP reports the public key once per
+        group, so a fresh key per case would be unreportable.
+        """
+        curve_instance = _curve(curve)
+        algorithm = _hash(hash_algorithm)
+        private_key = ec.generate_private_key(curve_instance)
+        numbers = private_key.public_key().public_numbers()
+        signatures: list[tuple[bytes, bytes]] = []
+        for message in messages:
+            r, s = utils.decode_dss_signature(private_key.sign(message, ec.ECDSA(algorithm)))
+            signatures.append((_field_bytes(r, curve_instance), _field_bytes(s, curve_instance)))
+        return GroupSignatures(
+            qx=_field_bytes(numbers.x, curve_instance),
+            qy=_field_bytes(numbers.y, curve_instance),
+            signatures=tuple(signatures),
+        )
+
     def verify(
         self,
         *,
@@ -239,5 +276,6 @@ __all__ = [
     "CryptographyEcdsaProvider",
     "EcdsaProvider",
     "GeneratedSignature",
+    "GroupSignatures",
     "SubprocessEcdsaProvider",
 ]
