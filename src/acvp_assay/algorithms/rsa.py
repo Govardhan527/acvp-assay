@@ -38,6 +38,7 @@ from acvp_assay.parser import (
     string_field,
 )
 from acvp_assay.providers.rsa import RsaProvider
+from acvp_assay.providers.subprocess_harness import HarnessUnsupportedError
 
 ALGORITHM = "RSA"
 SIG_GEN = "sigGen"
@@ -219,6 +220,11 @@ def _unsupported(tg_id: int, tc_id: int, reason: str) -> TestCaseResult:
     )
 
 
+def _declined(tg_id: int, tc_id: int) -> TestCaseResult:
+    """A harness said it does not implement this case."""
+    return _unsupported(tg_id, tc_id, "the harness declined this case")
+
+
 def _verdict(tg_id: int, tc_id: int, expected: bool, actual: bool, subject: str) -> TestCaseResult:
     passed = expected == actual
     return TestCaseResult(
@@ -308,22 +314,32 @@ def run_vector_set(
             mask_function=group.mask_function,
         )
         signed = None
+        declined = ""
         if usable and vector_set.mode == SIG_GEN:
-            # One key for the whole group: ACVP reports n and e at group level.
-            signed = provider.sign_group(
-                signature_type=group.signature_type,
-                hash_algorithm=group.hash_algorithm,
-                modulo=group.modulo,
-                salt_length=group.salt_length,
-                messages=[case.message for case in group.tests],
-            )
+            # One key for the whole group: ACVP reports n and e at group level,
+            # so the whole group is signed in one exchange. A harness declines
+            # at that granularity too, which is why this is caught here rather
+            # than per case.
+            try:
+                signed = provider.sign_group(
+                    signature_type=group.signature_type,
+                    hash_algorithm=group.hash_algorithm,
+                    mask_function=group.mask_function,
+                    modulo=group.modulo,
+                    salt_length=group.salt_length,
+                    messages=[case.message for case in group.tests],
+                )
+            except HarnessUnsupportedError:
+                usable = False
+                declined = "the harness declined this group"
         for index, case in enumerate(group.tests):
             if not usable:
                 results.append(
                     _unsupported(
                         group.tg_id,
                         case.tc_id,
-                        f"{group.signature_type} with {group.hash_algorithm}"
+                        declined
+                        or f"{group.signature_type} with {group.hash_algorithm}"
                         + (f" and {group.mask_function}" if group.mask_function else "")
                         + " is not supported",
                     )
@@ -334,7 +350,10 @@ def run_vector_set(
                 results.append(_unsupported(group.tg_id, case.tc_id, "no expected result recorded"))
                 continue
             if vector_set.mode in PRIMITIVES:
-                results.append(_run_primitive(vector_set.mode, group, case, wanted, provider))
+                try:
+                    results.append(_run_primitive(vector_set.mode, group, case, wanted, provider))
+                except HarnessUnsupportedError:
+                    results.append(_declined(group.tg_id, case.tc_id))
                 continue
             if vector_set.mode == SIG_VER:
                 if wanted.test_passed is None:
@@ -342,15 +361,22 @@ def run_vector_set(
                         _unsupported(group.tg_id, case.tc_id, "no expected verdict recorded")
                     )
                     continue
-                verdict = provider.verify(
-                    signature_type=group.signature_type,
-                    hash_algorithm=group.hash_algorithm,
-                    salt_length=group.salt_length,
-                    n=int.from_bytes(group.n, "big"),
-                    e=int.from_bytes(group.e, "big"),
-                    message=case.message,
-                    signature=case.signature,
-                )
+                try:
+                    verdict = provider.verify(
+                        signature_type=group.signature_type,
+                        hash_algorithm=group.hash_algorithm,
+                        mask_function=group.mask_function,
+                        salt_length=group.salt_length,
+                        n=int.from_bytes(group.n, "big"),
+                        e=int.from_bytes(group.e, "big"),
+                        message=case.message,
+                        signature=case.signature,
+                    )
+                except HarnessUnsupportedError:
+                    # A harness declining a hash or a mask is stating a
+                    # capability, not giving a wrong answer.
+                    results.append(_declined(group.tg_id, case.tc_id))
+                    continue
                 results.append(
                     _verdict(group.tg_id, case.tc_id, wanted.test_passed, verdict, "a signature")
                 )
@@ -360,15 +386,20 @@ def run_vector_set(
             # that ours verifies under the key we just generated.
             assert signed is not None  # noqa: S101 - set whenever the mode is sigGen
             produced = signed.signatures[index]
-            verified = provider.verify(
-                signature_type=group.signature_type,
-                hash_algorithm=group.hash_algorithm,
-                salt_length=group.salt_length,
-                n=int.from_bytes(signed.n, "big"),
-                e=int.from_bytes(signed.e, "big"),
-                message=case.message,
-                signature=produced,
-            )
+            try:
+                verified = provider.verify(
+                    signature_type=group.signature_type,
+                    hash_algorithm=group.hash_algorithm,
+                    mask_function=group.mask_function,
+                    salt_length=group.salt_length,
+                    n=int.from_bytes(signed.n, "big"),
+                    e=int.from_bytes(signed.e, "big"),
+                    message=case.message,
+                    signature=produced,
+                )
+            except HarnessUnsupportedError:
+                results.append(_declined(group.tg_id, case.tc_id))
+                continue
             results.append(
                 TestCaseResult(
                     tg_id=group.tg_id,

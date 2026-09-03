@@ -544,6 +544,7 @@ def _rsa_groups(document: dict[str, object]) -> list[dict[str, object]]:
             signed = provider.sign_group(
                 signature_type=group.signature_type,
                 hash_algorithm=group.hash_algorithm,
+                mask_function=group.mask_function,
                 modulo=group.modulo,
                 salt_length=group.salt_length,
                 messages=[case.message for case in group.tests],
@@ -569,6 +570,7 @@ def _rsa_groups(document: dict[str, object]) -> list[dict[str, object]]:
                         "testPassed": provider.verify(
                             signature_type=group.signature_type,
                             hash_algorithm=group.hash_algorithm,
+                            mask_function=group.mask_function,
                             salt_length=group.salt_length,
                             n=int.from_bytes(group.n, "big"),
                             e=int.from_bytes(group.e, "big"),

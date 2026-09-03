@@ -407,6 +407,7 @@ def test_a_signature_that_does_not_verify_is_a_failure() -> None:
             *,
             signature_type: str,
             hash_algorithm: str,
+            mask_function: str = "",
             modulo: int,
             salt_length: int,
             messages: Sequence[bytes],
@@ -414,6 +415,7 @@ def test_a_signature_that_does_not_verify_is_a_failure() -> None:
             real = super().sign_group(
                 signature_type=signature_type,
                 hash_algorithm=hash_algorithm,
+                mask_function=mask_function,
                 modulo=modulo,
                 salt_length=salt_length,
                 messages=messages,

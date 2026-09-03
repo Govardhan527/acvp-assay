@@ -58,7 +58,7 @@ from acvp_assay.providers.ecdsa import EcdsaProvider as EcdsaProviderProtocol
 from acvp_assay.providers.kdf import CryptographyKdf
 from acvp_assay.providers.kdf import KdfProvider as KdfProviderProtocol
 from acvp_assay.providers.pqc import SubprocessMlDsaProvider, SubprocessMlKemProvider
-from acvp_assay.providers.rsa import CryptographyRsaProvider
+from acvp_assay.providers.rsa import CryptographyRsaProvider, SubprocessRsaProvider
 from acvp_assay.providers.rsa import RsaProvider as RsaProviderProtocol
 from acvp_assay.providers.subprocess_harness import SubprocessAesGcmProvider
 
@@ -296,11 +296,13 @@ def _run_rsa(
     provider_command: str | None,
     provider_timeout: float,
 ) -> tuple[list[TestCaseResult], ProviderMetadata]:
-    if provider_command is not None:
-        raise UnsupportedAlgorithmError(
-            "--provider-command does not yet cover RSA; run it with the built-in provider"
+    provider: RsaProviderProtocol = (
+        SubprocessRsaProvider.from_command_string(
+            provider_command, timeout_seconds=provider_timeout
         )
-    provider: RsaProviderProtocol = CryptographyRsaProvider()
+        if provider_command is not None
+        else CryptographyRsaProvider()
+    )
     metadata = provider.metadata()
     vector_set = rsa.load_vector_set(vector_file)
     expected = rsa.load_expected_results(expected_file)

@@ -116,6 +116,28 @@ declining is a first-class answer, see below.
 | `cmac` | `key`, `message`, `macLen` | `mac` |
 | `gmac` | `key`, `iv`, `aad`, `tagLen` | `tag` |
 | `key-wrap` | `direction` (`wrap`/`unwrap`), `padded`, `key`, `data` | `out` |
+| `rsa-sign-group` | `sigType`, `hashAlg`, `maskFunction`, `saltLen`, `modulo`, `messages` (array) | `n`, `e`, `signatures` (array, same order) |
+| `rsa-verify` | `sigType`, `hashAlg`, `maskFunction`, `saltLen`, `n`, `e`, `message`, `signature` | `testPassed` |
+| `rsa-primitive-sign` | `n`, `message`, and either `d` or `p`/`q`/`dmp1`/`dmq1`/`iqmp` | `testPassed`, `signature` |
+| `rsa-primitive-decrypt` | `n`, `d`, `ct` | `testPassed`, `pt` |
+
+An RSA sigGen **group** is signed in one exchange, because ACVP reports the
+public key once per group: every case in it must share a key, so asking case by
+case would either force you to cache one or produce a document that cannot be
+expressed. The key is yours to generate — in sigGen it belongs to the
+implementation under test, not to the vector.
+
+`maskFunction` is a field of its own and is always sent. FIPS 186-5 lets PSS
+use SHAKE as its mask generation function, which is a different question from
+`hashAlg`; a harness that reads only `hashAlg` will answer those groups
+confidently wrong.
+
+The two primitives report `testPassed: false` when the input is out of range,
+and no value at all. **Their ranges differ**: a signature message is in range
+when `m < n`, a decryption ciphertext only when `1 < c < n - 1`. ACVP includes
+cases on both sides of each precisely to catch an implementation that shares
+one rule between them. Half the upstream signaturePrimitive groups supply the
+CRT parameters instead of `d`.
 
 `block-transform` and `block-mct` serve ECB, CBC, CTR, OFB and CFB128 alike —
 ECB is a block transform like the rest, and giving it its own pair would mean
@@ -221,7 +243,7 @@ and rewritten in another language without carrying anything with it.
 These families run against the built-in provider only, and
 `--provider-command` is **refused** rather than silently ignored:
 
-`ctrDRBG` · `hashDRBG` · `hmacDRBG` · `KDF` · `RSA`
+`ctrDRBG` · `hashDRBG` · `hmacDRBG` · `KDF`
 
 If you run one of these, you are testing this project's OpenSSL binding — not
 your module. That is stated plainly because the alternative is a customer

@@ -32,7 +32,7 @@ from cryptography.exceptions import InvalidSignature, InvalidTag
 from cryptography.hazmat.backends.openssl.backend import backend
 from cryptography.hazmat.primitives import cmac as cmac_mod
 from cryptography.hazmat.primitives import hashes, keywrap
-from cryptography.hazmat.primitives.asymmetric import ec, utils
+from cryptography.hazmat.primitives.asymmetric import ec, padding, rsa, utils
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 
 try:  # pragma: no cover - CFB and OFB move to `decrepit` in cryptography 49
@@ -378,7 +378,122 @@ def key_wrap(request: dict[str, Any]) -> dict[str, str]:
     return {"out": produced.hex().upper()}
 
 
+RSA_HASHES = {
+    "SHA-1": hashes.SHA1,
+    "SHA2-224": hashes.SHA224,
+    "SHA2-256": hashes.SHA256,
+    "SHA2-384": hashes.SHA384,
+    "SHA2-512": hashes.SHA512,
+    "SHA3-256": hashes.SHA3_256,
+    "SHA3-384": hashes.SHA3_384,
+    "SHA3-512": hashes.SHA3_512,
+}
+
+
+def _rsa_padding(request: dict[str, Any]) -> Any:
+    """Build the padding an ACVP RSA group describes, or None if unsupported.
+
+    `maskFunction` is a field of its own: FIPS 186-5 lets PSS use SHAKE as its
+    mask generation function, which is not the same question as `hashAlg`.
+    """
+    algorithm = RSA_HASHES.get(request["hashAlg"])
+    if algorithm is None:
+        return None
+    if request["sigType"] == "pkcs1v1.5":
+        return padding.PKCS1v15()
+    if request["sigType"] != "pss":
+        return None
+    if request.get("maskFunction", "mgf1") not in ("mgf1", ""):
+        return None
+    return padding.PSS(mgf=padding.MGF1(algorithm()), salt_length=request["saltLen"])
+
+
+def rsa_sign_group(request: dict[str, Any]) -> dict[str, Any]:
+    """Sign every message in a group under one freshly generated key.
+
+    ACVP reports the public key once per group, so a key per case could not be
+    reported at all. Generating it here is the point: in sigGen the key belongs
+    to the implementation under test, not to the vector.
+    """
+    scheme = _rsa_padding(request)
+    algorithm = RSA_HASHES.get(request["hashAlg"])
+    if scheme is None or algorithm is None:
+        return {"error": "unsupported"}
+    private_key = rsa.generate_private_key(public_exponent=65537, key_size=request["modulo"])
+    numbers = private_key.public_key().public_numbers()
+    return {
+        "n": f"{numbers.n:X}".zfill(request["modulo"] // 4),
+        "e": f"{numbers.e:X}".zfill(6),
+        "signatures": [
+            private_key.sign(bytes.fromhex(message), scheme, algorithm()).hex().upper()
+            for message in request["messages"]
+        ],
+    }
+
+
+def rsa_verify(request: dict[str, Any]) -> dict[str, Any]:
+    """Report whether a signature verifies. A rejection is an answer."""
+    scheme = _rsa_padding(request)
+    algorithm = RSA_HASHES.get(request["hashAlg"])
+    if scheme is None or algorithm is None:
+        return {"error": "unsupported"}
+    public_key = rsa.RSAPublicNumbers(e=int(request["e"], 16), n=int(request["n"], 16)).public_key()
+    try:
+        public_key.verify(
+            bytes.fromhex(request["signature"]),
+            bytes.fromhex(request["message"]),
+            scheme,
+            algorithm(),
+        )
+    except (InvalidSignature, ValueError):
+        return {"testPassed": False}
+    return {"testPassed": True}
+
+
+def rsa_primitive_sign(request: dict[str, Any]) -> dict[str, Any]:
+    """Raw RSA over a message: valid when 0 <= m < n.
+
+    Bare modular exponentiation on purpose. This ACVP mode exists to exercise
+    the unpadded operation, including inputs a padded API would refuse.
+    """
+    n = int(request["n"], 16)
+    message = int(request["message"], 16)
+    if not 0 <= message < n:
+        return {"testPassed": False}
+    if "d" in request:
+        signature = pow(message, int(request["d"], 16), n)
+    else:
+        p, q = int(request["p"], 16), int(request["q"], 16)
+        m1 = pow(message, int(request["dmp1"], 16), p)
+        m2 = pow(message, int(request["dmq1"], 16), q)
+        signature = (m2 + q * (int(request["iqmp"], 16) * (m1 - m2) % p)) % n
+    width = (n.bit_length() + 7) // 8 * 2
+    return {"testPassed": True, "signature": f"{signature:X}".zfill(width)}
+
+
+def rsa_primitive_decrypt(request: dict[str, Any]) -> dict[str, Any]:
+    """Raw RSA over a ciphertext: valid only when 1 < c < n-1.
+
+    Stricter than the signature primitive, and deliberately so -- SP 800-56B
+    excludes the endpoints. ACVP includes cases on both sides to catch an
+    implementation that shares one rule between the two.
+    """
+    n = int(request["n"], 16)
+    ciphertext = int(request["ct"], 16)
+    if not 1 < ciphertext < n - 1:
+        return {"testPassed": False}
+    width = (n.bit_length() + 7) // 8 * 2
+    return {
+        "testPassed": True,
+        "pt": f"{pow(ciphertext, int(request['d'], 16), n):X}".zfill(width),
+    }
+
+
 HANDLERS = {
+    "rsa-sign-group": rsa_sign_group,
+    "rsa-verify": rsa_verify,
+    "rsa-primitive-sign": rsa_primitive_sign,
+    "rsa-primitive-decrypt": rsa_primitive_decrypt,
     "block-transform": block_transform,
     "block-mct": block_mct,
     "cmac": cmac,

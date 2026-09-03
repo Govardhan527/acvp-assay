@@ -693,7 +693,7 @@ def test_aes_chaining_modes_are_dispatched_and_reach_a_harness(tmp_path: Path) -
     assert [r.status for r in harness_results] == [ResultStatus.PASS]
 
 
-def test_rsa_is_dispatched_and_refuses_a_harness(tmp_path: Path) -> None:
+def test_rsa_is_dispatched_and_reaches_a_harness(tmp_path: Path) -> None:
     """RSA routes to its runner and declines --provider-command."""
     prompt = {
         "vsId": 1,
@@ -724,9 +724,11 @@ def test_rsa_is_dispatched_and_refuses_a_harness(tmp_path: Path) -> None:
     assert [r.status for r in results] == [ResultStatus.PASS]
     assert "RSA" in supported_algorithms()
 
-    with pytest.raises(UnsupportedAlgorithmError, match="RSA"):
-        run_vector_file(
-            tmp_path / "prompt.json",
-            tmp_path / "expectedResults.json",
-            provider_command="python3 h.py",
-        )
+    # RSA reaches a harness now, so --provider-command is accepted.
+    harness_results, harness_metadata = run_vector_file(
+        tmp_path / "prompt.json",
+        tmp_path / "expectedResults.json",
+        provider_command=f"{sys.executable} {ROOT / 'examples/reference_harness.py'}",
+    )
+    assert harness_metadata.name == "reference-harness"
+    assert [r.status for r in harness_results] == [ResultStatus.PASS]
