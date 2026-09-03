@@ -1036,3 +1036,31 @@ def test_an_ecdsa_component_test_is_refused(tmp_path: Path) -> None:
 
     with pytest.raises(ResponseError, match="component test"):
         build_response(prompt)
+
+
+def test_kdf_without_a_middle_counter_omits_break_location(tmp_path: Path) -> None:
+    """breakLocation is meaningful only when the counter sits inside the fixed data."""
+    prompt = write_prompt(
+        tmp_path,
+        {
+            "vsId": 1,
+            "algorithm": "KDF",
+            "revision": "1.0",
+            "testGroups": [
+                {
+                    "tgId": 1,
+                    "testType": "AFT",
+                    "kdfMode": "counter",
+                    "counterLocation": "after fixed data",
+                    "macMode": "HMAC-SHA2-256",
+                    "counterLength": 8,
+                    "keyOutLength": 256,
+                    "tests": [{"tcId": 1, "keyIn": bytes(range(32)).hex()}],
+                }
+            ],
+        },
+    )
+
+    case = build_response(prompt)["testGroups"][0]["tests"][0]  # type: ignore[index]
+
+    assert set(case) == {"tcId", "fixedData", "keyOut"}

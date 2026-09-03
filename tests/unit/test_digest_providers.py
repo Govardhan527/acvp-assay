@@ -47,7 +47,7 @@ def test_every_supported_hash_is_constructible(algorithm: str) -> None:
 def test_unsupported_hash_algorithm_is_rejected() -> None:
     """An algorithm outside the supported map fails loudly at construction."""
     with pytest.raises(ValueError, match="unsupported hash algorithm"):
-        HashlibHashProvider("SHA3-256")
+        HashlibHashProvider("MD5")
 
 
 def test_mac_provider_matches_rfc4231_and_truncates() -> None:
@@ -66,7 +66,7 @@ def test_mac_provider_matches_rfc4231_and_truncates() -> None:
 def test_unsupported_mac_algorithm_is_rejected() -> None:
     """A MAC over an unsupported hash fails at construction."""
     with pytest.raises(ValueError, match="unsupported MAC algorithm"):
-        HashlibMacProvider("HMAC-SHA3-256")
+        HashlibMacProvider("MD5")
 
 
 @pytest.mark.parametrize("mac_length_bits", [0, -8, 12])
@@ -140,3 +140,58 @@ def test_provider_metadata_identifies_the_implementation() -> None:
     assert metadata.name == "hashlib-sha2-256"
     assert metadata.library_name == "hashlib"
     assert metadata.backend_version == ssl_version_text()
+
+
+def test_sha3_uses_its_own_monte_carlo_chain() -> None:
+    """SHA-3 chains one digest; SHA-2 chains three. Sharing them is silently wrong.
+
+    The two families use the same ``MCT`` test type name and nothing else, so
+    a runner that reuses the SHA-2 chain fails every SHA-3 Monte Carlo case
+    while looking structurally correct.
+    """
+    seed = bytes(range(32))
+    provider = HashlibHashProvider("SHA3-256")
+
+    chain = provider.digest_mct(seed, alternate=False)
+
+    assert len(chain) == 100
+    # Reproduce the spec's chain directly: MD[i] = SHA3(MD[i-1]).
+    current = seed
+    for _ in range(1000):
+        current = hashlib.sha3_256(current).digest()
+    assert chain[0] == current
+    # And it must differ from the SHA-2 triple chain over the same seed.
+    assert chain != monte_carlo(seed, provider.digest, alternate=False)
+
+
+def test_sha1_uses_the_sha2_monte_carlo_chain() -> None:
+    """SHA-1 shares SHA-2's triple chain, so it must not take the SHA-3 path."""
+    seed = bytes(range(20))
+    provider = HashlibHashProvider("SHA-1")
+
+    assert provider.digest_mct(seed, alternate=False) == monte_carlo(
+        seed, provider.digest, alternate=False
+    )
+
+
+def test_the_sha3_alternate_chain_normalises_the_message_length() -> None:
+    """The alternate variant pads or truncates each message to the seed length.
+
+    It exists for implementations whose supported message lengths do not
+    include the digest size, so the two variants diverge as soon as the seed
+    is not exactly one digest wide.
+    """
+    seed = bytes(range(8))
+    provider = HashlibHashProvider("SHA3-256")
+
+    standard = provider.digest_mct(seed, alternate=False)
+    alternate = provider.digest_mct(seed, alternate=True)
+
+    assert len(alternate) == 100
+    assert alternate != standard
+    # Reproduce the spec's alternate chain: every message is seed-length.
+    current = seed
+    for _ in range(1000):
+        message = current[: len(seed)].ljust(len(seed), b"\x00")
+        current = hashlib.sha3_256(message).digest()
+    assert alternate[0] == current

@@ -1,0 +1,14 @@
+[
+  {"algorithm": "SHA-1", "revision": "1.0",
+   "messageLength": [{"min": 0, "max": 65528, "increment": 8}]},
+  {"algorithm": "SHA3-256", "revision": "2.0",
+   "messageLength": [{"min": 0, "max": 65528, "increment": 8}]},
+  {"algorithm": "SHA3-512", "revision": "2.0",
+   "messageLength": [{"min": 0, "max": 65528, "increment": 8}]},
+  {"algorithm": "HMAC-SHA-1", "revision": "1.0",
+   "keyLen": [{"min": 8, "max": 524288, "increment": 8}],
+   "macLen": [{"min": 32, "max": 160, "increment": 8}]},
+  {"algorithm": "HMAC-SHA3-256", "revision": "1.0",
+   "keyLen": [{"min": 8, "max": 524288, "increment": 8}],
+   "macLen": [{"min": 32, "max": 256, "increment": 8}]}
+]

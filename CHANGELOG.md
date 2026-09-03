@@ -5,6 +5,29 @@ All notable changes to this project are recorded here. The format follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Before 1.0.0 the
 provider protocols may change between minor versions.
 
+## [0.7.0] - 2026-09-03
+
+### Added
+
+- `SHA-1` and the `SHA3-224/256/384/512` family, and `HMAC-SHA-1` and
+  `HMAC-SHA3-*` beside them. Ten new algorithm names, taking the runner from
+  23 to 33 of the 97 the live ACVTS Demo registry offers.
+- Live validation against `demo.acvts.nist.gov`. Session 765345 returned
+  `"passed": true` across SHA-1, SHA3-256, SHA3-512, HMAC-SHA-1 and
+  HMAC-SHA3-256.
+
+### Fixed
+
+- **SHA-3 has its own Monte Carlo chain**, and reusing SHA-2's would have been
+  silently wrong on every SHA-3 MCT case. SHA-2 hashes three digests
+  concatenated (`A || B || C`); SHA-3 hashes a single one
+  (`MD[i] = SHA3(MD[i-1])`). The two families share the `MCT` test type name
+  and nothing else, so the mistake looks structurally correct and fails
+  completely. Taken from the specification's pseudocode, then confirmed
+  against server-generated vectors.
+- The SHA parser accepted only revision `1.0`. SHA-3 is registered at `2.0`,
+  so the accepted revision now follows the algorithm family.
+
 ## [0.6.0] - 2026-09-02
 
 ### Added

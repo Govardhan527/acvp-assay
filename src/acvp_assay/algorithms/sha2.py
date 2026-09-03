@@ -31,10 +31,12 @@ from acvp_assay.parser import (
     optional_string,
     string_field,
 )
-from acvp_assay.providers.digest import HASHLIB_ALGORITHMS, HashProvider
+from acvp_assay.providers.digest import HASHLIB_ALGORITHMS, SHA3_ALGORITHMS, HashProvider
 from acvp_assay.providers.subprocess_harness import HarnessUnsupportedError
 
 SUPPORTED_MCT_VERSIONS = ("standard", "alternate")
+SHA2_REVISIONS = frozenset({"1.0"})
+SHA3_REVISIONS = frozenset({"2.0"})
 
 
 class Sha2TestType(StrEnum):
@@ -142,8 +144,13 @@ def parse_vector_set(value: object) -> Sha2VectorSet:
     if algorithm not in HASHLIB_ALGORITHMS:
         raise AcvpValidationError("$.algorithm", f"unsupported algorithm {algorithm!r}")
     revision = string_field(document, "revision", "$")
-    if revision != "1.0":
-        raise AcvpValidationError("$.revision", f"unsupported revision {revision!r}")
+    # SHA-3 is registered at revision 2.0 while SHA-1 and SHA-2 stay at 1.0,
+    # so the accepted revision follows the family rather than being one value.
+    allowed = SHA3_REVISIONS if algorithm in SHA3_ALGORITHMS else SHA2_REVISIONS
+    if revision not in allowed:
+        raise AcvpValidationError(
+            "$.revision", f"unsupported revision {revision!r} for {algorithm}"
+        )
     groups = tuple(
         _parse_group(entry, path=f"$.testGroups[{index}]")
         for index, entry in enumerate(list_field(document, "testGroups", "$"))

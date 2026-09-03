@@ -269,7 +269,7 @@ def test_case_without_expected_result_is_unsupported() -> None:
 @pytest.mark.parametrize(
     ("mutation", "path"),
     [
-        ({"algorithm": "SHA3-256"}, "$.algorithm"),
+        ({"algorithm": "MD5"}, "$.algorithm"),
         ({"revision": "2.0"}, "$.revision"),
     ],
 )
@@ -370,7 +370,7 @@ def test_hmac_case_without_expected_result_is_unsupported() -> None:
 @pytest.mark.parametrize(
     ("mutation", "match"),
     [
-        ({"algorithm": "HMAC-SHA3-256"}, "unsupported algorithm"),
+        ({"algorithm": "HMAC-MD5"}, "unsupported algorithm"),
         ({"revision": "2.0"}, "unsupported revision"),
     ],
 )

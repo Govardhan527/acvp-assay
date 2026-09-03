@@ -21,13 +21,22 @@ MCT_INNER_ITERATIONS = 1000
 
 #: ACVP algorithm name to the hashlib constructor name behind it.
 HASHLIB_ALGORITHMS = {
+    "SHA-1": "sha1",
     "SHA2-224": "sha224",
     "SHA2-256": "sha256",
     "SHA2-384": "sha384",
     "SHA2-512": "sha512",
     "SHA2-512/224": "sha512_224",
     "SHA2-512/256": "sha512_256",
+    "SHA3-224": "sha3_224",
+    "SHA3-256": "sha3_256",
+    "SHA3-384": "sha3_384",
+    "SHA3-512": "sha3_512",
 }
+
+#: SHA-3 chains its Monte Carlo test differently from SHA-1 and SHA-2, so the
+#: family a name belongs to decides which chain runs.
+SHA3_ALGORITHMS = frozenset(name for name in HASHLIB_ALGORITHMS if name.startswith("SHA3-"))
 
 
 @runtime_checkable
@@ -60,13 +69,47 @@ class MacProvider(Protocol):
         ...
 
 
+def monte_carlo_sha3(
+    seed: bytes,
+    digest: Callable[[bytes], bytes],
+    *,
+    alternate: bool,
+) -> list[bytes]:
+    """Run the ACVP SHA-3 Monte Carlo chain, returning the 100 outer digests.
+
+    SHA-3 chains a single digest rather than three::
+
+        For j = 0 to 99
+            MD[0] = SEED
+            For i = 1 to 1000
+                MSG = MD[i-1]
+                MD[i] = SHA3(MSG)
+            Output MD[1000]; SEED = MD[1000]
+
+    Reusing the SHA-2 chain here would be silently wrong on every case: the
+    two families share a test type name and nothing else.
+    """
+    seed_length = len(seed)
+    outputs: list[bytes] = []
+    for _ in range(MCT_OUTER_ITERATIONS):
+        current = seed
+        for _ in range(MCT_INNER_ITERATIONS):
+            message = current
+            if alternate:
+                message = message[:seed_length].ljust(seed_length, b"\x00")
+            current = digest(message)
+        outputs.append(current)
+        seed = current
+    return outputs
+
+
 def monte_carlo(
     seed: bytes,
     digest: Callable[[bytes], bytes],
     *,
     alternate: bool,
 ) -> list[bytes]:
-    """Run the ACVP SHA Monte Carlo chain, returning the 100 outer digests.
+    """Run the ACVP SHA-1/SHA-2 Monte Carlo chain, returning the 100 outer digests.
 
     Standard::
 
@@ -134,8 +177,9 @@ class HashlibHashProvider:
         return hashlib.new(self._constructor, message).digest()
 
     def digest_mct(self, seed: bytes, *, alternate: bool) -> list[bytes]:
-        """Run the Monte Carlo chain using this algorithm."""
-        return monte_carlo(seed, self.digest, alternate=alternate)
+        """Run the Monte Carlo chain this algorithm's family calls for."""
+        chain = monte_carlo_sha3 if self._algorithm in SHA3_ALGORITHMS else monte_carlo
+        return chain(seed, self.digest, alternate=alternate)
 
 
 class HashlibMacProvider:
@@ -165,6 +209,7 @@ class HashlibMacProvider:
 
 __all__ = [
     "HASHLIB_ALGORITHMS",
+    "SHA3_ALGORITHMS",
     "MCT_INNER_ITERATIONS",
     "MCT_OUTER_ITERATIONS",
     "HashProvider",
@@ -174,6 +219,7 @@ __all__ = [
     "SubprocessHashProvider",
     "SubprocessMacProvider",
     "monte_carlo",
+    "monte_carlo_sha3",
     "ssl_version_text",
 ]
 
