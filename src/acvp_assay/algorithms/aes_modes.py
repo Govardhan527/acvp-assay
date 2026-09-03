@@ -36,6 +36,7 @@ from acvp_assay.parser import (
     string_field,
 )
 from acvp_assay.providers.aes_modes import AesModeProvider
+from acvp_assay.providers.subprocess_harness import HarnessUnsupportedError
 
 ECB = "ACVP-AES-ECB"
 GMAC = "ACVP-AES-GMAC"
@@ -399,7 +400,14 @@ def run_vector_set(
             if expected_case is None:
                 results.append(_unsupported(group.tg_id, case.tc_id, "no expected result recorded"))
                 continue
-            results.append(_run_case(vector_set.algorithm, group, case, expected_case, provider))
+            try:
+                results.append(
+                    _run_case(vector_set.algorithm, group, case, expected_case, provider)
+                )
+            except HarnessUnsupportedError:
+                results.append(
+                    _unsupported(group.tg_id, case.tc_id, "the harness declined this case")
+                )
     return results
 
 

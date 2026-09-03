@@ -29,6 +29,7 @@ from acvp_assay.parser import (
     string_field,
 )
 from acvp_assay.providers.aes_block import CHAINING_MODES, AesBlockProvider
+from acvp_assay.providers.subprocess_harness import HarnessUnsupportedError
 
 SUPPORTED = tuple(CHAINING_MODES)
 MCT = "MCT"
@@ -270,22 +271,33 @@ def run_vector_set(
                 results.append(_unsupported(group.tg_id, case.tc_id, "no expected result recorded"))
                 continue
             if group.test_type == MCT:
-                results.append(
-                    _run_monte_carlo(vector_set.algorithm, group, case, wanted, provider)
-                )
+                try:
+                    results.append(
+                        _run_monte_carlo(vector_set.algorithm, group, case, wanted, provider)
+                    )
+                except HarnessUnsupportedError:
+                    results.append(
+                        _unsupported(group.tg_id, case.tc_id, "the harness declined this case")
+                    )
                 continue
             if name not in wanted.values:
                 results.append(
                     _unsupported(group.tg_id, case.tc_id, f"no expected {name} recorded")
                 )
                 continue
-            produced = provider.transform(
-                algorithm=vector_set.algorithm,
-                key=case.fields["key"],
-                iv=case.fields["iv"],
-                data=case.fields["pt" if encrypt else "ct"],
-                encrypt=encrypt,
-            )
+            try:
+                produced = provider.transform(
+                    algorithm=vector_set.algorithm,
+                    key=case.fields["key"],
+                    iv=case.fields["iv"],
+                    data=case.fields["pt" if encrypt else "ct"],
+                    encrypt=encrypt,
+                )
+            except HarnessUnsupportedError:
+                results.append(
+                    _unsupported(group.tg_id, case.tc_id, "the harness declined this case")
+                )
+                continue
             results.append(_compare(group.tg_id, case.tc_id, name, wanted.values[name], produced))
     return results
 

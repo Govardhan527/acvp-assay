@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -20,6 +21,7 @@ from acvp_assay.providers.aes_modes import (
     CryptographyAesModeProvider,
     SubprocessAesModeProvider,
 )
+from acvp_assay.providers.ctr_drbg import SubprocessDrbg
 from acvp_assay.providers.rsa import SubprocessRsaProvider
 from acvp_assay.providers.subprocess_harness import HarnessProtocolError
 
@@ -228,8 +230,6 @@ def test_the_runner_routes_every_aes_family_to_a_harness(tmp_path: Path) -> None
 
 def rsa_provider() -> SubprocessRsaProvider:
     """An RSA provider backed by the reference harness."""
-    from acvp_assay.providers.rsa import SubprocessRsaProvider
-
     return SubprocessRsaProvider(HARNESS, timeout_seconds=60)
 
 
@@ -536,3 +536,168 @@ def test_a_harness_that_signs_but_declines_to_verify_is_reported(tmp_path: Path)
     assert results[0].status.name == "UNSUPPORTED"
     assert "declined" in (results[0].diagnostic or "")
     provider.close()
+
+
+# ------------------------------------------------------------- DRBG and KDF
+
+
+@pytest.mark.parametrize("mechanism", ["ctrDRBG", "hashDRBG", "hmacDRBG"])
+def test_a_drbg_case_crosses_the_wire_in_one_exchange(mechanism: str) -> None:
+    """The whole case goes over at once, and must match the built-in provider.
+
+    A DRBG is a state machine. Putting one on a wire would make the two sides
+    agree about a conversation rather than about an answer, and a disagreement
+    would surface as a wrong value with no way to tell where it came from.
+    """
+    from acvp_assay.algorithms.ctr_drbg import provider_for, subprocess_provider_for
+    from acvp_assay.providers.ctr_drbg import run_drbg_case
+
+    mode = "AES-256" if mechanism == "ctrDRBG" else "SHA2-256"
+    entropy = bytes(range(48)) if mechanism == "ctrDRBG" else bytes(range(32))
+    counter_bits = 128 if mechanism == "ctrDRBG" else 0
+    steps: list[tuple[str, bytes, bytes]] = [("generate", b"", b""), ("generate", b"", b"")]
+    harness = subprocess_provider_for(mechanism, " ".join(HARNESS), timeout_seconds=30)
+    assert isinstance(harness, SubprocessDrbg)
+
+    over_wire = harness.run_case(
+        mode=mode,
+        derivation_function=True,
+        counter_field_bits=counter_bits,
+        byte_count=64,
+        entropy=entropy,
+        nonce=bytes(16),
+        personalization=b"",
+        operations=steps,
+    )
+    built_in = provider_for(mechanism)
+    assert not isinstance(built_in, SubprocessDrbg)
+    locally = run_drbg_case(
+        built_in,
+        mode=mode,
+        derivation_function=True,
+        counter_field_bits=counter_bits,
+        byte_count=64,
+        entropy=entropy,
+        nonce=bytes(16),
+        personalization=b"",
+        operations=steps,
+    )
+
+    assert over_wire == locally
+    assert len(over_wire) == 64
+    harness.close()
+
+
+def test_a_drbg_case_with_reseed_and_prediction_resistance_agrees() -> None:
+    """Both reseed paths must survive the trip, not just the plain generate.
+
+    Prediction resistance turns a generation carrying entropy into a reseed
+    followed by a generation, with the additional input consumed by the reseed.
+    """
+    from acvp_assay.algorithms.ctr_drbg import provider_for, subprocess_provider_for
+    from acvp_assay.providers.ctr_drbg import run_drbg_case
+
+    steps: list[tuple[str, bytes, bytes]] = [
+        ("reSeed", b"\xaa" * 16, b"\xbb" * 32),
+        ("generate", b"\xdd" * 16, b"\xee" * 32),
+        ("generate", b"\xff" * 16, b"\x11" * 32),
+    ]
+    common: dict[str, Any] = {
+        "mode": "SHA2-256",
+        "derivation_function": False,
+        "counter_field_bits": 0,
+        "byte_count": 32,
+        "entropy": bytes(range(32)),
+        "nonce": bytes(16),
+        "personalization": b"\xcc" * 16,
+        "operations": steps,
+    }
+    harness = subprocess_provider_for("hmacDRBG", " ".join(HARNESS), timeout_seconds=30)
+    built_in = provider_for("hmacDRBG")
+    assert isinstance(harness, SubprocessDrbg)
+    assert not isinstance(built_in, SubprocessDrbg)
+
+    assert harness.run_case(**common) == run_drbg_case(built_in, **common)
+    harness.close()
+
+
+def test_a_drbg_mode_the_harness_lacks_is_declined() -> None:
+    """TDES is disallowed for this use, and the harness says so rather than guessing."""
+    from acvp_assay.algorithms.ctr_drbg import subprocess_provider_for
+    from acvp_assay.providers.subprocess_harness import HarnessUnsupportedError
+
+    harness = subprocess_provider_for("ctrDRBG", " ".join(HARNESS), timeout_seconds=10)
+    assert isinstance(harness, SubprocessDrbg)
+
+    with pytest.raises(HarnessUnsupportedError):
+        harness.run_case(
+            mode="TDES",
+            derivation_function=True,
+            counter_field_bits=64,
+            byte_count=16,
+            entropy=bytes(29),
+            nonce=b"",
+            personalization=b"",
+            operations=[("generate", b"", b"")],
+        )
+    harness.close()
+
+
+@pytest.mark.parametrize(
+    ("kdf_mode", "counter_location", "mac_mode"),
+    [
+        ("counter", "after fixed data", "HMAC-SHA2-256"),
+        ("counter", "middle fixed data", "CMAC-AES128"),
+        ("feedback", "before iterator", "HMAC-SHA2-512"),
+        ("double pipeline iteration", "none", "HMAC-SHA-1"),
+    ],
+)
+def test_kdf_derivation_crosses_the_wire(
+    kdf_mode: str, counter_location: str, mac_mode: str
+) -> None:
+    """Every mode and placement must agree with the built-in provider.
+
+    fixedData travels *in* rather than being chosen by the harness: the runner
+    compares against the fixed data NIST recorded, so a harness free to pick
+    its own would produce a different key every run.
+    """
+    from acvp_assay.providers.kdf import CryptographyKdf, KdfRequest, SubprocessKdfProvider
+
+    key_in = bytes(range(16)) if mac_mode.startswith("CMAC") else bytes(range(32))
+    request = KdfRequest(
+        mac_mode=mac_mode,
+        kdf_mode=kdf_mode,
+        counter_location=counter_location,
+        counter_bits=0 if counter_location == "none" else 8,
+        key_in=key_in,
+        fixed_data=bytes(range(16)),
+        output_bits=512,
+        iv=bytes(range(20)) if kdf_mode == "feedback" else b"",
+        break_location=51 if counter_location == "middle fixed data" else 0,
+    )
+    harness = SubprocessKdfProvider(HARNESS, timeout_seconds=30)
+
+    assert harness.derive(request) == CryptographyKdf().derive(request)
+    harness.close()
+
+
+def test_a_kdf_prf_the_harness_lacks_is_declined() -> None:
+    """CMAC-TDES appears upstream and is disallowed for this use since 2023."""
+    from acvp_assay.providers.kdf import KdfRequest, SubprocessKdfProvider
+    from acvp_assay.providers.subprocess_harness import HarnessUnsupportedError
+
+    harness = SubprocessKdfProvider(HARNESS, timeout_seconds=10)
+
+    with pytest.raises(HarnessUnsupportedError):
+        harness.derive(
+            KdfRequest(
+                mac_mode="CMAC-TDES",
+                kdf_mode="counter",
+                counter_location="after fixed data",
+                counter_bits=8,
+                key_in=bytes(21),
+                fixed_data=bytes(16),
+                output_bits=128,
+            )
+        )
+    harness.close()

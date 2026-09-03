@@ -489,7 +489,316 @@ def rsa_primitive_decrypt(request: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+#: Every PRF SP 800-108 admits that this harness can compute. CMAC-TDES is
+#: absent on purpose: disallowed for this use since 2023.
+HMAC_FOR_KDF = {f"HMAC-{name}": digest for name, digest in HASHLIB.items()}
+CMAC_KEY_BYTES = {"CMAC-AES128": 16, "CMAC-AES192": 24, "CMAC-AES256": 32}
+
+
+def kdf_108(request: dict[str, Any]) -> dict[str, Any]:
+    """Derive keying material with SP 800-108.
+
+    `fixedData` arrives as input rather than being chosen here: the runner
+    compares against the fixed data NIST recorded, and a harness free to choose
+    its own would produce a different key every run with nothing to check it
+    against.
+    """
+    prf = request["macMode"]
+    if prf in HMAC_FOR_KDF:
+        outlen = hashlib.new(HMAC_FOR_KDF[prf]).digest_size
+    elif prf in CMAC_KEY_BYTES:
+        outlen = 16
+    else:
+        return {"error": "unsupported"}
+
+    def mac(data: bytes) -> bytes:
+        key = bytes.fromhex(request["keyIn"])
+        if prf in HMAC_FOR_KDF:
+            return hmac.new(key, data, HMAC_FOR_KDF[prf]).digest()
+        context = cmac_mod.CMAC(algorithms.AES(key))
+        context.update(data)
+        return context.finalize()
+
+    fixed = bytes.fromhex(request["fixedData"])
+    counter_bytes = request["counterLength"] // 8
+    bits = request["keyOutLength"]
+    iterations = -(-bits // (outlen * 8))
+
+    def place(index: int, iterator: bytes) -> bytes:
+        counter = index.to_bytes(counter_bytes, "big") if counter_bytes else b""
+        location = request["counterLocation"]
+        if location == "before iterator":
+            return counter + iterator + fixed
+        if location == "before fixed data":
+            return iterator + counter + fixed
+        if location == "after fixed data":
+            return iterator + fixed + counter
+        if location == "middle fixed data":
+            # A *bit* offset, so the counter splices mid-byte.
+            total = len(fixed) * 8
+            tail_bits = total - request["breakLocation"]
+            whole = int.from_bytes(fixed, "big")
+            joined = (
+                ((whole >> tail_bits) << (counter_bytes * 8 + tail_bits))
+                | (index << tail_bits)
+                | (whole & ((1 << tail_bits) - 1))
+            )
+            return iterator + joined.to_bytes((total + counter_bytes * 8) // 8, "big")
+        return iterator + fixed
+
+    derived = b""
+    feedback = bytes.fromhex(request["iv"])
+    pipeline = fixed
+    for index in range(1, iterations + 1):
+        if request["kdfMode"] == "counter":
+            derived += mac(place(index, b""))
+        elif request["kdfMode"] == "feedback":
+            feedback = mac(place(index, feedback))
+            derived += feedback
+        else:
+            pipeline = mac(pipeline)
+            derived += mac(place(index, pipeline))
+
+    length = -(-bits // 8)
+    out = bytearray(derived[:length])
+    if bits % 8:
+        out[-1] &= (0xFF << (8 - bits % 8)) & 0xFF
+    return {"keyOut": bytes(out).hex().upper()}
+
+
+DRBG_SEED_BITS = {
+    "SHA-1": 440,
+    "SHA2-224": 440,
+    "SHA2-256": 440,
+    "SHA2-512/224": 440,
+    "SHA2-512/256": 440,
+    "SHA2-384": 888,
+    "SHA2-512": 888,
+}
+DRBG_AES = {"AES-128": 16, "AES-192": 24, "AES-256": 32}
+
+
+class _HmacDrbg:
+    """HMAC_DRBG: a key and a value, both advanced by one update routine."""
+
+    def __init__(self, mode: str) -> None:
+        self.digest = HASHLIB[mode]
+        size = hashlib.new(self.digest).digest_size
+        self.key, self.v = b"\x00" * size, b"\x01" * size
+
+    def _mac(self, key: bytes, data: bytes) -> bytes:
+        return hmac.new(key, data, self.digest).digest()
+
+    def _update(self, provided: bytes) -> None:
+        self.key = self._mac(self.key, self.v + b"\x00" + provided)
+        self.v = self._mac(self.key, self.v)
+        if not provided:
+            return
+        self.key = self._mac(self.key, self.v + b"\x01" + provided)
+        self.v = self._mac(self.key, self.v)
+
+    def instantiate(self, entropy: bytes, nonce: bytes, perso: bytes) -> None:
+        self._update(entropy + nonce + perso)
+
+    def reseed(self, entropy: bytes, extra: bytes) -> None:
+        self._update(entropy + extra)
+
+    def generate(self, count: int, extra: bytes) -> bytes:
+        if extra:
+            self._update(extra)
+        out = b""
+        while len(out) < count:
+            self.v = self._mac(self.key, self.v)
+            out += self.v
+        # Runs even with no additional input: skipping it desynchronises every
+        # later generation.
+        self._update(extra)
+        return out[:count]
+
+
+class _HashDrbg:
+    """Hash_DRBG: a seed-length V, a constant C, and a reseed counter."""
+
+    def __init__(self, mode: str) -> None:
+        self.digest = HASHLIB[mode]
+        self.width = DRBG_SEED_BITS[mode] // 8
+        self.v = self.c = b""
+        self.counter = 1
+
+    def _hash(self, data: bytes) -> bytes:
+        return hashlib.new(self.digest, data).digest()
+
+    def _add(self, *values: bytes) -> bytes:
+        total = sum(int.from_bytes(value, "big") for value in values)
+        return (total % (1 << (self.width * 8))).to_bytes(self.width, "big")
+
+    def _df(self, data: bytes) -> bytes:
+        out, counter = b"", 1
+        while len(out) < self.width:
+            out += self._hash(bytes([counter]) + (self.width * 8).to_bytes(4, "big") + data)
+            counter += 1
+        return out[: self.width]
+
+    def _seed(self, material: bytes) -> None:
+        self.v = self._df(material)
+        self.c = self._df(b"\x00" + self.v)
+        self.counter = 1
+
+    def instantiate(self, entropy: bytes, nonce: bytes, perso: bytes) -> None:
+        self._seed(entropy + nonce + perso)
+
+    def reseed(self, entropy: bytes, extra: bytes) -> None:
+        self._seed(b"\x01" + self.v + entropy + extra)
+
+    def generate(self, count: int, extra: bytes) -> bytes:
+        if extra:
+            self.v = self._add(self.v, self._hash(b"\x02" + self.v + extra))
+        data, out = self.v, b""
+        while len(out) < count:
+            out += self._hash(data)
+            data = self._add(data, b"\x01")
+        # The reseed counter is part of the sum: omitting it stays correct for
+        # exactly one generation, and every case generates twice.
+        self.v = self._add(
+            self.v, self._hash(b"\x03" + self.v), self.c, self.counter.to_bytes(4, "big")
+        )
+        self.counter += 1
+        return out[:count]
+
+
+class _CtrDrbg:
+    """CTR_DRBG over AES, with the r1 narrow counter field."""
+
+    def __init__(self, mode: str, derivation_function: bool, counter_bits: int) -> None:
+        self.keylen, self.outlen = DRBG_AES[mode], 16
+        self.seedlen = self.keylen + self.outlen
+        self.df = derivation_function
+        self.counter_bits = counter_bits or self.outlen * 8
+        self.key, self.v = b"\x00" * self.keylen, b"\x00" * self.outlen
+
+    def _encrypt(self, key: bytes, block: bytes) -> bytes:
+        engine = Cipher(algorithms.AES(key), modes.ECB()).encryptor()  # noqa: S305
+        return engine.update(block) + engine.finalize()
+
+    def _increment(self) -> None:
+        value = int.from_bytes(self.v, "big")
+        mask = (1 << self.counter_bits) - 1
+        self.v = ((value & ~mask) | ((value + 1) & mask)).to_bytes(self.outlen, "big")
+
+    def _bcc(self, key: bytes, data: bytes) -> bytes:
+        chain = b"\x00" * self.outlen
+        for offset in range(0, len(data), self.outlen):
+            block = data[offset : offset + self.outlen]
+            chain = self._encrypt(key, bytes(a ^ b for a, b in zip(chain, block, strict=True)))
+        return chain
+
+    def _derive(self, data: bytes, count: int) -> bytes:
+        block = len(data).to_bytes(4, "big") + count.to_bytes(4, "big") + data + b"\x80"
+        if len(block) % self.outlen:
+            block += b"\x00" * (self.outlen - len(block) % self.outlen)
+        key, temp, index = bytes(range(32))[: self.keylen], b"", 0
+        while len(temp) < self.keylen + self.outlen:
+            iv = index.to_bytes(4, "big") + b"\x00" * (self.outlen - 4)
+            temp += self._bcc(key, iv + block)
+            index += 1
+        derived, chunk, out = temp[: self.keylen], temp[self.keylen : self.seedlen], b""
+        while len(out) < count:
+            chunk = self._encrypt(derived, chunk)
+            out += chunk
+        return out[:count]
+
+    def _update(self, provided: bytes) -> None:
+        temp = b""
+        while len(temp) < self.seedlen:
+            self._increment()
+            temp += self._encrypt(self.key, self.v)
+        mixed = bytes(a ^ b for a, b in zip(temp[: self.seedlen], provided, strict=True))
+        self.key, self.v = mixed[: self.keylen], mixed[self.keylen :]
+
+    def _fit(self, data: bytes) -> bytes:
+        return data.ljust(self.seedlen, b"\x00")[: self.seedlen]
+
+    def _material(self, entropy: bytes, extra: bytes) -> bytes:
+        if self.df:
+            return self._derive(entropy + extra, self.seedlen)
+        return bytes(a ^ b for a, b in zip(self._fit(entropy), self._fit(extra), strict=True))
+
+    def instantiate(self, entropy: bytes, nonce: bytes, perso: bytes) -> None:
+        material = (
+            self._derive(entropy + nonce + perso, self.seedlen)
+            if self.df
+            else self._material(entropy, perso)
+        )
+        self._update(material)
+
+    def reseed(self, entropy: bytes, extra: bytes) -> None:
+        self._update(self._material(entropy, extra))
+
+    def generate(self, count: int, extra: bytes) -> bytes:
+        if extra:
+            prepared = self._derive(extra, self.seedlen) if self.df else self._fit(extra)
+            self._update(prepared)
+        else:
+            prepared = b"\x00" * self.seedlen
+        out = b""
+        while len(out) < count:
+            self._increment()
+            out += self._encrypt(self.key, self.v)
+        self._update(prepared)
+        return out[:count]
+
+
+def drbg(request: dict[str, Any]) -> dict[str, Any]:
+    """Run a whole DRBG case and return the bits of the final generation.
+
+    The entire case arrives in one request -- seed material plus the ordered
+    `otherInput` steps -- rather than as a conversation. A DRBG is a state
+    machine, and keeping the state on this side means the two sides agree about
+    an answer rather than about a sequence of calls.
+
+    Two details are silently wrong if you get them wrong. Prediction resistance
+    turns a generation carrying entropy into a reseed *then* a generation, with
+    the additional input consumed by the reseed. And every case generates twice
+    while only the second output is compared: returning the first would pass a
+    DRBG that never updates its state.
+    """
+    mechanism, mode = request["mechanism"], request["mode"]
+    if mechanism == "ctrDRBG":
+        if mode not in DRBG_AES:
+            return {"error": "unsupported"}
+        engine: Any = _CtrDrbg(mode, request["derFunc"], request["counterFieldLen"])
+    elif mode not in DRBG_SEED_BITS:
+        return {"error": "unsupported"}
+    elif mechanism == "hashDRBG":
+        engine = _HashDrbg(mode)
+    elif mechanism == "hmacDRBG":
+        engine = _HmacDrbg(mode)
+    else:
+        return {"error": "unsupported"}
+
+    engine.instantiate(
+        bytes.fromhex(request["entropyInput"]),
+        bytes.fromhex(request["nonce"]),
+        bytes.fromhex(request["persoString"]),
+    )
+    count = request["returnedBitsLen"] // 8
+    produced = b""
+    for step in request["otherInput"]:
+        extra = bytes.fromhex(step["additionalInput"])
+        entropy = bytes.fromhex(step.get("entropyInput", ""))
+        if step["intendedUse"] == "reSeed":
+            engine.reseed(entropy, extra)
+        elif entropy:
+            engine.reseed(entropy, extra)
+            produced = engine.generate(count, b"")
+        else:
+            produced = engine.generate(count, extra)
+    return {"returnedBits": produced.hex().upper()}
+
+
 HANDLERS = {
+    "drbg": drbg,
+    "kdf-108": kdf_108,
     "rsa-sign-group": rsa_sign_group,
     "rsa-verify": rsa_verify,
     "rsa-primitive-sign": rsa_primitive_sign,

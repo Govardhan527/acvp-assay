@@ -102,12 +102,9 @@ The algorithm is read from the vector file itself and routed automatically. Curr
 | `hashDRBG`, `hmacDRBG` | AFT | SHA-1, the SHA-2 family and both truncated SHA-512 variants |
 | `KDF` (SP 800-108) | AFT | Counter, feedback and double-pipeline modes over 14 PRFs. CMAC-TDES is reported UNSUPPORTED |
 
-Not every family reaches the harness yet. The three DRBGs and `KDF` run in process only:
-they are `cryptography`-backed and have no wire operations defined, so `--provider-command` is
-**refused** for them rather than silently ignored. Extending the harness to cover them is tracked
-in `docs/backlog.md`. Every AES family — GCM, ECB, CBC, CTR, OFB, CFB128, GMAC, KW, KWP and
-CMAC-AES — reaches a harness, Monte Carlo chains included, as does `RSA` in all four of its
-modes.
+**Every one of the 40 algorithms reaches a harness** — Monte Carlo chains, DRBG state machines
+and RSA's four modes included. Nothing silently tests this project's OpenSSL binding when you
+asked for your own implementation.
 
 PQC has no built-in provider on purpose. `cryptography` 50.0.1 implements neither ML-KEM nor ML-DSA, and in a real engagement the implementation under test is the customer's — OpenSSL 3.5+, liboqs, an HSM, or their own module. `examples/pqc_reference_harness.py` drives the pinned NIST ML-KEM and ML-DSA sets end to end using `kyber-py` and `dilithium-py`, which are educational, **not constant-time**, and exist here to verify this runner and to demonstrate it, never as an implementation to ship or validate.
 
@@ -132,7 +129,7 @@ The harness reads JSON requests on stdin, one per line, and writes one JSON resp
 ← {"error": "authentication failed"}
 ```
 
-Operations: `metadata`, `encrypt`, `decrypt`, `digest`, `digest-mct`, `mac`, `ecdsa-sign`, `ecdsa-verify`, `block-transform`, `block-mct`, `cmac`, `gmac`, `key-wrap`, `rsa-sign-group`, `rsa-verify`, `rsa-primitive-sign`, `rsa-primitive-decrypt`, `ml-kem-encapsulate`, `ml-kem-decapsulate`, `ml-kem-key-check`, `ml-dsa-verify`. A harness need only implement the families you are testing.
+Operations: `metadata`, `encrypt`, `decrypt`, `digest`, `digest-mct`, `mac`, `ecdsa-sign`, `ecdsa-verify`, `block-transform`, `block-mct`, `cmac`, `gmac`, `key-wrap`, `rsa-sign-group`, `rsa-verify`, `rsa-primitive-sign`, `rsa-primitive-decrypt`, `drbg`, `kdf-108`, `ml-kem-encapsulate`, `ml-kem-decapsulate`, `ml-kem-key-check`, `ml-dsa-verify`. A harness need only implement the families you are testing.
 
 Two error values are reserved. `{"error": "unsupported"}` declines a case the implementation does not offer — a curve, a parameter set, a mode — and is reported UNSUPPORTED rather than as a failure, because capability is yours to declare, not ours to assume. (An HSM's binary curves are not "unsupported" merely because Python's `cryptography` lacks them.)
 

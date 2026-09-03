@@ -120,6 +120,26 @@ declining is a first-class answer, see below.
 | `rsa-verify` | `sigType`, `hashAlg`, `maskFunction`, `saltLen`, `n`, `e`, `message`, `signature` | `testPassed` |
 | `rsa-primitive-sign` | `n`, `message`, and either `d` or `p`/`q`/`dmp1`/`dmq1`/`iqmp` | `testPassed`, `signature` |
 | `rsa-primitive-decrypt` | `n`, `d`, `ct` | `testPassed`, `pt` |
+| `drbg` | `mechanism`, `mode`, `derFunc`, `counterFieldLen`, `returnedBitsLen`, `entropyInput`, `nonce`, `persoString`, `otherInput` (array) | `returnedBits` |
+| `kdf-108` | `kdfMode`, `macMode`, `counterLocation`, `counterLength`, `keyOutLength`, `keyIn`, `fixedData`, `iv`, `breakLocation` | `keyOut` |
+
+A **whole DRBG case** crosses in one request — the seed material plus the
+ordered `otherInput` steps — rather than as a conversation. A DRBG is a state
+machine, and putting one on a wire would make the two sides agree about a
+sequence of calls rather than about an answer; a disagreement would then
+surface as a wrong value with no way to tell where it came from. Keep the state
+on your side.
+
+Two details in that sequence are silently wrong if you get them wrong.
+Prediction resistance turns a `generate` step carrying entropy into a **reseed
+then a generation**, with the additional input consumed by the reseed. And
+every case generates twice while only the second output is compared — returning
+the first would pass a DRBG that never updates its state.
+
+For `kdf-108`, `fixedData` arrives as **input**. SP 800-108 leaves it to the
+implementation, but the runner compares against the fixed data NIST recorded,
+so a harness free to choose its own would produce a different key every run
+with nothing to check it against. `breakLocation` is a **bit** offset.
 
 An RSA sigGen **group** is signed in one exchange, because ACVP reports the
 public key once per group: every case in it must share a key, so asking case by
@@ -238,12 +258,11 @@ Start from `examples/reference_harness.py`. It is a complete worked
 implementation that imports nothing from this package, so it can be copied out
 and rewritten in another language without carrying anything with it.
 
-## Not yet reachable through the harness
+## Coverage
 
-These families run against the built-in provider only, and
-`--provider-command` is **refused** rather than silently ignored:
-
-`ctrDRBG` · `hashDRBG` · `hmacDRBG` · `KDF`
+**Every family this runner supports now reaches a harness.** There is nothing
+left that silently tests the built-in OpenSSL binding when you asked for your
+own implementation.
 
 If you run one of these, you are testing this project's OpenSSL binding — not
 your module. That is stated plainly because the alternative is a customer

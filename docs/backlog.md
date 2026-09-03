@@ -49,9 +49,11 @@ Aimed at demand rather than portfolio scope; supersedes the v0.1.0 non-goals whe
       harness rather than deadlocking on it. Spawning per case cost ~75 ms, about
       fifty times the cryptography, and forced a PKCS#11 harness to log in once per
       case. See `docs/harness-protocol.md`.
-- [~] M11: harness operations for the fourteen families that are in-process only.
-      The ten AES families and all four RSA modes are done and verified through the
-      wire against NIST's vectors. The three DRBGs and KDF remain.
+- [x] M11: harness operations for every family. All forty algorithms now reach an
+      external implementation, verified through the wire against NIST's vectors with
+      the shipped reference harness. A DRBG case crosses in one exchange rather than
+      as a conversation, because putting a state machine on a wire makes the two sides
+      agree about a sequence of calls rather than about an answer.
       This is what makes the coverage claim true for a *vendor's* module rather than
       for this project's OpenSSL binding, so it is the highest-value item left.
       Planned operations, in the order they are worth building:

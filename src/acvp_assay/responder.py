@@ -48,8 +48,7 @@ from acvp_assay.providers.aes_block import (
 )
 from acvp_assay.providers.aes_modes import AesModeProvider, CryptographyAesModeProvider
 from acvp_assay.providers.cryptography_aesgcm import CryptographyAesGcmProvider
-from acvp_assay.providers.ctr_drbg import CtrDrbgProvider
-from acvp_assay.providers.digest import (
+from acvp_assay.providers.ctr_drbg import CryptographyCtrDrbg, run_drbg_case
     HASHLIB_ALGORITHMS,
     HashlibHashProvider,
     HashlibMacProvider,
@@ -57,6 +56,7 @@ from acvp_assay.providers.digest import (
     MacProvider,
 )
 from acvp_assay.providers.ecdsa import CryptographyEcdsaProvider
+from acvp_assay.providers.hash_drbg import HashDrbg, HmacDrbg
 from acvp_assay.providers.kdf import (
     CMAC_MODES,
     HMAC_MODES,
@@ -364,7 +364,11 @@ def _aes_block_groups(document: dict[str, object]) -> list[dict[str, object]]:
 def _ctr_drbg_groups(document: dict[str, object]) -> list[dict[str, object]]:
     """The bits returned by the second generation of each case."""
     vector_set = ctr_drbg.parse_vector_set(document)
-    provider: CtrDrbgProvider = ctr_drbg.provider_for(vector_set.algorithm)
+    provider = (
+        CryptographyCtrDrbg()
+        if vector_set.algorithm == ctr_drbg.ALGORITHM
+        else (HashDrbg() if vector_set.algorithm == ctr_drbg.HASH_DRBG else HmacDrbg())
+    )
     groups: list[dict[str, object]] = []
     for group in vector_set.groups:
         if group.mode not in ctr_drbg.SUPPORTED[vector_set.algorithm]:
@@ -375,32 +379,23 @@ def _ctr_drbg_groups(document: dict[str, object]) -> list[dict[str, object]]:
             )
         cases: list[dict[str, object]] = []
         for case in group.cases:
-            provider.instantiate(
+            # One driver for the whole case, shared with the offline runner, so
+            # the prediction-resistance and generate-twice rules live in exactly
+            # one place rather than in every caller.
+            produced = run_drbg_case(
+                provider,
                 mode=group.mode,
                 derivation_function=group.derivation_function,
                 counter_field_bits=group.counter_field_bits,
+                byte_count=group.returned_bits // 8,
                 entropy=case.entropy,
                 nonce=case.nonce,
                 personalization=case.personalization,
+                operations=[
+                    (step.intended_use, step.additional_input, step.entropy)
+                    for step in case.operations
+                ],
             )
-            produced: bytes | None = None
-            byte_count = group.returned_bits // 8
-            for operation in case.operations:
-                if operation.intended_use == ctr_drbg.RESEED:
-                    provider.reseed(
-                        entropy=operation.entropy, additional_input=operation.additional_input
-                    )
-                elif operation.entropy:
-                    # Prediction resistance: the reseed consumes the additional
-                    # input, so the generation that follows carries none.
-                    provider.reseed(
-                        entropy=operation.entropy, additional_input=operation.additional_input
-                    )
-                    produced = provider.generate(byte_count=byte_count, additional_input=b"")
-                else:
-                    produced = provider.generate(
-                        byte_count=byte_count, additional_input=operation.additional_input
-                    )
             if produced is None:
                 raise ResponseError(f"tgId {group.tg_id} tcId {case.tc_id} requests no generation")
             cases.append({"tcId": case.tc_id, "returnedBits": _hex(produced)})

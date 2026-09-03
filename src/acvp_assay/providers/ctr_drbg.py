@@ -12,6 +12,7 @@ are reported UNSUPPORTED rather than answered with a deprecated primitive.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import Protocol, runtime_checkable
 
 import cryptography
@@ -19,6 +20,7 @@ from cryptography.hazmat.backends.openssl.backend import backend
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 
 from acvp_assay.models import ProviderMetadata
+from acvp_assay.providers.subprocess_harness import HarnessClient, decode_hex
 
 #: Key and block length in bytes for each supported ``mode``.
 BLOCK_CIPHERS: dict[str, tuple[int, int]] = {
@@ -216,3 +218,104 @@ class CryptographyCtrDrbg:
 
 
 __all__ = ["BLOCK_CIPHERS", "CryptographyCtrDrbg", "CtrDrbgProvider"]
+
+
+#: One step of a case: the intended use, the additional input, the entropy.
+DrbgStep = tuple[str, bytes, bytes]
+
+RESEED = "reSeed"
+
+
+def run_drbg_case(
+    provider: CtrDrbgProvider,
+    *,
+    mode: str,
+    derivation_function: bool,
+    counter_field_bits: int,
+    byte_count: int,
+    entropy: bytes,
+    nonce: bytes,
+    personalization: bytes,
+    operations: Sequence[DrbgStep],
+) -> bytes | None:
+    """Drive one DRBG through a whole case, returning the last generation.
+
+    Two details here are silently wrong if you get them wrong, which is why
+    they live in one place rather than in each provider. Prediction resistance
+    turns a generation carrying entropy into a reseed followed by a generation,
+    with the additional input consumed by the *reseed*. And a case generates
+    twice while only the second output is compared -- returning the first would
+    pass a DRBG that never updates its state.
+    """
+    provider.instantiate(
+        mode=mode,
+        derivation_function=derivation_function,
+        counter_field_bits=counter_field_bits,
+        entropy=entropy,
+        nonce=nonce,
+        personalization=personalization,
+    )
+    produced: bytes | None = None
+    for intended_use, additional_input, step_entropy in operations:
+        if intended_use == RESEED:
+            provider.reseed(entropy=step_entropy, additional_input=additional_input)
+        elif step_entropy:
+            provider.reseed(entropy=step_entropy, additional_input=additional_input)
+            produced = provider.generate(byte_count=byte_count, additional_input=b"")
+        else:
+            produced = provider.generate(byte_count=byte_count, additional_input=additional_input)
+    return produced
+
+
+class SubprocessDrbg(HarnessClient):
+    """A DRBG driven by an external harness, one exchange per case.
+
+    The whole case crosses in a single request: the seed material and the
+    ordered ``otherInput`` steps. That is deliberate. A DRBG is a state
+    machine, and putting a state machine on a wire means the runner and the
+    implementation must agree about a conversation rather than about an answer
+    -- and any disagreement shows up as a wrong value with no way to tell where
+    it came from. One request, one answer, state entirely on the far side.
+    """
+
+    def __init__(self, mechanism: str, command: Sequence[str], **kwargs: float) -> None:
+        super().__init__(command, **kwargs)
+        self._mechanism = mechanism
+
+    def run_case(
+        self,
+        *,
+        mode: str,
+        derivation_function: bool,
+        counter_field_bits: int,
+        byte_count: int,
+        entropy: bytes,
+        nonce: bytes,
+        personalization: bytes,
+        operations: Sequence[DrbgStep],
+    ) -> bytes:
+        """Ask the harness to run a whole case and return the bits it generated."""
+        return decode_hex(
+            self.invoke(
+                {
+                    "operation": "drbg",
+                    "mechanism": self._mechanism,
+                    "mode": mode,
+                    "derFunc": derivation_function,
+                    "counterFieldLen": counter_field_bits,
+                    "returnedBitsLen": byte_count * 8,
+                    "entropyInput": entropy.hex().upper(),
+                    "nonce": nonce.hex().upper(),
+                    "persoString": personalization.hex().upper(),
+                    "otherInput": [
+                        {
+                            "intendedUse": intended_use,
+                            "additionalInput": additional_input.hex().upper(),
+                            "entropyInput": step_entropy.hex().upper(),
+                        }
+                        for intended_use, additional_input, step_entropy in operations
+                    ],
+                }
+            ),
+            "returnedBits",
+        )

@@ -43,7 +43,6 @@ from acvp_assay.providers.aes_modes import (
     SubprocessAesModeProvider,
 )
 from acvp_assay.providers.cryptography_aesgcm import CryptographyAesGcmProvider
-from acvp_assay.providers.ctr_drbg import CtrDrbgProvider as CtrDrbgProviderProtocol
 from acvp_assay.providers.digest import (
     HASHLIB_ALGORITHMS,
     HashlibHashProvider,
@@ -55,7 +54,7 @@ from acvp_assay.providers.digest import HashProvider as HashProviderProtocol
 from acvp_assay.providers.digest import MacProvider as MacProviderProtocol
 from acvp_assay.providers.ecdsa import CryptographyEcdsaProvider, SubprocessEcdsaProvider
 from acvp_assay.providers.ecdsa import EcdsaProvider as EcdsaProviderProtocol
-from acvp_assay.providers.kdf import CryptographyKdf
+from acvp_assay.providers.kdf import CryptographyKdf, SubprocessKdfProvider
 from acvp_assay.providers.kdf import KdfProvider as KdfProviderProtocol
 from acvp_assay.providers.pqc import SubprocessMlDsaProvider, SubprocessMlKemProvider
 from acvp_assay.providers.rsa import CryptographyRsaProvider, SubprocessRsaProvider
@@ -241,12 +240,14 @@ def _run_ctr_drbg(
     provider_command: str | None,
     provider_timeout: float,
 ) -> tuple[list[TestCaseResult], ProviderMetadata]:
-    if provider_command is not None:
-        raise UnsupportedAlgorithmError(
-            "--provider-command does not yet cover ctrDRBG; run it with the built-in provider"
-        )
     algorithm, _ = peek_algorithm(vector_file)
-    provider: CtrDrbgProviderProtocol = ctr_drbg.provider_for(algorithm)
+    provider: ctr_drbg.DrbgRunner = (
+        ctr_drbg.subprocess_provider_for(
+            algorithm, provider_command, timeout_seconds=provider_timeout
+        )
+        if provider_command is not None
+        else ctr_drbg.provider_for(algorithm)
+    )
     metadata = provider.metadata()
     vector_set = ctr_drbg.load_vector_set(vector_file)
     expected = ctr_drbg.load_expected_results(expected_file)
@@ -259,12 +260,13 @@ def _run_kdf(
     provider_command: str | None,
     provider_timeout: float,
 ) -> tuple[list[TestCaseResult], ProviderMetadata]:
-    if provider_command is not None:
-        raise UnsupportedAlgorithmError(
-            "--provider-command does not yet cover KDF SP 800-108; "
-            "run it with the built-in provider"
+    provider: KdfProviderProtocol = (
+        SubprocessKdfProvider.from_command_string(
+            provider_command, timeout_seconds=provider_timeout
         )
-    provider: KdfProviderProtocol = CryptographyKdf()
+        if provider_command is not None
+        else CryptographyKdf()
+    )
     metadata = provider.metadata()
     vector_set = kdf.load_vector_set(vector_file)
     expected = kdf.load_expected_results(expected_file)

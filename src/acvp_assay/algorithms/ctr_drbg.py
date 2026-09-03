@@ -33,8 +33,15 @@ from acvp_assay.parser import (
     optional_integer,
     string_field,
 )
-from acvp_assay.providers.ctr_drbg import BLOCK_CIPHERS, CryptographyCtrDrbg, CtrDrbgProvider
+from acvp_assay.providers.ctr_drbg import (
+    BLOCK_CIPHERS,
+    CryptographyCtrDrbg,
+    CtrDrbgProvider,
+    SubprocessDrbg,
+    run_drbg_case,
+)
 from acvp_assay.providers.hash_drbg import SEED_LENGTH_BITS, HashDrbg, HmacDrbg
+from acvp_assay.providers.subprocess_harness import HarnessUnsupportedError
 
 ALGORITHM = "ctrDRBG"
 HASH_DRBG = "hashDRBG"
@@ -48,7 +55,20 @@ SUPPORTED: dict[str, frozenset[str]] = {
 }
 
 
-def provider_for(algorithm: str) -> CtrDrbgProvider:
+#: What the runner accepts: either a stateful provider it drives itself, or a
+#: harness that answers a whole case in one exchange. They are different shapes
+#: on purpose -- a state machine does not belong on a wire.
+DrbgRunner = CtrDrbgProvider | SubprocessDrbg
+
+
+def subprocess_provider_for(algorithm: str, command: str, *, timeout_seconds: float) -> DrbgRunner:
+    """A harness-backed provider for one DRBG mechanism."""
+    import shlex
+
+    return SubprocessDrbg(algorithm, shlex.split(command), timeout_seconds=timeout_seconds)
+
+
+def provider_for(algorithm: str) -> DrbgRunner:
     """The built-in provider for one DRBG mechanism.
 
     All three present the same boundary because all three have the same
@@ -225,32 +245,34 @@ def _run_case(
     group: DrbgGroup,
     case: DrbgCase,
     expected: bytes,
-    provider: CtrDrbgProvider,
+    provider: DrbgRunner,
 ) -> TestCaseResult:
-    """Drive one DRBG through its operation sequence and compare the final output."""
-    provider.instantiate(
-        mode=group.mode,
-        derivation_function=group.derivation_function,
-        counter_field_bits=group.counter_field_bits,
-        entropy=case.entropy,
-        nonce=case.nonce,
-        personalization=case.personalization,
-    )
-
-    produced: bytes | None = None
-    byte_count = group.returned_bits // 8
-    for operation in case.operations:
-        if operation.intended_use == RESEED:
-            provider.reseed(entropy=operation.entropy, additional_input=operation.additional_input)
-        elif operation.entropy:
-            # Prediction resistance: reseed first, and the additional input is
-            # spent there, so the generation that follows carries none.
-            provider.reseed(entropy=operation.entropy, additional_input=operation.additional_input)
-            produced = provider.generate(byte_count=byte_count, additional_input=b"")
-        else:
-            produced = provider.generate(
-                byte_count=byte_count, additional_input=operation.additional_input
-            )
+    """Run one whole case and compare the bits of the final generation."""
+    steps = [
+        (operation.intended_use, operation.additional_input, operation.entropy)
+        for operation in case.operations
+    ]
+    arguments = {
+        "mode": group.mode,
+        "derivation_function": group.derivation_function,
+        "counter_field_bits": group.counter_field_bits,
+        "byte_count": group.returned_bits // 8,
+        "entropy": case.entropy,
+        "nonce": case.nonce,
+        "personalization": case.personalization,
+        "operations": steps,
+    }
+    produced: bytes | None
+    if isinstance(provider, SubprocessDrbg):
+        # A harness answers the whole case in one exchange: putting a state
+        # machine on the wire would make the two sides agree about a
+        # conversation rather than about an answer.
+        try:
+            produced = provider.run_case(**arguments)  # type: ignore[arg-type]
+        except HarnessUnsupportedError:
+            return _unsupported(group.tg_id, case.tc_id, "the harness declined this case")
+    else:
+        produced = run_drbg_case(provider, **arguments)  # type: ignore[arg-type]
 
     if produced is None:
         return _unsupported(group.tg_id, case.tc_id, "the case requested no generation")
@@ -269,7 +291,7 @@ def _run_case(
 def run_vector_set(
     vector_set: DrbgVectorSet,
     expected: DrbgExpectedSet,
-    provider: CtrDrbgProvider,
+    provider: DrbgRunner,
 ) -> list[TestCaseResult]:
     """Execute every case, declaring the ones this provider cannot answer."""
     results: list[TestCaseResult] = []
@@ -312,7 +334,9 @@ __all__ = [
     "load_vector_set",
     "parse_expected_results",
     "parse_vector_set",
+    "DrbgRunner",
     "provider_for",
+    "subprocess_provider_for",
     "run_vector_set",
     "supported_modes",
 ]

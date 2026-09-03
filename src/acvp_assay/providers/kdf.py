@@ -24,6 +24,7 @@ from cryptography.hazmat.primitives import cmac
 from cryptography.hazmat.primitives.ciphers import algorithms
 
 from acvp_assay.models import ProviderMetadata
+from acvp_assay.providers.subprocess_harness import HarnessClient, decode_hex
 
 #: ACVP ``macMode`` to the hashlib name backing its HMAC.
 HMAC_MODES: dict[str, str] = {
@@ -208,3 +209,34 @@ __all__ = [
     "KdfRequest",
     "supported_mac_modes",
 ]
+
+
+class SubprocessKdfProvider(HarnessClient):
+    """SP 800-108 derivation performed by an external harness.
+
+    One request per case. ``fixedData`` travels *in* rather than being chosen
+    by the harness: the offline runner derives against the fixed data NIST
+    recorded, so that the two can be compared at all. A harness free to choose
+    its own would produce a different key every run and nothing to check it
+    against.
+    """
+
+    def derive(self, request: KdfRequest) -> bytes:
+        """Derive keying material through the harness."""
+        return decode_hex(
+            self.invoke(
+                {
+                    "operation": "kdf-108",
+                    "kdfMode": request.kdf_mode,
+                    "macMode": request.mac_mode,
+                    "counterLocation": request.counter_location,
+                    "counterLength": request.counter_bits,
+                    "keyOutLength": request.output_bits,
+                    "keyIn": request.key_in.hex().upper(),
+                    "fixedData": request.fixed_data.hex().upper(),
+                    "iv": request.iv.hex().upper(),
+                    "breakLocation": request.break_location,
+                }
+            ),
+            "keyOut",
+        )

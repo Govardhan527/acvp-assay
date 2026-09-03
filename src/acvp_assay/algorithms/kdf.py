@@ -38,6 +38,7 @@ from acvp_assay.providers.kdf import (
     KdfProvider,
     KdfRequest,
 )
+from acvp_assay.providers.subprocess_harness import HarnessUnsupportedError
 
 ALGORITHM = "KDF"
 
@@ -254,7 +255,12 @@ def run_vector_set(
             if wanted is None:
                 results.append(_unsupported(group.tg_id, case.tc_id, "no expected result recorded"))
                 continue
-            results.append(_run_case(group, case, wanted, provider))
+            try:
+                results.append(_run_case(group, case, wanted, provider))
+            except HarnessUnsupportedError:
+                results.append(
+                    _unsupported(group.tg_id, case.tc_id, "the harness declined this case")
+                )
     return results
 
 
