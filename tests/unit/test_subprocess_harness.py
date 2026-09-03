@@ -18,10 +18,16 @@ IV = bytes.fromhex("101112131415161718191A1B")
 
 
 def harness(tmp_path: Path, body: str) -> SubprocessAesGcmProvider:
-    """Write a one-shot harness script and return a provider that invokes it."""
+    """Write a looping harness script and return a provider that invokes it."""
     script = tmp_path / "harness.py"
-    script.write_text(f"import json, sys\nrequest = json.loads(sys.stdin.read())\n{body}\n")
-    return SubprocessAesGcmProvider([sys.executable, str(script)])
+    script.write_text(
+        "import json, sys\n"
+        "for _line in sys.stdin:\n"
+        "    request = json.loads(_line)\n"
+        + "\n".join("    " + piece for piece in body.splitlines())
+        + '\n    sys.stdout.write("\\n")\n    sys.stdout.flush()\n'
+    )
+    return SubprocessAesGcmProvider([sys.executable, str(script)], timeout_seconds=2)
 
 
 def responding(tmp_path: Path, literal: str) -> SubprocessAesGcmProvider:
@@ -32,7 +38,7 @@ def responding(tmp_path: Path, literal: str) -> SubprocessAesGcmProvider:
 def test_reference_harness_round_trips_encrypt_and_decrypt() -> None:
     """The shipped example satisfies the contract for both directions."""
     example = Path(__file__).resolve().parents[2] / "examples/reference_harness.py"
-    provider = SubprocessAesGcmProvider([sys.executable, str(example)])
+    provider = SubprocessAesGcmProvider([sys.executable, str(example)], timeout_seconds=5)
 
     encrypted = provider.encrypt(
         key=KEY, iv=IV, plaintext=b"payload", aad=b"context", tag_length_bits=128
@@ -57,7 +63,7 @@ def test_reference_harness_round_trips_encrypt_and_decrypt() -> None:
 def test_reference_harness_reports_a_rejected_tag_as_invalid_tag() -> None:
     """A corrupted tag surfaces as InvalidTag, matching the in-process provider."""
     example = Path(__file__).resolve().parents[2] / "examples/reference_harness.py"
-    provider = SubprocessAesGcmProvider([sys.executable, str(example)])
+    provider = SubprocessAesGcmProvider([sys.executable, str(example)], timeout_seconds=5)
     encrypted = provider.encrypt(key=KEY, iv=IV, plaintext=b"payload", aad=b"", tag_length_bits=128)
     assert encrypted.ciphertext is not None
     assert encrypted.tag is not None
@@ -203,3 +209,202 @@ def test_request_hex_is_uppercase(tmp_path: Path) -> None:
     )
 
     assert provider.decrypt(key=KEY, iv=IV, ciphertext=b"", aad=b"", tag=b"").plaintext == b"\x00"
+
+
+def test_a_one_shot_harness_still_works(tmp_path: Path) -> None:
+    """A harness that reads stdin to EOF is detected and driven one case at a time.
+
+    This is the easiest kind to write -- a shell script with `jq` naturally
+    takes this shape -- so it stays supported even though a looping harness is
+    both faster and the recommended contract. It cannot answer until its input
+    closes, so the transport gives it an end-of-input rather than deadlocking.
+    """
+    script = tmp_path / "oneshot.py"
+    script.write_text(
+        "import json, sys\n"
+        "request = json.loads(sys.stdin.read())\n"
+        'print(json.dumps({"name": "one-shot", "libraryName": "l", '
+        '"libraryVersion": "1", "backendName": "b", "backendVersion": "2"}))\n'
+    )
+    client = SubprocessAesGcmProvider([sys.executable, str(script)], timeout_seconds=3)
+
+    first = client.metadata()
+    second = client.metadata()
+
+    assert first.name == "one-shot"
+    assert second.name == "one-shot"
+    client.close()
+
+
+def test_a_looping_harness_is_kept_alive(tmp_path: Path) -> None:
+    """A looping harness answers repeatedly from one process.
+
+    Keeping it alive is the point: spawning per case costs about 75 ms here,
+    and an implementation reached over PKCS#11 or a serial link would have to
+    re-establish its session every time.
+    """
+    script = tmp_path / "loop.py"
+    script.write_text(
+        "import json, os, sys\n"
+        "for _line in sys.stdin:\n"
+        '    print(json.dumps({"name": str(os.getpid()), "libraryName": "l", '
+        '"libraryVersion": "1", "backendName": "b", "backendVersion": "2"}), flush=True)\n'
+    )
+    client = SubprocessAesGcmProvider([sys.executable, str(script)], timeout_seconds=3)
+
+    first = client.metadata()
+    second = client.metadata()
+
+    # Same pid across calls: one process served both.
+    assert first.name == second.name
+    client.close()
+
+
+def test_a_persistent_harness_that_stops_answering_times_out(tmp_path: Path) -> None:
+    """A wedged device fails its case rather than stalling the whole run.
+
+    This is what --provider-timeout is for. The harness here answers the first
+    request, so it is classified persistent, then goes silent.
+    """
+    script = tmp_path / "wedge.py"
+    script.write_text(
+        "import json, sys, time\n"
+        "first = True\n"
+        "for _line in sys.stdin:\n"
+        "    if first:\n"
+        '        print(json.dumps({"name": "w", "libraryName": "l", "libraryVersion": "1",'
+        ' "backendName": "b", "backendVersion": "2"}), flush=True)\n'
+        "        first = False\n"
+        "    else:\n"
+        "        time.sleep(60)\n"
+    )
+    client = SubprocessAesGcmProvider([sys.executable, str(script)], timeout_seconds=1)
+    client.metadata()
+
+    with pytest.raises(HarnessProtocolError, match="timed out"):
+        client.metadata()
+    client.close()
+
+
+def test_a_harness_that_never_answers_times_out(tmp_path: Path) -> None:
+    """Silence with and without an end-of-input is reported, not waited on forever."""
+    script = tmp_path / "silent.py"
+    script.write_text("import sys, time\nsys.stdin.read()\ntime.sleep(60)\n")
+    client = SubprocessAesGcmProvider([sys.executable, str(script)], timeout_seconds=1)
+
+    with pytest.raises(HarnessProtocolError, match="without answering"):
+        client.metadata()
+    client.close()
+
+
+def test_writing_to_a_dead_harness_is_reported(tmp_path: Path) -> None:
+    """A harness that exits without reading is a protocol failure, not a hang."""
+    script = tmp_path / "dead.py"
+    script.write_text("import sys\nsys.exit(0)\n")
+    client = SubprocessAesGcmProvider([sys.executable, str(script)], timeout_seconds=5)
+
+    with pytest.raises(HarnessProtocolError):
+        client.metadata()
+    client.close()
+
+
+def test_the_client_closes_its_harness(tmp_path: Path) -> None:
+    """Closing ends the process, and works as a context manager and when repeated."""
+    script = tmp_path / "loop.py"
+    script.write_text(
+        "import json, sys\n"
+        "for _line in sys.stdin:\n"
+        '    print(json.dumps({"name": "l", "libraryName": "l", "libraryVersion": "1",'
+        ' "backendName": "b", "backendVersion": "2"}), flush=True)\n'
+    )
+    with SubprocessAesGcmProvider([sys.executable, str(script)], timeout_seconds=3) as client:
+        client.metadata()
+        process = client._process
+        assert process is not None and process.poll() is None
+
+    assert process.poll() is not None
+    client.close()  # idempotent
+
+
+def test_a_harness_that_ignores_its_input_is_reported(tmp_path: Path) -> None:
+    """Writing to a harness that has closed stdin is a protocol failure."""
+    script = tmp_path / "deaf.py"
+    script.write_text(
+        "import json, os, sys\n"
+        "os.close(0)\n"
+        'print(json.dumps({"name": "d", "libraryName": "l", "libraryVersion": "1",'
+        ' "backendName": "b", "backendVersion": "2"}), flush=True)\n'
+        "import time; time.sleep(30)\n"
+    )
+    client = SubprocessAesGcmProvider([sys.executable, str(script)], timeout_seconds=3)
+    client.metadata()
+
+    with pytest.raises(HarnessProtocolError):
+        for _ in range(200):
+            client.metadata()
+    client.close()
+
+
+def test_a_one_shot_harness_that_goes_silent_times_out(tmp_path: Path) -> None:
+    """Once classified one-shot, a later silent run still fails its case cleanly."""
+    marker = tmp_path / "seen"
+    script = tmp_path / "flaky.py"
+    script.write_text(
+        "import json, pathlib, sys, time\n"
+        f"marker = pathlib.Path({str(marker)!r})\n"
+        "sys.stdin.read()\n"
+        "if marker.exists():\n"
+        "    time.sleep(30)\n"
+        "marker.write_text('x')\n"
+        'print(json.dumps({"name": "f", "libraryName": "l", "libraryVersion": "1",'
+        ' "backendName": "b", "backendVersion": "2"}))\n'
+    )
+    client = SubprocessAesGcmProvider([sys.executable, str(script)], timeout_seconds=2)
+    client.metadata()
+
+    with pytest.raises(HarnessProtocolError, match="timed out"):
+        client.metadata()
+    client.close()
+
+
+def test_closing_a_harness_that_will_not_exit_kills_it(tmp_path: Path) -> None:
+    """A harness that ignores end-of-input is killed rather than waited on."""
+    script = tmp_path / "stubborn.py"
+    script.write_text(
+        "import json, signal, sys, time\n"
+        "signal.signal(signal.SIGTERM, signal.SIG_IGN)\n"
+        "for _line in sys.stdin:\n"
+        '    print(json.dumps({"name": "s", "libraryName": "l", "libraryVersion": "1",'
+        ' "backendName": "b", "backendVersion": "2"}), flush=True)\n'
+        "time.sleep(60)\n"
+    )
+    client = SubprocessAesGcmProvider([sys.executable, str(script)], timeout_seconds=1)
+    client.metadata()
+    process = client._process
+    assert process is not None
+
+    client.close()
+
+    assert process.poll() is not None
+
+
+def test_blank_lines_from_a_harness_are_ignored(tmp_path: Path) -> None:
+    """A harness may pad its output; only the response line counts.
+
+    Worth tolerating because the natural shell implementation -- `echo` into a
+    pipeline -- emits stray newlines easily, and refusing them would reject a
+    harness that is otherwise answering correctly.
+    """
+    script = tmp_path / "chatty.py"
+    script.write_text(
+        "import json, sys\n"
+        "for _line in sys.stdin:\n"
+        '    print("", flush=True)\n'
+        '    print("   ", flush=True)\n'
+        '    print(json.dumps({"name": "c", "libraryName": "l", "libraryVersion": "1",'
+        ' "backendName": "b", "backendVersion": "2"}), flush=True)\n'
+    )
+    client = SubprocessAesGcmProvider([sys.executable, str(script)], timeout_seconds=3)
+
+    assert client.metadata().name == "c"
+    client.close()

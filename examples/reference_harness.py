@@ -35,13 +35,24 @@ from cryptography.hazmat.primitives.asymmetric import ec, utils
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 
 HASHLIB = {
+    "SHA-1": "sha1",
     "SHA2-224": "sha224",
     "SHA2-256": "sha256",
     "SHA2-384": "sha384",
     "SHA2-512": "sha512",
     "SHA2-512/224": "sha512_224",
     "SHA2-512/256": "sha512_256",
+    "SHA3-224": "sha3_224",
+    "SHA3-256": "sha3_256",
+    "SHA3-384": "sha3_384",
+    "SHA3-512": "sha3_512",
 }
+
+#: SHA-3 chains its Monte Carlo test differently from SHA-1 and SHA-2. The two
+#: families share the "MCT" test type name and nothing else, so a harness that
+#: runs one chain for both fails every SHA-3 Monte Carlo case while looking
+#: structurally correct.
+SHA3 = frozenset(name for name in HASHLIB if name.startswith("SHA3-"))
 
 CURVES = {
     "P-224": ec.SECP224R1,
@@ -134,11 +145,14 @@ def digest_mct(request: dict[str, Any]) -> dict[str, Any]:
     seed = bytes.fromhex(request["seed"])
     alternate = bool(request.get("alternate"))
     width = len(seed)
+    sha3 = request["algorithm"] in SHA3
     outputs: list[str] = []
     for _ in range(100):
         a = b = c = seed
         for _ in range(1000):
-            message = a + b + c
+            # SHA-3 hashes the previous digest alone; SHA-1 and SHA-2 hash
+            # three concatenated.
+            message = c if sha3 else a + b + c
             if alternate:
                 message = message[:width].ljust(width, b"\x00")
             current = hashlib.new(name, message).digest()
@@ -220,16 +234,28 @@ HANDLERS = {
 
 
 def main() -> int:
-    """Handle exactly one request from stdin."""
-    request = json.loads(sys.stdin.read())
-    operation = request.get("operation")
+    """Answer requests until stdin closes.
 
-    handler = HANDLERS.get(operation)
-    if handler is None:
-        json.dump({"error": f"unsupported operation {operation!r}"}, sys.stdout)
-        return 0
+    One JSON request per line in, one JSON response per line out. The process
+    is started once and kept alive for the whole run, so any expensive setup --
+    opening a PKCS#11 session, attaching to a serial port, logging in to a
+    device -- happens once here rather than once per case.
 
-    json.dump(handler(request), sys.stdout)
+    ``flush=True`` is not optional: a harness that buffers its stdout looks to
+    the runner exactly like one that has hung.
+    """
+    for line in sys.stdin:
+        if not line.strip():
+            continue
+        request = json.loads(line)
+        operation = request.get("operation")
+        handler = HANDLERS.get(operation)
+        response = (
+            {"error": f"unsupported operation {operation!r}"}
+            if handler is None
+            else handler(request)
+        )
+        print(json.dumps(response), flush=True)
     return 0
 
 

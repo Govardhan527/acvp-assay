@@ -47,8 +47,10 @@ shared as evidence.
 from __future__ import annotations
 
 import json
+import select
 import shlex
 import subprocess
+import time
 from collections.abc import Mapping, Sequence
 from typing import Self
 
@@ -56,6 +58,8 @@ from cryptography.exceptions import InvalidTag
 
 from acvp_assay.models import AesGcmValues, ProviderMetadata
 
+_POLL_SECONDS = 0.2
+_PROBE_SECONDS = 5.0
 DEFAULT_TIMEOUT_SECONDS = 30.0
 AUTHENTICATION_FAILED = "authentication failed"
 UNSUPPORTED = "unsupported"
@@ -103,11 +107,67 @@ def _decode(document: Mapping[str, object], key: str) -> bytes:
         raise HarnessProtocolError(f"harness returned invalid hex in {key!r}") from None
 
 
-class HarnessClient:
-    """Speaks the one-request-per-invocation JSON contract to an external command.
+def _reap(process: subprocess.Popen[str], timeout_seconds: float) -> None:
+    """Wait briefly for a finished harness, then kill it.
 
-    Shared by every algorithm family's subprocess provider, so the transport,
-    timeout, and error-to-diagnostic rules are defined once.
+    An unbounded ``wait`` here would undo the timeout that just fired: a
+    harness that stops answering usually also declines to exit, and the run
+    would stall in the cleanup instead of the request.
+    """
+    try:
+        process.wait(timeout=timeout_seconds)
+    except subprocess.TimeoutExpired:
+        process.kill()
+        process.wait()
+
+
+def _read_line(process: subprocess.Popen[str], timeout_seconds: float) -> str | None:
+    """Read one response line, or None if nothing arrived before the deadline.
+
+    The read is polled rather than blocking so a wedged implementation cannot
+    hang the run -- that is what ``--provider-timeout`` is for. A device that
+    stops answering is a result to report, not a reason to stall forever.
+    """
+    assert process.stdout is not None  # noqa: S101
+    deadline = time.monotonic() + timeout_seconds
+    while True:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            return None
+        if not select.select([process.stdout], [], [], min(remaining, _POLL_SECONDS))[0]:
+            continue
+        line: str = process.stdout.readline()
+        if line == "":
+            status = process.poll()
+            raise HarnessProtocolError(
+                f"harness exited with status {status}" if status else "harness closed its output"
+            )
+        if line.strip():
+            return line
+
+
+class HarnessClient:
+    """Speaks newline-delimited JSON to a long-lived external command.
+
+    The harness is started once and kept alive: one JSON request per line on
+    its stdin, one JSON response per line on its stdout, until stdin closes.
+
+    That the process persists is the whole design. Spawning per case costs
+    about 75 ms here, which is roughly fifty times the work itself and would
+    add nine minutes to a single AES key wrap set. Worse, an implementation
+    reached over PKCS#11, a serial link or a network session would have to
+    re-establish that session for every case, which for an HSM means a login
+    per case. Vendors are the reason: the tool exists to reach implementations
+    that cannot be linked against, and those are exactly the ones for which
+    setup is expensive.
+
+    The loop a harness needs is five lines in any language::
+
+        for line in sys.stdin:
+            request = json.loads(line)
+            print(json.dumps(handle(request)), flush=True)
+
+    ``flush`` matters. A harness that buffers its stdout will appear to hang.
     """
 
     def __init__(
@@ -120,6 +180,8 @@ class HarnessClient:
             raise ValueError("harness command must not be empty")
         self._command = list(command)
         self._timeout_seconds = timeout_seconds
+        self._process: subprocess.Popen[str] | None = None
+        self._one_shot_mode: bool | None = None
 
     @classmethod
     def from_command_string(
@@ -147,15 +209,17 @@ class HarnessClient:
             values[field_name] = value
         return ProviderMetadata(**values)
 
-    def invoke(self, request: Mapping[str, object]) -> Mapping[str, object]:
+    def _start(self) -> subprocess.Popen[str]:
+        """Start the harness, or return the one already running."""
+        if self._process is not None and self._process.poll() is None:
+            return self._process
         try:
-            completed = subprocess.run(
+            self._process = subprocess.Popen(  # noqa: S603 - the command is the user's own
                 self._command,
-                input=json.dumps(request),
+                stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE,
                 text=True,
-                timeout=self._timeout_seconds,
-                check=False,
+                bufsize=1,
             )
         except FileNotFoundError:
             raise HarnessProtocolError(f"harness command not found: {self._command[0]!r}") from None
@@ -163,16 +227,106 @@ class HarnessClient:
             raise HarnessProtocolError(
                 f"harness command is not executable: {self._command[0]!r}"
             ) from None
-        except subprocess.TimeoutExpired:
-            raise HarnessProtocolError(
-                f"harness timed out after {self._timeout_seconds:g}s"
-            ) from None
+        return self._process
 
-        if completed.returncode != 0:
-            raise HarnessProtocolError(f"harness exited with status {completed.returncode}")
+    def close(self) -> None:
+        """Close the harness's stdin and wait for it to exit."""
+        process = self._process
+        self._process = None
+        if process is None or process.poll() is not None:
+            return
+        assert process.stdin is not None  # noqa: S101 - always created with a pipe
+        try:
+            process.stdin.close()
+            process.wait(timeout=self._timeout_seconds)
+        except (OSError, subprocess.TimeoutExpired):
+            process.kill()
+            process.wait()
+
+    def __enter__(self) -> Self:
+        """Enter a context that closes the harness on exit."""
+        return self
+
+    def __exit__(self, *_: object) -> None:
+        """Close the harness."""
+        self.close()
+
+    def _write(self, process: subprocess.Popen[str], payload: str) -> None:
+        assert process.stdin is not None  # noqa: S101
+        try:
+            process.stdin.write(payload + "\n")
+            process.stdin.flush()
+        except (BrokenPipeError, ValueError):
+            raise HarnessProtocolError("harness closed its input before answering") from None
+
+    def _one_shot(self, payload: str) -> str:
+        """Run the harness once for this request, closing stdin so it sees EOF."""
+        process = self._start()
+        self._process = None
+        self._write(process, payload)
+        assert process.stdin is not None  # noqa: S101
+        process.stdin.close()
+        line = _read_line(process, self._timeout_seconds)
+        _reap(process, self._timeout_seconds)
+        if line is None:
+            raise HarnessProtocolError(f"harness timed out after {self._timeout_seconds:g}s")
+        return line
+
+    def _persistent(self, payload: str) -> str:
+        process = self._start()
+        self._write(process, payload)
+        line = _read_line(process, self._timeout_seconds)
+        if line is None:
+            process.kill()
+            self._process = None
+            raise HarnessProtocolError(f"harness timed out after {self._timeout_seconds:g}s")
+        return line
+
+    def _detect(self, payload: str) -> str:
+        """First exchange: work out which contract this harness speaks.
+
+        A harness that loops over stdin answers straight away. One that reads
+        stdin to EOF -- the easiest kind to write, and the shape a shell script
+        with `jq` naturally takes -- cannot answer until its input closes, so it
+        stays silent. Rather than deadlock, wait a bounded moment and then give
+        it the EOF it is waiting for.
+
+        Misjudging a merely slow persistent harness as one-shot costs speed and
+        nothing else: the answer is still read, and every later request simply
+        starts a fresh process. Silence is the only signal available here, so
+        the safe reading of it is the cheap one.
+        """
+        process = self._start()
+        self._write(process, payload)
+        line = _read_line(process, min(self._timeout_seconds, _PROBE_SECONDS))
+        if line is not None:
+            self._one_shot_mode = False
+            return line
+
+        assert process.stdin is not None  # noqa: S101
+        process.stdin.close()
+        self._process = None
+        line = _read_line(process, self._timeout_seconds)
+        _reap(process, self._timeout_seconds)
+        if line is None:
+            raise HarnessProtocolError(
+                f"harness timed out after {self._timeout_seconds:g}s without answering, "
+                "with and without an end-of-input"
+            )
+        self._one_shot_mode = True
+        return line
+
+    def invoke(self, request: Mapping[str, object]) -> Mapping[str, object]:
+        payload = json.dumps(request)
+        if self._one_shot_mode is None:
+            line = self._detect(payload)
+        elif self._one_shot_mode:
+            line = self._one_shot(payload)
+        else:
+            line = self._persistent(payload)
 
         try:
-            response: object = json.loads(completed.stdout)
+            response: object = json.loads(line)
         except json.JSONDecodeError:
             raise HarnessProtocolError("harness returned output that is not valid JSON") from None
         if not isinstance(response, Mapping):

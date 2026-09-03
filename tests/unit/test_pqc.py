@@ -359,7 +359,13 @@ def test_pqc_without_a_harness_explains_why(tmp_path: Path) -> None:
 def harness(tmp_path: Path, body: str) -> list[str]:
     """Write a one-shot harness script and return its argument vector."""
     script = tmp_path / "pqc_harness.py"
-    script.write_text(f"import json, sys\nrequest = json.loads(sys.stdin.read())\n{body}\n")
+    script.write_text(
+        "import json, sys\n"
+        "for _line in sys.stdin:\n"
+        "    request = json.loads(_line)\n"
+        + "\n".join("    " + piece for piece in body.splitlines())
+        + '\n    sys.stdout.write("\\n")\n    sys.stdout.flush()\n'
+    )
     return [sys.executable, str(script)]
 
 

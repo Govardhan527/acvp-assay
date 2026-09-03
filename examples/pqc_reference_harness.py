@@ -127,13 +127,23 @@ HANDLERS = {
 
 
 def main() -> int:
-    """Handle exactly one request from stdin."""
-    request = json.loads(sys.stdin.read())
-    handler = HANDLERS.get(request.get("operation"))
-    if handler is None:
-        json.dump({"error": f"unsupported operation {request.get('operation')!r}"}, sys.stdout)
-        return 0
-    json.dump(handler(request), sys.stdout)
+    """Answer requests until stdin closes.
+
+    One JSON request per line in, one JSON response per line out, with the
+    process kept alive for the whole run. See `reference_harness.py` for why
+    that matters.
+    """
+    for line in sys.stdin:
+        if not line.strip():
+            continue
+        request = json.loads(line)
+        handler = HANDLERS.get(request.get("operation"))
+        response = (
+            {"error": f"unsupported operation {request.get('operation')!r}"}
+            if handler is None
+            else handler(request)
+        )
+        print(json.dumps(response), flush=True)
     return 0
 
 

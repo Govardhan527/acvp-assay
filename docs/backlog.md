@@ -45,6 +45,25 @@ Aimed at demand rather than portfolio scope; supersedes the v0.1.0 non-goals whe
       cases. The IUT supplies its own `fixedData`, so the runner reads it back from the
       expected results and derives against it — which bounds what a pass means, and the
       limitation is documented rather than glossed.
-- [ ] M10: publish to PyPI.
+- [x] M10: keep the harness process alive across cases, and detect a one-shot
+      harness rather than deadlocking on it. Spawning per case cost ~75 ms, about
+      fifty times the cryptography, and forced a PKCS#11 harness to log in once per
+      case. See `docs/harness-protocol.md`.
+- [ ] M11: harness operations for the fourteen families that are in-process only.
+      This is what makes the coverage claim true for a *vendor's* module rather than
+      for this project's OpenSSL binding, so it is the highest-value item left.
+      Planned operations, in the order they are worth building:
+      - `block-encrypt` / `block-decrypt` / `block-mct` — ECB, CBC, CTR, OFB, CFB128.
+        The Monte Carlo chain is delegated whole and returns each outer iteration's
+        key, IV, input and output.
+      - `cmac`, `gmac`, `key-wrap` — the remaining AES mode families.
+      - `rsa-sign-group` (one key per group, returning `n` and `e`), `rsa-verify`,
+        `rsa-primitive-sign`, `rsa-primitive-decrypt`.
+      - `drbg` — one call per case carrying the whole `otherInput` sequence, rather
+        than a stateful instantiate/reseed/generate conversation over the wire.
+      - `kdf-108` — returns `keyOut` *and* the `fixedData` the implementation chose.
+- [ ] M12: `--provider-command` for the live responder, so a vendor's own answers
+      can be submitted to ACVTS rather than this project's.
+- [ ] M13: publish to PyPI.
 
 Still out of scope: a full ACVP protocol client, algorithm count as a goal, an HTML dashboard, and any hosted service.

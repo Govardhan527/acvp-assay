@@ -120,7 +120,7 @@ The built-in provider exercises OpenSSL through Python's `cryptography`. To test
 acvp-assay run VECTOR_FILE --provider-command "python3 examples/reference_harness.py"
 ```
 
-The harness reads one JSON request on stdin and writes one JSON response on stdout. That is the whole contract, so it can be written in any language. AES-GCM, the hash families (including the Monte Carlo chain), HMAC, ECDSA, ML-KEM and ML-DSA all go through it:
+The harness reads JSON requests on stdin, one per line, and writes one JSON response per line on stdout. That is the whole contract, so it can be written in any language. **`docs/harness-protocol.md` is the full specification** — every operation, the reserved errors, and worked patterns for HSMs, serial devices and network appliances. AES-GCM, the hash families (including the Monte Carlo chain), HMAC, ECDSA, ML-KEM and ML-DSA all go through it:
 
 ```json
 → {"operation": "encrypt", "key": "000102…", "iv": "1011…", "aad": "", "pt": "4865…", "tagLen": 128}
@@ -139,7 +139,15 @@ A rejected authentication tag is reported as `{"error": "authentication failed"}
 
 The Monte Carlo chain is delegated whole via `digest-mct`: at 100,000 inner iterations, one round trip per hash would take hours, and running the chain is what a real implementation under test does anyway.
 
-`examples/reference_harness.py` is a complete worked implementation that imports nothing from this package. `--provider-timeout SECONDS` bounds each call, so a wedged device cannot hang the run. The harness is invoked once per case; its stderr passes through to your terminal for debugging but never enters the JSON report, since a crashing harness may print key material.
+`examples/reference_harness.py` is a complete worked implementation that imports nothing from this package. `--provider-timeout SECONDS` bounds each call, so a wedged device cannot hang the run. Its stderr passes through to your terminal for debugging but never enters the JSON report, since a crashing harness may print key material.
+
+**The harness is started once and kept alive** for the whole run, so expensive
+setup — a PKCS#11 login, a serial port, an SSH session — happens once rather
+than once per case. That is worth about fifty times the run time: 239 SHA3-256
+cases take 0.5 s against a persistent harness and 17.9 s against one spawned per
+case. A one-shot harness that reads stdin to end still works and is detected
+automatically, because a shell script with `jq` naturally takes that shape and
+reach matters more than the speed lost.
 
 ### Sample output — PASS
 
@@ -314,6 +322,7 @@ python3.12 scripts/dev.py demo
 - `tests/integration/`: subprocess and full-path tests
 - `fixtures/`: small, rights-safe local test vectors
 - `docs/architecture.md`: component boundaries and data flow
+- `docs/harness-protocol.md`: the full harness specification for vendors
 - `docs/limitations.md`: security and assurance boundaries
 - `docs/vector-sources.md`: pinned upstream source, hashes, licensing, and redistribution policy
 - `docs/decisions/`: committed design decisions

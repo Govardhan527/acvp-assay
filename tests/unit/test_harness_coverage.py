@@ -32,7 +32,13 @@ REFERENCE = f"{sys.executable} {ROOT / 'examples/reference_harness.py'}"
 def script(tmp_path: Path, body: str) -> list[str]:
     """Write a one-shot harness and return its argument vector."""
     path = tmp_path / "h.py"
-    path.write_text(f"import json, sys\nrequest = json.loads(sys.stdin.read())\n{body}\n")
+    path.write_text(
+        "import json, sys\n"
+        "for _line in sys.stdin:\n"
+        "    request = json.loads(_line)\n"
+        + "\n".join("    " + piece for piece in body.splitlines())
+        + '\n    sys.stdout.write("\\n")\n    sys.stdout.flush()\n'
+    )
     return [sys.executable, str(path)]
 
 
@@ -235,18 +241,51 @@ def test_ecdsa_verdict_crosses_the_boundary_intact(tmp_path: Path) -> None:
 
 
 def test_reference_harness_declines_what_it_lacks() -> None:
-    """The shipped example reports 'unsupported' rather than crashing."""
+    """The shipped example reports 'unsupported' rather than crashing.
+
+    SHAKE is genuinely absent from it. SHA-3 used to be too, which is what this
+    test asserted until the omission was found: the harness listed the SHA-3
+    hashes for ECDSA but not in the table its digest operation reads, so every
+    SHA-3 case came back declined and looked like an honest capability limit.
+    """
     import subprocess
 
     completed = subprocess.run(
         [sys.executable, str(ROOT / "examples/reference_harness.py")],
-        input=json.dumps({"operation": "digest", "algorithm": "SHA3-256", "message": "616263"}),
+        input=json.dumps({"operation": "digest", "algorithm": "SHAKE-128", "message": "616263"}),
         capture_output=True,
         text=True,
         check=False,
     )
 
     assert json.loads(completed.stdout) == {"error": "unsupported"}
+
+
+def test_reference_harness_answers_every_hash_it_lists() -> None:
+    """Every algorithm the example claims must actually work through `digest`.
+
+    The two tables in the harness -- one for ECDSA hashes, one for digests --
+    drifted apart once and nothing caught it.
+    """
+    import subprocess
+
+    from acvp_assay.providers.digest import HASHLIB_ALGORITHMS
+
+    requests = "\n".join(
+        json.dumps({"operation": "digest", "algorithm": name, "message": "616263"})
+        for name in HASHLIB_ALGORITHMS
+    )
+    completed = subprocess.run(
+        [sys.executable, str(ROOT / "examples/reference_harness.py")],
+        input=requests,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    answers = [json.loads(line) for line in completed.stdout.splitlines() if line.strip()]
+    assert len(answers) == len(HASHLIB_ALGORITHMS)
+    assert all("md" in answer for answer in answers), answers
 
 
 def test_reference_harness_matches_published_known_answers() -> None:
