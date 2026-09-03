@@ -88,6 +88,17 @@ class EcdsaProvider(Protocol):
         """Generate a key pair, sign, and return the signature with its public key."""
         ...
 
+    def sign_group(
+        self, *, curve: str, hash_algorithm: str, messages: Sequence[bytes]
+    ) -> GroupSignatures:
+        """Sign a whole group under one key pair.
+
+        Separate from ``sign`` because ACVP reports the public key once per
+        group: a submission needs every case in the group signed under the key
+        it reports, which per-case signing cannot express.
+        """
+        ...
+
     def verify(
         self,
         *,
@@ -238,6 +249,36 @@ class SubprocessEcdsaProvider(HarnessClient):
             qy=decode_hex(response, "qy"),
             r=decode_hex(response, "r"),
             s=decode_hex(response, "s"),
+        )
+
+    def sign_group(
+        self, *, curve: str, hash_algorithm: str, messages: Sequence[bytes]
+    ) -> GroupSignatures:
+        """Ask the harness to sign a whole group under one key it generates."""
+        response = self.invoke(
+            {
+                "operation": "ecdsa-sign-group",
+                "curve": curve,
+                "hashAlg": hash_algorithm,
+                "messages": [message.hex().upper() for message in messages],
+            }
+        )
+        signatures = response.get("signatures")
+        if not isinstance(signatures, list):
+            raise HarnessProtocolError("harness returned no 'signatures' array")
+        if len(signatures) != len(messages):
+            raise HarnessProtocolError(
+                f"harness returned {len(signatures)} signatures for {len(messages)} messages"
+            )
+        decoded: list[tuple[bytes, bytes]] = []
+        for index, value in enumerate(signatures):
+            if not isinstance(value, dict):
+                raise HarnessProtocolError(f"harness returned a non-object signature at {index}")
+            decoded.append((decode_hex(value, "r"), decode_hex(value, "s")))
+        return GroupSignatures(
+            qx=decode_hex(response, "qx"),
+            qy=decode_hex(response, "qy"),
+            signatures=tuple(decoded),
         )
 
     def verify(

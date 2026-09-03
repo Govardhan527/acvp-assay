@@ -26,8 +26,10 @@ from __future__ import annotations
 
 import json
 import secrets
+import shlex
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Protocol
+from typing import Protocol, TypeVar
 
 from acvp_assay import parser
 from acvp_assay.algorithms import (
@@ -45,18 +47,30 @@ from acvp_assay.providers.aes_block import (
     CHAINING_MODES,
     AesBlockProvider,
     CryptographyAesBlockProvider,
+    SubprocessAesBlockProvider,
 )
-from acvp_assay.providers.aes_modes import AesModeProvider, CryptographyAesModeProvider
+from acvp_assay.providers.aes_modes import (
+    AesModeProvider,
+    CryptographyAesModeProvider,
+    SubprocessAesModeProvider,
+)
+from acvp_assay.providers.base import AesGcmProvider
 from acvp_assay.providers.cryptography_aesgcm import CryptographyAesGcmProvider
-from acvp_assay.providers.ctr_drbg import CryptographyCtrDrbg, run_drbg_case
+from acvp_assay.providers.ctr_drbg import CryptographyCtrDrbg, SubprocessDrbg, run_drbg_case
 from acvp_assay.providers.digest import (
     HASHLIB_ALGORITHMS,
     HashlibHashProvider,
     HashlibMacProvider,
     HashProvider,
     MacProvider,
+    SubprocessHashProvider,
+    SubprocessMacProvider,
 )
-from acvp_assay.providers.ecdsa import CryptographyEcdsaProvider
+from acvp_assay.providers.ecdsa import (
+    CryptographyEcdsaProvider,
+    EcdsaProvider,
+    SubprocessEcdsaProvider,
+)
 from acvp_assay.providers.hash_drbg import HashDrbg, HmacDrbg
 from acvp_assay.providers.kdf import (
     CMAC_MODES,
@@ -65,8 +79,21 @@ from acvp_assay.providers.kdf import (
     CryptographyKdf,
     KdfProvider,
     KdfRequest,
+    SubprocessKdfProvider,
 )
-from acvp_assay.providers.rsa import CryptographyRsaProvider
+from acvp_assay.providers.rsa import (
+    CryptographyRsaProvider,
+    RsaProvider,
+    SubprocessRsaProvider,
+)
+from acvp_assay.providers.subprocess_harness import (
+    DEFAULT_TIMEOUT_SECONDS,
+    HarnessClient,
+    HarnessUnsupportedError,
+    SubprocessAesGcmProvider,
+)
+
+_ClientT = TypeVar("_ClientT", bound=HarnessClient)
 
 #: ``fixedData`` is chosen by the implementation under test, so a submission
 #: must invent it and report what it used. Sixteen bytes matches the width the
@@ -78,8 +105,40 @@ class ResponseError(RuntimeError):
     """A response cannot be constructed faithfully for this vector set."""
 
 
+@dataclass
+class Harness:
+    """A vendor implementation to answer with, in place of the built-in providers.
+
+    This is what makes a live session say something about the vendor's product
+    rather than about ``cryptography``: the same builders run, but every value
+    submitted comes back over the harness protocol from the vendor's own code.
+
+    A family may need more than one client (RSA signing and the primitives, for
+    instance), and each holds a live subprocess, so every client opened is kept
+    here and closed together once the document is built.
+    """
+
+    command: str
+    timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS
+
+    def __post_init__(self) -> None:
+        self._clients: list[HarnessClient] = []
+
+    def open(self, client: _ClientT) -> _ClientT:
+        """Adopt a freshly built harness client, to be closed with the rest."""
+        self._clients.append(client)
+        return client
+
+    def close(self) -> None:
+        """Shut down every subprocess this harness started."""
+        while self._clients:
+            self._clients.pop().close()
+
+
 class _Builder(Protocol):
-    def __call__(self, document: dict[str, object]) -> list[dict[str, object]]:
+    def __call__(
+        self, document: dict[str, object], harness: Harness | None
+    ) -> list[dict[str, object]]:
         """Build the ``testGroups`` array of a response."""
         ...
 
@@ -91,10 +150,22 @@ def _hex(value: bytes) -> str:
 # --------------------------------------------------------------------------- SHA-2
 
 
-def _sha2_groups(document: dict[str, object]) -> list[dict[str, object]]:
+def _sha2_groups(
+    document: dict[str, object], harness: Harness | None = None
+) -> list[dict[str, object]]:
     """A digest per AFT case; the whole chain per Monte Carlo case."""
     vector_set = sha2.parse_vector_set(document)
-    provider: HashProvider = HashlibHashProvider(vector_set.algorithm)
+    provider: HashProvider = (
+        HashlibHashProvider(vector_set.algorithm)
+        if harness is None
+        else harness.open(
+            SubprocessHashProvider(
+                vector_set.algorithm,
+                shlex.split(harness.command),
+                timeout_seconds=harness.timeout_seconds,
+            )
+        )
+    )
     groups: list[dict[str, object]] = []
     for group in vector_set.test_groups:
         cases: list[dict[str, object]] = []
@@ -123,11 +194,21 @@ def _sha2_groups(document: dict[str, object]) -> list[dict[str, object]]:
 # --------------------------------------------------------------------------- HMAC
 
 
-def _hmac_groups(document: dict[str, object]) -> list[dict[str, object]]:
+def _hmac_groups(
+    document: dict[str, object], harness: Harness | None = None
+) -> list[dict[str, object]]:
     """One MAC per case, truncated to the group's ``macLen``."""
     vector_set = hmac_mac.parse_vector_set(document)
     underlying = vector_set.algorithm.removeprefix("HMAC-")
-    provider: MacProvider = HashlibMacProvider(underlying)
+    provider: MacProvider = (
+        HashlibMacProvider(underlying)
+        if harness is None
+        else harness.open(
+            SubprocessMacProvider(
+                underlying, shlex.split(harness.command), timeout_seconds=harness.timeout_seconds
+            )
+        )
+    )
     return [
         {
             "tgId": group.tg_id,
@@ -152,10 +233,20 @@ def _hmac_groups(document: dict[str, object]) -> list[dict[str, object]]:
 # --------------------------------------------------------------------------- AES-GCM
 
 
-def _aes_gcm_groups(document: dict[str, object]) -> list[dict[str, object]]:
+def _aes_gcm_groups(
+    document: dict[str, object], harness: Harness | None = None
+) -> list[dict[str, object]]:
     """Ciphertext and tag when encrypting; plaintext or a verdict when decrypting."""
     vector_set = parser.parse_vector_set(document)
-    provider = CryptographyAesGcmProvider()
+    provider: AesGcmProvider = (
+        CryptographyAesGcmProvider()
+        if harness is None
+        else harness.open(
+            SubprocessAesGcmProvider.from_command_string(
+                harness.command, timeout_seconds=harness.timeout_seconds
+            )
+        )
+    )
     groups: list[dict[str, object]] = []
     for group in vector_set.test_groups:
         if group.iv_generation == "internal":
@@ -259,11 +350,21 @@ def _aes_mode_case(
     return {"tcId": case.tc_id, "testPassed": True, "pt": _hex(produced)}
 
 
-def _aes_modes_groups(document: dict[str, object]) -> list[dict[str, object]]:
+def _aes_modes_groups(
+    document: dict[str, object], harness: Harness | None = None
+) -> list[dict[str, object]]:
     """ECB (including Monte Carlo), CMAC, GMAC and the two key wraps."""
     vector_set = aes_modes.parse_vector_set(document)
     algorithm = vector_set.algorithm
-    provider: AesModeProvider = CryptographyAesModeProvider()
+    provider: AesModeProvider = (
+        CryptographyAesModeProvider()
+        if harness is None
+        else harness.open(
+            SubprocessAesModeProvider.from_command_string(
+                harness.command, timeout_seconds=harness.timeout_seconds
+            )
+        )
+    )
     groups: list[dict[str, object]] = []
     for group in vector_set.test_groups:
         if algorithm in (aes_modes.KW, aes_modes.KWP) and group.kw_cipher != (
@@ -304,11 +405,21 @@ def _aes_modes_groups(document: dict[str, object]) -> list[dict[str, object]]:
 # --------------------------------------------------------------------------- AES chaining
 
 
-def _aes_block_groups(document: dict[str, object]) -> list[dict[str, object]]:
+def _aes_block_groups(
+    document: dict[str, object], harness: Harness | None = None
+) -> list[dict[str, object]]:
     """CBC, CTR, OFB and CFB128: one transform per case, plus the MCT chain."""
     vector_set = aes_block.parse_vector_set(document)
     algorithm = vector_set.algorithm
-    provider: AesBlockProvider = CryptographyAesBlockProvider()
+    provider: AesBlockProvider = (
+        CryptographyAesBlockProvider()
+        if harness is None
+        else harness.open(
+            SubprocessAesBlockProvider.from_command_string(
+                harness.command, timeout_seconds=harness.timeout_seconds
+            )
+        )
+    )
     groups: list[dict[str, object]] = []
     for group in vector_set.test_groups:
         encrypt = group.direction == "encrypt"
@@ -362,41 +473,60 @@ def _aes_block_groups(document: dict[str, object]) -> list[dict[str, object]]:
 # --------------------------------------------------------------------------- ctrDRBG
 
 
-def _ctr_drbg_groups(document: dict[str, object]) -> list[dict[str, object]]:
+def _ctr_drbg_groups(
+    document: dict[str, object], harness: Harness | None = None
+) -> list[dict[str, object]]:
     """The bits returned by the second generation of each case."""
     vector_set = ctr_drbg.parse_vector_set(document)
-    provider = (
-        CryptographyCtrDrbg()
-        if vector_set.algorithm == ctr_drbg.ALGORITHM
-        else (HashDrbg() if vector_set.algorithm == ctr_drbg.HASH_DRBG else HmacDrbg())
-    )
+    provider: ctr_drbg.DrbgRunner
+    if harness is not None:
+        provider = harness.open(
+            SubprocessDrbg(
+                vector_set.algorithm,
+                shlex.split(harness.command),
+                timeout_seconds=harness.timeout_seconds,
+            )
+        )
+    elif vector_set.algorithm == ctr_drbg.ALGORITHM:
+        provider = CryptographyCtrDrbg()
+    else:
+        provider = HashDrbg() if vector_set.algorithm == ctr_drbg.HASH_DRBG else HmacDrbg()
     groups: list[dict[str, object]] = []
     for group in vector_set.groups:
-        if group.mode not in ctr_drbg.SUPPORTED[vector_set.algorithm]:
+        # Capability is the implementation's to declare. With a harness the
+        # mode travels on the wire and the harness answers or declines it; the
+        # built-in table describes only the built-in provider.
+        if harness is None and group.mode not in ctr_drbg.SUPPORTED[vector_set.algorithm]:
             raise ResponseError(
-                f"tgId {group.tg_id} uses mode {group.mode!r}, which this runner does not "
-                "implement for {vector_set.algorithm}; three-key TDES has been disallowed "
-                "for this use since 2023"
+                f"tgId {group.tg_id} uses mode {group.mode!r}, which the built-in provider does "
+                f"not implement for {vector_set.algorithm}; three-key TDES has been disallowed "
+                "for this use since 2023. Pass --provider-command to answer it from an "
+                "implementation that offers it."
             )
         cases: list[dict[str, object]] = []
         for case in group.cases:
             # One driver for the whole case, shared with the offline runner, so
             # the prediction-resistance and generate-twice rules live in exactly
-            # one place rather than in every caller.
-            produced = run_drbg_case(
-                provider,
-                mode=group.mode,
-                derivation_function=group.derivation_function,
-                counter_field_bits=group.counter_field_bits,
-                byte_count=group.returned_bits // 8,
-                entropy=case.entropy,
-                nonce=case.nonce,
-                personalization=case.personalization,
-                operations=[
+            # one place rather than in every caller. A harness takes the same
+            # case in a single exchange instead.
+            arguments = {
+                "mode": group.mode,
+                "derivation_function": group.derivation_function,
+                "counter_field_bits": group.counter_field_bits,
+                "byte_count": group.returned_bits // 8,
+                "entropy": case.entropy,
+                "nonce": case.nonce,
+                "personalization": case.personalization,
+                "operations": [
                     (step.intended_use, step.additional_input, step.entropy)
                     for step in case.operations
                 ],
-            )
+            }
+            produced: bytes | None
+            if isinstance(provider, SubprocessDrbg):
+                produced = provider.run_case(**arguments)  # type: ignore[arg-type]
+            else:
+                produced = run_drbg_case(provider, **arguments)  # type: ignore[arg-type]
             if produced is None:
                 raise ResponseError(f"tgId {group.tg_id} tcId {case.tc_id} requests no generation")
             cases.append({"tcId": case.tc_id, "returnedBits": _hex(produced)})
@@ -407,7 +537,9 @@ def _ctr_drbg_groups(document: dict[str, object]) -> list[dict[str, object]]:
 # --------------------------------------------------------------------------- KDF
 
 
-def _kdf_groups(document: dict[str, object]) -> list[dict[str, object]]:
+def _kdf_groups(
+    document: dict[str, object], harness: Harness | None = None
+) -> list[dict[str, object]]:
     """Derived keying material, plus the fixed data this client chose.
 
     Unlike every other family here, the prompt does not supply the whole input:
@@ -416,13 +548,27 @@ def _kdf_groups(document: dict[str, object]) -> list[dict[str, object]]:
     from what was reported.
     """
     vector_set = kdf.parse_vector_set(document)
-    provider: KdfProvider = CryptographyKdf()
+    provider: KdfProvider = (
+        CryptographyKdf()
+        if harness is None
+        else harness.open(
+            SubprocessKdfProvider.from_command_string(
+                harness.command, timeout_seconds=harness.timeout_seconds
+            )
+        )
+    )
     groups: list[dict[str, object]] = []
     for group in vector_set.groups:
-        if group.mac_mode not in HMAC_MODES and group.mac_mode not in CMAC_MODES:
+        # As with the DRBGs: macMode is sent to the harness, which decides.
+        if (
+            harness is None
+            and group.mac_mode not in HMAC_MODES
+            and group.mac_mode not in CMAC_MODES
+        ):
             raise ResponseError(
-                f"tgId {group.tg_id} uses macMode {group.mac_mode!r}, which this runner does "
-                "not implement"
+                f"tgId {group.tg_id} uses macMode {group.mac_mode!r}, which the built-in "
+                "provider does not implement; pass --provider-command to answer it from an "
+                "implementation that offers it"
             )
         cases: list[dict[str, object]] = []
         for case in group.cases:
@@ -456,10 +602,20 @@ def _kdf_groups(document: dict[str, object]) -> list[dict[str, object]]:
 # --------------------------------------------------------------------------- ECDSA
 
 
-def _ecdsa_groups(document: dict[str, object]) -> list[dict[str, object]]:
+def _ecdsa_groups(
+    document: dict[str, object], harness: Harness | None = None
+) -> list[dict[str, object]]:
     """Signatures under one key per group, or a verdict per case."""
     vector_set = ecdsa.parse_vector_set(document)
-    provider = CryptographyEcdsaProvider()
+    provider: EcdsaProvider = (
+        CryptographyEcdsaProvider()
+        if harness is None
+        else harness.open(
+            SubprocessEcdsaProvider.from_command_string(
+                harness.command, timeout_seconds=harness.timeout_seconds
+            )
+        )
+    )
     groups: list[dict[str, object]] = []
     for group in vector_set.test_groups:
         if group.component_test:
@@ -517,10 +673,20 @@ def _ecdsa_groups(document: dict[str, object]) -> list[dict[str, object]]:
 # --------------------------------------------------------------------------- RSA
 
 
-def _rsa_groups(document: dict[str, object]) -> list[dict[str, object]]:
+def _rsa_groups(
+    document: dict[str, object], harness: Harness | None = None
+) -> list[dict[str, object]]:
     """Signatures under one key per group, verdicts, or raw primitive output."""
     vector_set = rsa.parse_vector_set(document)
-    provider = CryptographyRsaProvider()
+    provider: RsaProvider = (
+        CryptographyRsaProvider()
+        if harness is None
+        else harness.open(
+            SubprocessRsaProvider.from_command_string(
+                harness.command, timeout_seconds=harness.timeout_seconds
+            )
+        )
+    )
     groups: list[dict[str, object]] = []
     for group in vector_set.test_groups:
         signing = vector_set.mode in (rsa.SIG_GEN, rsa.SIG_VER)
@@ -640,8 +806,14 @@ def _builder_for(algorithm: str) -> _Builder | None:
     }.get(algorithm)
 
 
-def build_response(prompt_file: Path) -> dict[str, object]:
-    """Compute the ACVP response document for one downloaded prompt."""
+def build_response(prompt_file: Path, *, harness: Harness | None = None) -> dict[str, object]:
+    """Compute the ACVP response document for one downloaded prompt.
+
+    With ``harness`` supplied, every value in the document comes from the
+    vendor's implementation rather than from the built-in providers. The
+    document itself is identical in shape either way -- the server is told what
+    was computed, never how.
+    """
     document = json.loads(Path(prompt_file).read_text(encoding="utf-8"))
     algorithm = str(document.get("algorithm"))
     builder = _builder_for(algorithm)
@@ -650,11 +822,25 @@ def build_response(prompt_file: Path) -> dict[str, object]:
             f"no response builder for {algorithm!r}; "
             "the offline runner can still verify it against expected results"
         )
+    try:
+        groups = builder(document, harness)
+    except HarnessUnsupportedError as error:
+        # Offline, a declined case is reported UNSUPPORTED and the run
+        # continues. There is no such verdict here: ACVP scores a missing case
+        # as a wrong answer, so a partial document would be recorded as a
+        # failure the implementation never earned.
+        raise ResponseError(
+            f"the harness declined a case in {algorithm} ({error}); a submission missing "
+            "cases is scored as wrong answers, so none was built"
+        ) from error
+    finally:
+        if harness is not None:
+            harness.close()
     return {
         "vsId": document.get("vsId"),
         "algorithm": algorithm,
         "revision": document.get("revision"),
-        "testGroups": builder(document),
+        "testGroups": groups,
     }
 
 
@@ -681,6 +867,7 @@ def supported_response_algorithms() -> tuple[str, ...]:
 __all__ = [
     "FIXED_DATA_BYTES",
     "ResponseError",
+    "Harness",
     "build_response",
     "supported_response_algorithms",
 ]

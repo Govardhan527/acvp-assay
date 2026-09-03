@@ -207,6 +207,49 @@ def test_ecdsa_sign_returns_the_key_it_generated(tmp_path: Path) -> None:
     )
 
 
+def test_ecdsa_sign_group_shares_one_key_across_the_group(tmp_path: Path) -> None:
+    """A whole group comes back under one key, in the order it was sent."""
+    command = script(
+        tmp_path,
+        "sys.stdout.write(json.dumps({"
+        '"qx": "01", "qy": "02", '
+        '"signatures": [{"r": "03", "s": "04"}, {"r": "05", "s": "06"}]'
+        "}))",
+    )
+
+    produced = SubprocessEcdsaProvider(command).sign_group(
+        curve="P-256", hash_algorithm="SHA2-256", messages=[b"one", b"two"]
+    )
+
+    assert (produced.qx, produced.qy) == (b"\x01", b"\x02")
+    assert produced.signatures == ((b"\x03", b"\x04"), (b"\x05", b"\x06"))
+
+
+@pytest.mark.parametrize(
+    ("payload", "expected"),
+    [
+        ('{"qx": "01", "qy": "02"}', "no 'signatures' array"),
+        ('{"qx": "01", "qy": "02", "signatures": [{"r": "03", "s": "04"}]}', "for 2 messages"),
+        ('{"qx": "01", "qy": "02", "signatures": ["0304", "0506"]}', "non-object signature"),
+    ],
+    ids=["missing", "wrong-count", "not-an-object"],
+)
+def test_ecdsa_sign_group_rejects_a_malformed_answer(
+    tmp_path: Path, payload: str, expected: str
+) -> None:
+    """A group answer that cannot be placed against its messages is an error.
+
+    Silently accepting a short array would attach signatures to the wrong
+    messages, which ACVP scores as wrong answers rather than as a protocol fault.
+    """
+    command = script(tmp_path, f"sys.stdout.write({payload!r})")
+
+    with pytest.raises(HarnessProtocolError, match=expected):
+        SubprocessEcdsaProvider(command).sign_group(
+            curve="P-256", hash_algorithm="SHA2-256", messages=[b"one", b"two"]
+        )
+
+
 def test_ecdsa_verify_requires_a_boolean_verdict(tmp_path: Path) -> None:
     """A verdict question must be answered with a real boolean."""
     command = script(tmp_path, 'sys.stdout.write(json.dumps({"testPassed": "yes"}))')

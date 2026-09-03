@@ -307,10 +307,20 @@ def _cmd_fetch(arguments: argparse.Namespace) -> int:
 
 
 def _cmd_submit(arguments: argparse.Namespace) -> int:
-    """Compute responses for each downloaded vector set and submit them."""
-    sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
-    from acvp_assay.responder import ResponseError, build_response
+    """Compute responses for each downloaded vector set and submit them.
 
+    With ``--provider-command`` every value sent to NIST comes from the
+    vendor's implementation rather than from the built-in providers, which is
+    the only configuration that says anything about their product.
+    """
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
+    from acvp_assay.providers.subprocess_harness import DEFAULT_TIMEOUT_SECONDS
+    from acvp_assay.responder import Harness, ResponseError, build_response
+
+    command = getattr(arguments, "provider_command", None)
+    timeout = arguments.provider_timeout or DEFAULT_TIMEOUT_SECONDS
+    answered_by = command or "the built-in providers (nothing about your implementation)"
+    print(f"  answering with {answered_by}")
     record = load_session()
     token = str(record["accessToken"])
     destination = STATE / f"session-{record['testSessionId']}"
@@ -320,7 +330,13 @@ def _cmd_submit(arguments: argparse.Namespace) -> int:
         if not prompt_file.exists():
             raise SystemExit(f"{prompt_file} not downloaded; run `fetch` first")
         try:
-            response = build_response(prompt_file)
+            # A fresh Harness per vector set: it owns the subprocesses it
+            # started and closes them when the document is built, so one
+            # family's harness never outlives the set it answered.
+            response = build_response(
+                prompt_file,
+                harness=None if command is None else Harness(command, timeout_seconds=timeout),
+            )
         except ResponseError as error:
             print(f"  vector set {vs_id}: cannot answer -- {error}")
             continue
@@ -330,6 +346,9 @@ def _cmd_submit(arguments: argparse.Namespace) -> int:
             for group in groups_of(response)
             if isinstance(group, dict) and isinstance(group.get("tests"), list)
         )
+        if arguments.dry_run:
+            print(f"  vector set {vs_id}: {cases} cases written, not submitted (--dry-run)")
+            continue
         print(f"  vector set {vs_id}: submitting {cases} cases")
         # Results are a sub-resource: the vector set URL itself answers 405.
         reply = body_of(
@@ -416,7 +435,28 @@ def main() -> int:
     )
     register.set_defaults(run=_cmd_register)
     sub.add_parser("fetch", help="download the session's vector sets").set_defaults(run=_cmd_fetch)
-    sub.add_parser("submit", help="compute and submit responses").set_defaults(run=_cmd_submit)
+    submit = sub.add_parser("submit", help="compute and submit responses")
+    submit.add_argument(
+        "--provider-command",
+        help=(
+            "shell command running your implementation's harness. Without it the "
+            "built-in providers answer, which tests this runner rather than your product."
+        ),
+    )
+    submit.add_argument(
+        "--provider-timeout",
+        type=float,
+        # Left unset here so the package's own default is the single source of
+        # truth; this script imports acvp_assay only once it needs it, so the
+        # constant is not in scope while the parser is being built.
+        help="seconds to wait for each harness answer (default: the runner's own)",
+    )
+    submit.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="write response.json for each vector set but do not send anything to NIST",
+    )
+    submit.set_defaults(run=_cmd_submit)
     sub.add_parser("results", help="ask the server for its verdict").set_defaults(run=_cmd_results)
 
     arguments = parser.parse_args()

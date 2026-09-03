@@ -208,6 +208,36 @@ def ecdsa_sign(request: dict[str, Any]) -> dict[str, str]:
     }
 
 
+def ecdsa_sign_group(request: dict[str, Any]) -> dict[str, Any]:
+    """Sign every message in a group under one freshly generated key.
+
+    Same rule as RSA sigGen: ACVP reports qx/qy once per group, so a key per
+    case could not be reported. In sigGen the key belongs to the implementation
+    under test, which is why it is generated here rather than supplied.
+    """
+    parameters = _ecdsa_parameters(request)
+    if parameters is None:
+        return {"error": "unsupported"}
+    curve, algorithm = parameters
+    key = ec.generate_private_key(curve)
+    numbers = key.public_key().public_numbers()
+    size = (curve.key_size + 7) // 8
+    signatures: list[dict[str, str]] = []
+    for message in request["messages"]:
+        r, s = utils.decode_dss_signature(key.sign(bytes.fromhex(message), ec.ECDSA(algorithm)))
+        signatures.append(
+            {
+                "r": r.to_bytes(size, "big").hex().upper(),
+                "s": s.to_bytes(size, "big").hex().upper(),
+            }
+        )
+    return {
+        "qx": numbers.x.to_bytes(size, "big").hex().upper(),
+        "qy": numbers.y.to_bytes(size, "big").hex().upper(),
+        "signatures": signatures,
+    }
+
+
 def ecdsa_verify(request: dict[str, Any]) -> dict[str, Any]:
     """Report a verification verdict. An off-curve key is a false verdict, not an error."""
     parameters = _ecdsa_parameters(request)
@@ -815,6 +845,7 @@ HANDLERS = {
     "digest-mct": digest_mct,
     "mac": mac,
     "ecdsa-sign": ecdsa_sign,
+    "ecdsa-sign-group": ecdsa_sign_group,
     "ecdsa-verify": ecdsa_verify,
 }
 

@@ -358,9 +358,16 @@ class HarnessClient:
         if error is not None:
             if error == AUTHENTICATION_FAILED:
                 raise InvalidTag
+            operation = request.get("operation")
             if error == UNSUPPORTED:
-                raise HarnessUnsupportedError
-            raise HarnessProtocolError("harness reported a failure")
+                # Name the operation: a vendor reading "the harness declined a
+                # case" needs to know which one before they can either extend
+                # the harness or narrow their registration.
+                raise HarnessUnsupportedError(f"the harness declined {operation!r}")
+            # The operation, never the harness's own message: a failure text
+            # commonly quotes the key or plaintext it failed on, and this
+            # error reaches logs and CI output.
+            raise HarnessProtocolError(f"harness reported a failure on {operation!r}")
         return response
 
 

@@ -66,8 +66,25 @@ Aimed at demand rather than portfolio scope; supersedes the v0.1.0 non-goals whe
       - `drbg` — one call per case carrying the whole `otherInput` sequence, rather
         than a stateful instantiate/reseed/generate conversation over the wire.
       - `kdf-108` — returns `keyOut` *and* the `fixedData` the implementation chose.
-- [ ] M12: `--provider-command` for the live responder, so a vendor's own answers
-      can be submitted to ACVTS rather than this project's.
+- [x] M12: `--provider-command` for the live responder, so a vendor's own answers
+      can be submitted to ACVTS rather than this project's. `acvts_client.py submit`
+      takes `--provider-command`, `--provider-timeout` and `--dry-run`; every value in
+      the submitted document then comes from the vendor's implementation, and the
+      document itself is identical in shape either way — the server is told what was
+      computed, never how.
+      Two things this settled that the offline runner had not had to decide:
+      - **A declined case refuses the whole document.** Offline, UNSUPPORTED is a
+        verdict worth recording. In a submission there is no such verdict: ACVP scores
+        a missing case as a wrong answer, so a partial document would record a failure
+        the implementation never earned.
+      - **Capability belongs to the implementation.** The built-in provider's limits
+        (DRBG `TDES`, KDF `CMAC-TDES`) were being raised on the vendor's behalf, which
+        would make a submission impossible for a product that offers them. Those modes
+        already travel on the wire, so with a harness the implementation answers or
+        declines them itself.
+      Gaps left deliberately: AES `kwCipher: inverse` and SHA LDT are not merely
+      capability checks — neither operation is on the wire at all — and GCM
+      `ivGen: internal` needs the provider to report the IV it chose.
 - [ ] M13: publish to PyPI.
 
 Still out of scope: a full ACVP protocol client, algorithm count as a goal, an HTML dashboard, and any hosted service.

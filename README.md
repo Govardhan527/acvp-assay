@@ -251,6 +251,28 @@ python3 scripts/acvts_client.py submit                             # let NIST ju
 python3 scripts/acvts_client.py results
 ```
 
+### Submitting *your* implementation's answers
+
+Without `--provider-command` the built-in providers answer, which tests this runner rather
+than your product. Point it at your harness and every value NIST scores comes from your code:
+
+```bash
+python3 scripts/acvts_client.py submit \
+    --provider-command "./my-acvp-harness --device /dev/hsm0" \
+    --dry-run                                       # writes response.json, sends nothing
+```
+
+Drop `--dry-run` once the documents look right. Two behaviours differ from an offline run,
+both deliberate:
+
+- **A case your harness declines refuses the whole submission.** Offline, UNSUPPORTED is a
+  useful verdict. Here there is no such verdict — ACVP scores a missing case as a *wrong
+  answer* — so a partial document would record a failure you never earned. The error names
+  the operation that was declined, so you can either implement it or narrow your
+  registration.
+- **Capability is yours to declare.** Modes the built-in provider lacks, such as DRBG `TDES`
+  or KDF `CMAC-TDES`, are sent to your harness rather than refused on your behalf.
+
 Session state, downloaded vectors and tokens land in a gitignored `.acvts/`. NIST's vectors are
 theirs to distribute, and the certificate, key and TOTP seed are secrets.
 

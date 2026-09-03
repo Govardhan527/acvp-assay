@@ -106,6 +106,7 @@ declining is a first-class answer, see below.
 | `digest-mct` | `algorithm`, `seed`, `alternate` | `md` — an **array** of 100 digests |
 | `mac` | `algorithm`, `key`, `message`, `macLen` | `mac` |
 | `ecdsa-sign` | `curve`, `hashAlg`, `message` | `qx`, `qy`, `r`, `s` |
+| `ecdsa-sign-group` | `curve`, `hashAlg`, `messages` (array) | `qx`, `qy`, `signatures` (array of `{r, s}`, same order) |
 | `ecdsa-verify` | `curve`, `hashAlg`, `message`, `qx`, `qy`, `r`, `s` | `testPassed` |
 | `ml-kem-encapsulate` | `parameterSet`, `ek` | `c`, `k` |
 | `ml-kem-decapsulate` | `parameterSet`, `dk`, `c` | `k` |
@@ -141,11 +142,29 @@ implementation, but the runner compares against the fixed data NIST recorded,
 so a harness free to choose its own would produce a different key every run
 with nothing to check it against. `breakLocation` is a **bit** offset.
 
-An RSA sigGen **group** is signed in one exchange, because ACVP reports the
-public key once per group: every case in it must share a key, so asking case by
-case would either force you to cache one or produce a document that cannot be
+An RSA or ECDSA sigGen **group** is signed in one exchange, because ACVP reports
+the public key once per group: every case in it must share a key, so asking case
+by case would either force you to cache one or produce a document that cannot be
 expressed. The key is yours to generate — in sigGen it belongs to the
 implementation under test, not to the vector.
+
+`ecdsa-sign` remains for the offline runner, which checks each signature on its
+own and does not care whether the keys differ. Only a live submission needs
+`ecdsa-sign-group`; implement it if you intend to submit ECDSA sigGen.
+
+### Answering a live session
+
+`acvts_client.py submit --provider-command ...` builds the document NIST scores
+from your harness. Two rules apply there that do not apply offline:
+
+**A declined case refuses the whole submission.** Offline, `unsupported` is a
+verdict worth recording. In a submission there is no such verdict — ACVP scores
+a missing case as a wrong answer — so a partial document would record a failure
+you never earned. Nothing is sent; the error names the operation you declined.
+
+**Capability is yours to declare.** Parameters the built-in provider lacks are
+sent to you rather than refused on your behalf, so answer or decline them
+yourself. That is the same rule as the `supports` boundary elsewhere here.
 
 `maskFunction` is a field of its own and is always sent. FIPS 186-5 lets PSS
 use SHAKE as its mask generation function, which is a different question from
