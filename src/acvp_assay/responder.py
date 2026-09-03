@@ -30,7 +30,16 @@ from pathlib import Path
 from typing import Protocol
 
 from acvp_assay import parser
-from acvp_assay.algorithms import aes_block, aes_modes, ctr_drbg, ecdsa, hmac_mac, kdf, sha2
+from acvp_assay.algorithms import (
+    aes_block,
+    aes_modes,
+    ctr_drbg,
+    ecdsa,
+    hmac_mac,
+    kdf,
+    rsa,
+    sha2,
+)
 from acvp_assay.models import Direction
 from acvp_assay.providers.aes_block import (
     CHAINING_MODES,
@@ -56,6 +65,7 @@ from acvp_assay.providers.kdf import (
     KdfProvider,
     KdfRequest,
 )
+from acvp_assay.providers.rsa import CryptographyRsaProvider
 
 #: ``fixedData`` is chosen by the implementation under test, so a submission
 #: must invent it and report what it used. Sixteen bytes matches the width the
@@ -508,6 +518,106 @@ def _ecdsa_groups(document: dict[str, object]) -> list[dict[str, object]]:
     return groups
 
 
+# --------------------------------------------------------------------------- RSA
+
+
+def _rsa_groups(document: dict[str, object]) -> list[dict[str, object]]:
+    """Signatures under one key per group, verdicts, or raw primitive output."""
+    vector_set = rsa.parse_vector_set(document)
+    provider = CryptographyRsaProvider()
+    groups: list[dict[str, object]] = []
+    for group in vector_set.test_groups:
+        signing = vector_set.mode in (rsa.SIG_GEN, rsa.SIG_VER)
+        if signing and not provider.supports(
+            signature_type=group.signature_type,
+            hash_algorithm=group.hash_algorithm,
+            mask_function=group.mask_function,
+        ):
+            raise ResponseError(
+                f"tgId {group.tg_id} uses {group.signature_type} with "
+                f"{group.hash_algorithm} and mask {group.mask_function or 'none'}, which "
+                "this build does not offer"
+            )
+        cases: list[dict[str, object]] = []
+
+        if vector_set.mode == rsa.SIG_GEN:
+            signed = provider.sign_group(
+                signature_type=group.signature_type,
+                hash_algorithm=group.hash_algorithm,
+                modulo=group.modulo,
+                salt_length=group.salt_length,
+                messages=[case.message for case in group.tests],
+            )
+            groups.append(
+                {
+                    "tgId": group.tg_id,
+                    "n": _hex(signed.n),
+                    "e": _hex(signed.e),
+                    "tests": [
+                        {"tcId": case.tc_id, "signature": _hex(signature)}
+                        for case, signature in zip(group.tests, signed.signatures, strict=True)
+                    ],
+                }
+            )
+            continue
+
+        for case in group.tests:
+            if vector_set.mode == rsa.SIG_VER:
+                cases.append(
+                    {
+                        "tcId": case.tc_id,
+                        "testPassed": provider.verify(
+                            signature_type=group.signature_type,
+                            hash_algorithm=group.hash_algorithm,
+                            salt_length=group.salt_length,
+                            n=int.from_bytes(group.n, "big"),
+                            e=int.from_bytes(group.e, "big"),
+                            message=case.message,
+                            signature=case.signature,
+                        ),
+                    }
+                )
+                continue
+
+            number = int.from_bytes
+            n = number(case.n, "big")
+            if vector_set.mode == rsa.SIGNATURE_PRIMITIVE:
+                if case.d:
+                    produced = provider.signature_primitive(
+                        n=n, d=number(case.d, "big"), message=number(case.message, "big")
+                    )
+                else:
+                    produced = provider.signature_primitive_crt(
+                        n=n,
+                        p=number(case.p, "big"),
+                        q=number(case.q, "big"),
+                        dmp1=number(case.dmp1, "big"),
+                        dmq1=number(case.dmq1, "big"),
+                        iqmp=number(case.iqmp, "big"),
+                        message=number(case.message, "big"),
+                    )
+                field = "signature"
+            else:
+                produced = provider.decryption_primitive(
+                    n=n, d=number(case.d, "big"), ciphertext=number(case.ciphertext, "big")
+                )
+                field = "pt"
+            # An out-of-range input is answered with the verdict alone: there
+            # is no value to report, and reporting one would be a wrong answer.
+            if produced is None:
+                cases.append({"tcId": case.tc_id, "testPassed": False})
+            else:
+                cases.append(
+                    {
+                        "tcId": case.tc_id,
+                        "testPassed": True,
+                        field: _hex(produced.to_bytes(group.modulo // 8, "big")),
+                    }
+                )
+        groups.append({"tgId": group.tg_id, "tests": cases})
+    return groups
+
+
 # --------------------------------------------------------------------------- dispatch
 
 
@@ -528,6 +638,7 @@ def _builder_for(algorithm: str) -> _Builder | None:
         **dict.fromkeys(ctr_drbg.SUPPORTED, _ctr_drbg_groups),
         kdf.ALGORITHM: _kdf_groups,
         "ECDSA": _ecdsa_groups,
+        rsa.ALGORITHM: _rsa_groups,
     }.get(algorithm)
 
 
@@ -562,6 +673,7 @@ def supported_response_algorithms() -> tuple[str, ...]:
         *ctr_drbg.SUPPORTED,
         kdf.ALGORITHM,
         "ECDSA",
+        rsa.ALGORITHM,
         *HASHLIB_ALGORITHMS,
         *(f"HMAC-{name}" for name in HASHLIB_ALGORITHMS),
     }

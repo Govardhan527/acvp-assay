@@ -5,6 +5,36 @@ All notable changes to this project are recorded here. The format follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Before 1.0.0 the
 provider protocols may change between minor versions.
 
+## [0.10.0] - 2026-09-03
+
+### Added
+
+- RSA `sigGen`, `sigVer`, `signaturePrimitive` and `decryptionPrimitive`. RSA
+  is the single most common name on published certificates, and these are the
+  four modes a module normally validates. Submitted to demo.acvts.nist.gov;
+  the session returned `"passed"` on all four.
+- PKCS#1 v1.5 and PSS over SHA-1, the SHA-2 family and the SHA-3 family,
+  including the `keyMode: crt` half of the primitive sets.
+
+### Notes
+
+- **The two primitives use different range checks**, and ACVP includes
+  out-of-range cases precisely to catch a runner that uses one rule for both.
+  A signature primitive message is in range when `m < n`; a decryption
+  primitive ciphertext only when `1 < c < n - 1`. Both bounds come from NIST's
+  generator grains in usnistgov/ACVP-Server and reproduce every case of the
+  pinned upstream sets exactly.
+- **`maskFunction` is a separate field from `hashAlg`.** FIPS 186-5 lets PSS
+  use SHAKE as its mask generation function, which ACVP signals through
+  `maskFunction` rather than through the hash. Ignoring it made six upstream
+  cases fail while the group looked supported; those groups are now declared.
+- SHAKE-based groups are declared throughout: this binding has no PSS over an
+  extendable-output function. Across the pinned upstream sets that is 196 cases
+  declared and 350 executed, with no failures.
+- RSA `keyGen` is deliberately absent. Several of its modes require reporting
+  intermediate prime seeds this binding does not expose, and a partial answer
+  to keyGen is scored as wrong rather than incomplete.
+
 ## [0.9.0] - 2026-09-03
 
 ### Added

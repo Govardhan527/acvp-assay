@@ -684,3 +684,42 @@ def test_aes_chaining_modes_are_dispatched_and_refuse_a_harness(tmp_path: Path) 
             tmp_path / "expectedResults.json",
             provider_command="python3 h.py",
         )
+
+
+def test_rsa_is_dispatched_and_refuses_a_harness(tmp_path: Path) -> None:
+    """RSA routes to its runner and declines --provider-command."""
+    prompt = {
+        "vsId": 1,
+        "algorithm": "RSA",
+        "mode": "sigGen",
+        "revision": "FIPS186-5",
+        "testGroups": [
+            {
+                "tgId": 1,
+                "testType": "GDT",
+                "sigType": "pkcs1v1.5",
+                "modulo": 2048,
+                "hashAlg": "SHA2-256",
+                "tests": [{"tcId": 1, "message": b"acvp".hex()}],
+            }
+        ],
+    }
+    expected = {
+        "vsId": 1,
+        "testGroups": [{"tgId": 1, "tests": [{"tcId": 1, "signature": "00" * 256}]}],
+    }
+    (tmp_path / "prompt.json").write_text(json.dumps(prompt), encoding="utf-8")
+    (tmp_path / "expectedResults.json").write_text(json.dumps(expected), encoding="utf-8")
+
+    results, metadata = run_vector_file(tmp_path / "prompt.json", tmp_path / "expectedResults.json")
+
+    assert metadata.name == "cryptography-rsa"
+    assert [r.status for r in results] == [ResultStatus.PASS]
+    assert "RSA" in supported_algorithms()
+
+    with pytest.raises(UnsupportedAlgorithmError, match="RSA"):
+        run_vector_file(
+            tmp_path / "prompt.json",
+            tmp_path / "expectedResults.json",
+            provider_command="python3 h.py",
+        )

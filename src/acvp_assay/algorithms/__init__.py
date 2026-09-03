@@ -18,7 +18,17 @@ from pathlib import Path
 
 from acvp_assay import parser as aes_parser
 from acvp_assay import runner as aes_runner
-from acvp_assay.algorithms import aes_block, aes_modes, ctr_drbg, ecdsa, hmac_mac, kdf, pqc, sha2
+from acvp_assay.algorithms import (
+    aes_block,
+    aes_modes,
+    ctr_drbg,
+    ecdsa,
+    hmac_mac,
+    kdf,
+    pqc,
+    rsa,
+    sha2,
+)
 from acvp_assay.models import ProviderMetadata, TestCaseResult
 from acvp_assay.providers.aes_block import AesBlockProvider as AesBlockProviderProtocol
 from acvp_assay.providers.aes_block import CryptographyAesBlockProvider
@@ -42,6 +52,8 @@ from acvp_assay.providers.ecdsa import EcdsaProvider as EcdsaProviderProtocol
 from acvp_assay.providers.kdf import CryptographyKdf
 from acvp_assay.providers.kdf import KdfProvider as KdfProviderProtocol
 from acvp_assay.providers.pqc import SubprocessMlDsaProvider, SubprocessMlKemProvider
+from acvp_assay.providers.rsa import CryptographyRsaProvider
+from acvp_assay.providers.rsa import RsaProvider as RsaProviderProtocol
 from acvp_assay.providers.subprocess_harness import SubprocessAesGcmProvider
 
 
@@ -71,6 +83,7 @@ def supported_algorithms() -> list[str]:
     names = [
         "ACVP-AES-GCM",
         "ECDSA",
+        rsa.ALGORITHM,
         "ML-DSA",
         "ML-KEM",
         *ctr_drbg.SUPPORTED,
@@ -269,6 +282,23 @@ def _run_aes_block(
     return aes_block.run_vector_set(vector_set, expected, provider), metadata
 
 
+def _run_rsa(
+    vector_file: Path,
+    expected_file: Path,
+    provider_command: str | None,
+    provider_timeout: float,
+) -> tuple[list[TestCaseResult], ProviderMetadata]:
+    if provider_command is not None:
+        raise UnsupportedAlgorithmError(
+            "--provider-command does not yet cover RSA; run it with the built-in provider"
+        )
+    provider: RsaProviderProtocol = CryptographyRsaProvider()
+    metadata = provider.metadata()
+    vector_set = rsa.load_vector_set(vector_file)
+    expected = rsa.load_expected_results(expected_file)
+    return rsa.run_vector_set(vector_set, expected, provider), metadata
+
+
 def run_vector_file(
     vector_file: Path,
     expected_file: Path,
@@ -306,6 +336,10 @@ def run_vector_file(
         )
     elif algorithm in aes_modes.SUPPORTED:
         runners[algorithm] = lambda: _run_aes_modes(
+            vector_file, expected_file, provider_command, provider_timeout
+        )
+    elif algorithm == rsa.ALGORITHM:
+        runners[algorithm] = lambda: _run_rsa(
             vector_file, expected_file, provider_command, provider_timeout
         )
     elif algorithm == "ECDSA":

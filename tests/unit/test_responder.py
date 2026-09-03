@@ -1152,3 +1152,193 @@ def test_counter_mode_has_no_monte_carlo_group_to_answer(tmp_path: Path) -> None
 
     with pytest.raises(ResponseError, match="no Monte Carlo test"):
         build_response(prompt)
+
+
+def rsa_key() -> tuple[int, int, int, int, int]:
+    """A small but genuine RSA key for the primitive responses."""
+    p = 0xE1B1E1B7C1F3D5D7C7D3E1F5B7C3D1E5F7B1C3D5E7F1B3C5D7E1F3B5C7D1E499
+    q = 0xC3D5E7F1B3C5D7E1F3B5C7D1E3F5B7C1D3E5F7B1C5D7E3F1B5C7D1E3F5B7C21D
+    n = p * q
+    e = 65537
+    return n, e, pow(e, -1, (p - 1) * (q - 1)), p, q
+
+
+def test_rsa_siggen_reports_one_key_per_group(tmp_path: Path) -> None:
+    """ACVP reports n and e at group level, so every case shares one key."""
+    prompt = write_prompt(
+        tmp_path,
+        {
+            "vsId": 1,
+            "algorithm": "RSA",
+            "mode": "sigGen",
+            "revision": "FIPS186-5",
+            "testGroups": [
+                {
+                    "tgId": 1,
+                    "testType": "GDT",
+                    "sigType": "pkcs1v1.5",
+                    "modulo": 2048,
+                    "hashAlg": "SHA2-256",
+                    "tests": [
+                        {"tcId": 1, "message": b"one".hex()},
+                        {"tcId": 2, "message": b"two".hex()},
+                    ],
+                }
+            ],
+        },
+    )
+
+    group = build_response(prompt)["testGroups"][0]  # type: ignore[index]
+
+    assert set(group) == {"tgId", "n", "e", "tests"}
+    assert all(set(case) == {"tcId", "signature"} for case in group["tests"])
+
+
+def test_rsa_sigver_answers_with_a_verdict(tmp_path: Path) -> None:
+    """sigVer is verdict-only; a bogus signature is answered false, not refused."""
+    n, e, _, _, _ = rsa_key()
+    prompt = write_prompt(
+        tmp_path,
+        {
+            "vsId": 1,
+            "algorithm": "RSA",
+            "mode": "sigVer",
+            "revision": "FIPS186-5",
+            "testGroups": [
+                {
+                    "tgId": 1,
+                    "testType": "GDT",
+                    "sigType": "pkcs1v1.5",
+                    "modulo": 512,
+                    "hashAlg": "SHA2-256",
+                    "n": f"{n:0128X}",
+                    "e": f"{e:06X}",
+                    "tests": [{"tcId": 1, "message": b"acvp".hex(), "signature": "00" * 64}],
+                }
+            ],
+        },
+    )
+
+    case = build_response(prompt)["testGroups"][0]["tests"][0]  # type: ignore[index]
+
+    assert case == {"tcId": 1, "testPassed": False}
+
+
+@pytest.mark.parametrize(
+    ("mode", "field", "value", "in_range"),
+    [
+        ("signaturePrimitive", "message", 1, True),
+        ("signaturePrimitive", "message", None, False),
+        ("decryptionPrimitive", "ct", 2, True),
+        ("decryptionPrimitive", "ct", 1, False),
+    ],
+)
+def test_rsa_primitives_answer_value_or_verdict(
+    tmp_path: Path, mode: str, field: str, value: int | None, in_range: bool
+) -> None:
+    """In range gives a value and a verdict; out of range gives a verdict alone.
+
+    A message of 1 is in range for the signature primitive and a ciphertext of
+    1 is not for the decryption primitive: the two bounds genuinely differ.
+    """
+    n, e, d, _, _ = rsa_key()
+    raw = n if value is None else value
+    prompt = write_prompt(
+        tmp_path,
+        {
+            "vsId": 1,
+            "algorithm": "RSA",
+            "mode": mode,
+            "revision": "2.0",
+            "testGroups": [
+                {
+                    "tgId": 1,
+                    "testType": "AFT",
+                    "modulo": 512,
+                    "keyMode": "standard",
+                    "tests": [
+                        {
+                            "tcId": 1,
+                            "n": f"{n:0128X}",
+                            "e": f"{e:06X}",
+                            "d": f"{d:0128X}",
+                            field: f"{raw:0128X}",
+                        }
+                    ],
+                }
+            ],
+        },
+    )
+
+    case = build_response(prompt)["testGroups"][0]["tests"][0]  # type: ignore[index]
+
+    assert case["testPassed"] is in_range
+    assert ("signature" in case or "pt" in case) is in_range
+
+
+def test_rsa_primitive_uses_crt_parameters_when_d_is_absent(tmp_path: Path) -> None:
+    """Half the upstream signaturePrimitive groups never supply d."""
+    n, e, d, p, q = rsa_key()
+    prompt = write_prompt(
+        tmp_path,
+        {
+            "vsId": 1,
+            "algorithm": "RSA",
+            "mode": "signaturePrimitive",
+            "revision": "2.0",
+            "testGroups": [
+                {
+                    "tgId": 1,
+                    "testType": "AFT",
+                    "modulo": 512,
+                    "keyMode": "crt",
+                    "tests": [
+                        {
+                            "tcId": 1,
+                            "n": f"{n:0128X}",
+                            "e": f"{e:06X}",
+                            "p": f"{p:064X}",
+                            "q": f"{q:064X}",
+                            "dmp1": f"{d % (p - 1):064X}",
+                            "dmq1": f"{d % (q - 1):064X}",
+                            "iqmp": f"{pow(q, -1, p):064X}",
+                            "message": f"{0x2468ACE0:0128X}",
+                        }
+                    ],
+                }
+            ],
+        },
+    )
+
+    case = build_response(prompt)["testGroups"][0]["tests"][0]  # type: ignore[index]
+
+    assert case["testPassed"] is True
+    assert int(case["signature"], 16) == pow(0x2468ACE0, d, n)
+
+
+def test_a_shake_masked_rsa_group_is_refused(tmp_path: Path) -> None:
+    """Submitting a guess for a mask this build lacks would be scored as wrong."""
+    prompt = write_prompt(
+        tmp_path,
+        {
+            "vsId": 1,
+            "algorithm": "RSA",
+            "mode": "sigGen",
+            "revision": "FIPS186-5",
+            "testGroups": [
+                {
+                    "tgId": 1,
+                    "testType": "GDT",
+                    "sigType": "pss",
+                    "modulo": 2048,
+                    "hashAlg": "SHA3-256",
+                    "saltLen": 32,
+                    "maskFunction": "shake-128",
+                    "tests": [{"tcId": 1, "message": b"acvp".hex()}],
+                }
+            ],
+        },
+    )
+
+    with pytest.raises(ResponseError, match="shake-128"):
+        build_response(prompt)

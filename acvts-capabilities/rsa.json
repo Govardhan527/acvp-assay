@@ -1,0 +1,25 @@
+[
+  {"algorithm": "RSA", "mode": "sigGen", "revision": "FIPS186-5",
+   "capabilities": [
+     {"sigType": "pkcs1v1.5",
+      "properties": [{"modulo": 2048, "maskFunction": ["none"],
+        "hashPair": [{"hashAlg": "SHA2-256", "saltLen": 0}, {"hashAlg": "SHA3-256", "saltLen": 0}]}]},
+     {"sigType": "pss",
+      "properties": [{"modulo": 3072, "maskFunction": ["mgf1"],
+        "hashPair": [{"hashAlg": "SHA2-256", "saltLen": 32}, {"hashAlg": "SHA3-256", "saltLen": 32}]}]}
+   ]},
+  {"algorithm": "RSA", "mode": "sigVer", "revision": "FIPS186-5",
+   "pubExpMode": "random",
+   "capabilities": [
+     {"sigType": "pkcs1v1.5",
+      "properties": [{"modulo": 2048, "maskFunction": ["none"],
+        "hashPair": [{"hashAlg": "SHA2-256", "saltLen": 0}]}]},
+     {"sigType": "pss",
+      "properties": [{"modulo": 2048, "maskFunction": ["mgf1"],
+        "hashPair": [{"hashAlg": "SHA2-256", "saltLen": 32}]}]}
+   ]},
+  {"algorithm": "RSA", "mode": "signaturePrimitive", "revision": "2.0",
+   "keyFormat": ["standard", "crt"], "modulo": [2048], "pubExpMode": "random"},
+  {"algorithm": "RSA", "mode": "decryptionPrimitive", "revision": "Sp800-56Br2",
+   "keyFormat": ["standard", "crt"], "modulo": [2048], "pubExpMode": "random"}
+]

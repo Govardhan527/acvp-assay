@@ -15,7 +15,7 @@ Two things distinguish it from `libacvp` and ACVP Proxy, which cover more algori
 
 Implemented today:
 
-- twenty-one algorithm families — AES-GCM, AES-ECB, AES-GMAC, AES-KW/KWP,
+- twenty-two algorithm families — AES-GCM, AES-ECB, AES-GMAC, AES-KW/KWP,
   CMAC-AES, CTR_DRBG, KDF SP 800-108, SHA-1, SHA-2, SHA-3, HMAC, ECDSA,
   ML-KEM, ML-DSA
 - a replaceable provider boundary, in-process or an external harness over JSON
@@ -65,6 +65,7 @@ The algorithm is read from the vector file itself and routed automatically. Curr
 | `SHA-1`, `SHA2-224/256/384/512`, `SHA2-512/224`, `SHA2-512/256` | AFT, MCT | Both `standard` and `alternate` Monte Carlo chains; LDT is reported UNSUPPORTED |
 | `SHA3-224/256/384/512` | AFT, MCT | SHA-3 chains a single digest per iteration, not SHA-2's three |
 | `HMAC-SHA-1`, `HMAC-SHA2-*`, `HMAC-SHA3-*` | AFT | Honours per-group `macLen` truncation |
+| `RSA` | sigGen, sigVer, signaturePrimitive, decryptionPrimitive | PKCS#1 v1.5 and PSS over SHA-1/SHA-2/SHA-3; SHAKE masks are reported UNSUPPORTED. `keyGen` is out of scope |
 | `ECDSA` | sigGen, sigVer | P-224/256/384/521; sigVer is verdict-only, sigGen is verified against its own key |
 | `ML-KEM` | encap, decap, key checks | Requires `--provider-command`: no built-in PQC implementation |
 | `ML-DSA` | sigVer | Requires `--provider-command`; external and internal interfaces |
