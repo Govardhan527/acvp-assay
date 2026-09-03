@@ -111,6 +111,40 @@ declining is a first-class answer, see below.
 | `ml-kem-decapsulate` | `parameterSet`, `dk`, `c` | `k` |
 | `ml-kem-key-check` | `parameterSet`, `ek`, `dk` | `testPassed` |
 | `ml-dsa-verify` | `parameterSet`, `pk`, `message`, `signature`, `signatureInterface`, `context` | `testPassed` |
+| `block-transform` | `algorithm`, `direction`, `key`, `iv`, `data` | `out` |
+| `block-mct` | `algorithm`, `direction`, `key`, `iv`, `data` | `resultsArray` — 100 × `{key, iv, in, out}` |
+| `cmac` | `key`, `message`, `macLen` | `mac` |
+| `gmac` | `key`, `iv`, `aad`, `tagLen` | `tag` |
+| `key-wrap` | `direction` (`wrap`/`unwrap`), `padded`, `key`, `data` | `out` |
+
+`block-transform` and `block-mct` serve ECB, CBC, CTR, OFB and CFB128 alike —
+ECB is a block transform like the rest, and giving it its own pair would mean
+implementing the same thing twice. ECB sends an empty `iv`. CTR has **no**
+Monte Carlo test, so `block-mct` is never asked for it.
+
+A rejected unwrapping is reported with the reserved `authentication failed`
+error, not as a crash: half of each upstream unwrap set is a deliberately
+corrupt wrapping where refusing is the correct answer.
+
+### The block-mode Monte Carlo chain
+
+`block-mct` runs the whole 100 × 1000 chain and returns each outer iteration's
+key, IV, input and output. Those are the four values ACVP records, and the last
+two outputs are what the key shuffle needs.
+
+The IV advance between inner iterations is the part to get right, and the
+specification does not state it — it writes the loop as a cipher that
+"continues" from the previous call. Each mode differs:
+
+| Mode | The IV becomes |
+| --- | --- |
+| CBC, CFB128 — encrypting | the ciphertext just **produced** |
+| CBC, CFB128 — decrypting | the ciphertext just **consumed** |
+| OFB — either direction | the raw **keystream** block |
+| ECB | — no IV |
+
+The payload chain is shared: `payload[0]` is the case's input, `payload[1]` is
+the IV, and `payload[j]` is `output[j-2]` thereafter.
 
 ### Monte Carlo is delegated whole
 
@@ -187,9 +221,7 @@ and rewritten in another language without carrying anything with it.
 These families run against the built-in provider only, and
 `--provider-command` is **refused** rather than silently ignored:
 
-`ACVP-AES-ECB` · `ACVP-AES-CBC` · `ACVP-AES-CTR` · `ACVP-AES-OFB` ·
-`ACVP-AES-CFB128` · `ACVP-AES-GMAC` · `ACVP-AES-KW` · `ACVP-AES-KWP` ·
-`CMAC-AES` · `ctrDRBG` · `hashDRBG` · `hmacDRBG` · `KDF` · `RSA`
+`ctrDRBG` · `hashDRBG` · `hmacDRBG` · `KDF` · `RSA`
 
 If you run one of these, you are testing this project's OpenSSL binding — not
 your module. That is stated plainly because the alternative is a customer

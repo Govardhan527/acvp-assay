@@ -146,6 +146,28 @@ def _read_line(process: subprocess.Popen[str], timeout_seconds: float) -> str | 
             return line
 
 
+def decode_mct_quads(response: Mapping[str, object]) -> list[tuple[bytes, bytes, bytes, bytes]]:
+    """Decode a Monte Carlo ``resultsArray`` of key, IV, input and output."""
+    entries = response.get("resultsArray")
+    if not isinstance(entries, list):
+        raise HarnessProtocolError("harness returned no 'resultsArray' for the Monte Carlo chain")
+    quads: list[tuple[bytes, bytes, bytes, bytes]] = []
+    for index, entry in enumerate(entries):
+        if not isinstance(entry, Mapping):
+            raise HarnessProtocolError(f"harness returned a non-object at resultsArray[{index}]")
+        try:
+            quads.append(
+                tuple(  # type: ignore[arg-type]
+                    bytes.fromhex(str(entry.get(name, ""))) for name in ("key", "iv", "in", "out")
+                )
+            )
+        except ValueError:
+            raise HarnessProtocolError(
+                f"harness returned invalid hex at resultsArray[{index}]"
+            ) from None
+    return quads
+
+
 class HarnessClient:
     """Speaks newline-delimited JSON to a long-lived external command.
 

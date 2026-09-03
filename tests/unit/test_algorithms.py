@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -19,6 +20,8 @@ from acvp_assay.algorithms import (
 from acvp_assay.models import ResultStatus
 from acvp_assay.parser import AcvpValidationError
 from acvp_assay.providers.digest import HashlibHashProvider, HashlibMacProvider
+
+ROOT = Path(__file__).resolve().parents[2]
 
 FIXTURES = Path(__file__).resolve().parents[2] / "fixtures"
 SHA2 = FIXTURES / "sha2-256-known-answers"
@@ -457,7 +460,7 @@ def test_peek_algorithm_reports_malformed_files(tmp_path: Path, content: str, me
         peek_algorithm(prompt)
 
 
-def test_aes_mode_families_are_dispatched_and_refuse_a_harness(tmp_path: Path) -> None:
+def test_aes_mode_families_are_dispatched_and_reach_a_harness(tmp_path: Path) -> None:
     """The five AES mode families route to their runner and decline --provider-command."""
     from acvp_assay.algorithms import aes_modes
 
@@ -491,12 +494,15 @@ def test_aes_mode_families_are_dispatched_and_refuse_a_harness(tmp_path: Path) -
     assert results[0].status is ResultStatus.PASS
     assert "ACVP-AES-ECB" in supported_algorithms()
 
-    with pytest.raises(UnsupportedAlgorithmError, match="AES mode families"):
-        run_vector_file(
-            tmp_path / "prompt.json",
-            tmp_path / "expectedResults.json",
-            provider_command="python3 h.py",
-        )
+    # The AES mode families now reach a harness too, so --provider-command is
+    # accepted rather than refused.
+    harness_results, harness_metadata = run_vector_file(
+        tmp_path / "prompt.json",
+        tmp_path / "expectedResults.json",
+        provider_command=f"{sys.executable} {ROOT / 'examples/reference_harness.py'}",
+    )
+    assert harness_metadata.name == "reference-harness"
+    assert [r.status for r in harness_results] == [ResultStatus.PASS]
 
 
 def test_ctr_drbg_is_dispatched_and_refuses_a_harness(tmp_path: Path) -> None:
@@ -643,7 +649,7 @@ def test_kdf_is_dispatched_and_refuses_a_harness(tmp_path: Path) -> None:
         )
 
 
-def test_aes_chaining_modes_are_dispatched_and_refuse_a_harness(tmp_path: Path) -> None:
+def test_aes_chaining_modes_are_dispatched_and_reach_a_harness(tmp_path: Path) -> None:
     """CBC, CTR, OFB and CFB128 route to their runner and decline --provider-command."""
     key, iv, block = bytes(range(16)), bytes(range(16, 32)), bytes(range(32, 48))
     prompt = {
@@ -678,12 +684,13 @@ def test_aes_chaining_modes_are_dispatched_and_refuse_a_harness(tmp_path: Path) 
     assert [r.status for r in results] == [ResultStatus.PASS]
     assert "ACVP-AES-CTR" in supported_algorithms()
 
-    with pytest.raises(UnsupportedAlgorithmError, match="AES chaining modes"):
-        run_vector_file(
-            tmp_path / "prompt.json",
-            tmp_path / "expectedResults.json",
-            provider_command="python3 h.py",
-        )
+    harness_results, harness_metadata = run_vector_file(
+        tmp_path / "prompt.json",
+        tmp_path / "expectedResults.json",
+        provider_command=f"{sys.executable} {ROOT / 'examples/reference_harness.py'}",
+    )
+    assert harness_metadata.name == "reference-harness"
+    assert [r.status for r in harness_results] == [ResultStatus.PASS]
 
 
 def test_rsa_is_dispatched_and_refuses_a_harness(tmp_path: Path) -> None:

@@ -31,11 +31,17 @@ from acvp_assay.algorithms import (
 )
 from acvp_assay.models import ProviderMetadata, TestCaseResult
 from acvp_assay.providers.aes_block import AesBlockProvider as AesBlockProviderProtocol
-from acvp_assay.providers.aes_block import CryptographyAesBlockProvider
+from acvp_assay.providers.aes_block import (
+    CryptographyAesBlockProvider,
+    SubprocessAesBlockProvider,
+)
 from acvp_assay.providers.aes_modes import (
     AesModeProvider as AesModeProviderProtocol,
 )
-from acvp_assay.providers.aes_modes import CryptographyAesModeProvider
+from acvp_assay.providers.aes_modes import (
+    CryptographyAesModeProvider,
+    SubprocessAesModeProvider,
+)
 from acvp_assay.providers.cryptography_aesgcm import CryptographyAesGcmProvider
 from acvp_assay.providers.ctr_drbg import CtrDrbgProvider as CtrDrbgProviderProtocol
 from acvp_assay.providers.digest import (
@@ -216,12 +222,13 @@ def _run_aes_modes(
     provider_command: str | None,
     provider_timeout: float,
 ) -> tuple[list[TestCaseResult], ProviderMetadata]:
-    if provider_command is not None:
-        raise UnsupportedAlgorithmError(
-            "--provider-command does not yet cover the AES mode families; "
-            "run them with the built-in provider"
+    provider: AesModeProviderProtocol = (
+        SubprocessAesModeProvider.from_command_string(
+            provider_command, timeout_seconds=provider_timeout
         )
-    provider: AesModeProviderProtocol = CryptographyAesModeProvider()
+        if provider_command is not None
+        else CryptographyAesModeProvider()
+    )
     metadata = provider.metadata()
     vector_set = aes_modes.load_vector_set(vector_file)
     expected = aes_modes.load_expected_results(expected_file)
@@ -270,12 +277,13 @@ def _run_aes_block(
     provider_command: str | None,
     provider_timeout: float,
 ) -> tuple[list[TestCaseResult], ProviderMetadata]:
-    if provider_command is not None:
-        raise UnsupportedAlgorithmError(
-            "--provider-command does not yet cover the AES chaining modes; "
-            "run them with the built-in provider"
+    provider: AesBlockProviderProtocol = (
+        SubprocessAesBlockProvider.from_command_string(
+            provider_command, timeout_seconds=provider_timeout
         )
-    provider: AesBlockProviderProtocol = CryptographyAesBlockProvider()
+        if provider_command is not None
+        else CryptographyAesBlockProvider()
+    )
     metadata = provider.metadata()
     vector_set = aes_block.load_vector_set(vector_file)
     expected = aes_block.load_expected_results(expected_file)

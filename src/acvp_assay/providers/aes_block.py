@@ -26,6 +26,11 @@ from acvp_assay.providers.aes_modes import (
     MCT_OUTER_ITERATIONS,
     key_shuffle,
 )
+from acvp_assay.providers.subprocess_harness import (
+    HarnessClient,
+    decode_hex,
+    decode_mct_quads,
+)
 
 #: CFB and OFB move to `decrepit` in cryptography 49 and warn before that, so
 #: these follow the move where it exists rather than pinning to one side of it.
@@ -212,3 +217,49 @@ __all__ = [
     "CryptographyAesBlockProvider",
     "McQuad",
 ]
+
+
+class SubprocessAesBlockProvider(HarnessClient):
+    """AES chaining modes performed by an external harness.
+
+    The Monte Carlo chain is delegated whole. Driving its 100 x 1000 inner
+    iterations across the wire would be 100,000 exchanges per case, and running
+    the chain is what a real implementation under test does anyway. Each outer
+    iteration comes back as the key and IV in force, the input, and the output
+    -- the four values ACVP records, and the two (last and previous output) the
+    key shuffle needs.
+    """
+
+    def transform(
+        self, *, algorithm: str, key: bytes, iv: bytes, data: bytes, encrypt: bool
+    ) -> bytes:
+        """Encrypt or decrypt one payload through the harness."""
+        response = self.invoke(
+            {
+                "operation": "block-transform",
+                "algorithm": algorithm,
+                "direction": "encrypt" if encrypt else "decrypt",
+                "key": key.hex().upper(),
+                "iv": iv.hex().upper(),
+                "data": data.hex().upper(),
+            }
+        )
+        return decode_hex(response, "out")
+
+    def monte_carlo(
+        self, *, algorithm: str, key: bytes, iv: bytes, data: bytes, encrypt: bool
+    ) -> list[McQuad]:
+        """Ask the harness to run the whole Monte Carlo chain."""
+        if not CHAINING_MODES.get(algorithm, False):
+            raise ValueError(f"{algorithm} has no Monte Carlo test")
+        response = self.invoke(
+            {
+                "operation": "block-mct",
+                "algorithm": algorithm,
+                "direction": "encrypt" if encrypt else "decrypt",
+                "key": key.hex().upper(),
+                "iv": iv.hex().upper(),
+                "data": data.hex().upper(),
+            }
+        )
+        return decode_mct_quads(response)

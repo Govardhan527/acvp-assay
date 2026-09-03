@@ -11,12 +11,17 @@ from __future__ import annotations
 from typing import Protocol, runtime_checkable
 
 import cryptography
-from cryptography.exceptions import InvalidSignature
+from cryptography.exceptions import InvalidSignature, InvalidTag
 from cryptography.hazmat.backends.openssl.backend import backend
 from cryptography.hazmat.primitives import cmac, keywrap
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 
 from acvp_assay.models import ProviderMetadata
+from acvp_assay.providers.subprocess_harness import (
+    HarnessClient,
+    decode_hex,
+    decode_mct_quads,
+)
 
 MCT_OUTER_ITERATIONS = 100
 MCT_INNER_ITERATIONS = 1000
@@ -160,3 +165,88 @@ __all__ = [
     "CryptographyAesModeProvider",
     "McTriple",
 ]
+
+
+class SubprocessAesModeProvider(HarnessClient):
+    """ECB, CMAC, GMAC and key wrapping performed by an external harness.
+
+    ECB shares the ``block-transform`` and ``block-mct`` operations with the
+    chaining modes: it is a block transform like the others, and giving it its
+    own pair would mean a vendor implementing the same thing twice.
+    """
+
+    def ecb(self, *, key: bytes, data: bytes, encrypt: bool) -> bytes:
+        """Transform whole blocks in ECB mode through the harness."""
+        response = self.invoke(
+            {
+                "operation": "block-transform",
+                "algorithm": "ACVP-AES-ECB",
+                "direction": "encrypt" if encrypt else "decrypt",
+                "key": key.hex().upper(),
+                "iv": "",
+                "data": data.hex().upper(),
+            }
+        )
+        return decode_hex(response, "out")
+
+    def ecb_monte_carlo(self, *, key: bytes, data: bytes, encrypt: bool) -> list[McTriple]:
+        """Ask the harness to run the ECB Monte Carlo chain."""
+        response = self.invoke(
+            {
+                "operation": "block-mct",
+                "algorithm": "ACVP-AES-ECB",
+                "direction": "encrypt" if encrypt else "decrypt",
+                "key": key.hex().upper(),
+                "iv": "",
+                "data": data.hex().upper(),
+            }
+        )
+        return [(entry[0], entry[2], entry[3]) for entry in decode_mct_quads(response)]
+
+    def cmac(self, *, key: bytes, message: bytes, mac_length_bits: int) -> bytes:
+        """Compute a CMAC through the harness, truncated to the requested length."""
+        response = self.invoke(
+            {
+                "operation": "cmac",
+                "key": key.hex().upper(),
+                "message": message.hex().upper(),
+                "macLen": mac_length_bits,
+            }
+        )
+        return decode_hex(response, "mac")
+
+    def gmac(self, *, key: bytes, iv: bytes, aad: bytes, tag_length_bits: int) -> bytes:
+        """Authenticate AAD only through the harness, returning the tag."""
+        response = self.invoke(
+            {
+                "operation": "gmac",
+                "key": key.hex().upper(),
+                "iv": iv.hex().upper(),
+                "aad": aad.hex().upper(),
+                "tagLen": tag_length_bits,
+            }
+        )
+        return decode_hex(response, "tag")
+
+    def key_wrap(self, *, key: bytes, data: bytes, padded: bool, wrap: bool) -> bytes:
+        """Wrap or unwrap through the harness.
+
+        A rejected unwrapping arrives as the reserved "authentication failed"
+        error, which the transport raises as InvalidTag; it is translated here
+        to the ValueError this boundary promises, because half of each upstream
+        unwrap set is a deliberately corrupt wrapping and rejecting one is the
+        correct answer rather than a fault.
+        """
+        try:
+            response = self.invoke(
+                {
+                    "operation": "key-wrap",
+                    "direction": "wrap" if wrap else "unwrap",
+                    "padded": padded,
+                    "key": key.hex().upper(),
+                    "data": data.hex().upper(),
+                }
+            )
+        except InvalidTag:
+            raise ValueError("key unwrapping failed") from None
+        return decode_hex(response, "out")

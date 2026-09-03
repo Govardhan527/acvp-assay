@@ -30,9 +30,16 @@ from typing import Any
 import cryptography
 from cryptography.exceptions import InvalidSignature, InvalidTag
 from cryptography.hazmat.backends.openssl.backend import backend
-from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives import cmac as cmac_mod
+from cryptography.hazmat.primitives import hashes, keywrap
 from cryptography.hazmat.primitives.asymmetric import ec, utils
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+
+try:  # pragma: no cover - CFB and OFB move to `decrepit` in cryptography 49
+    from cryptography.hazmat.decrepit.ciphers.modes import CFB as _CFB
+    from cryptography.hazmat.decrepit.ciphers.modes import OFB as _OFB
+except ImportError:  # pragma: no cover
+    _CFB, _OFB = modes.CFB, modes.OFB
 
 HASHLIB = {
     "SHA-1": "sha1",
@@ -221,7 +228,162 @@ def ecdsa_verify(request: dict[str, Any]) -> dict[str, Any]:
     return {"testPassed": True}
 
 
+BLOCK_MODES = {
+    "ACVP-AES-ECB": lambda _iv: modes.ECB(),  # noqa: S305 - ACVP tests ECB directly
+    "ACVP-AES-CBC": modes.CBC,
+    "ACVP-AES-CTR": modes.CTR,
+    "ACVP-AES-OFB": _OFB,
+    "ACVP-AES-CFB128": _CFB,
+}
+
+#: How the cipher's IV advances between Monte Carlo iterations. The
+#: specification writes the inner loop as a cipher that "continues" from the
+#: previous call without saying what that does to the IV, and each mode answers
+#: differently -- see docs/harness-protocol.md.
+MCT_INNER = 1000
+MCT_OUTER = 100
+
+
+def _block(algorithm: str, key: bytes, iv: bytes, data: bytes, encrypt: bool) -> bytes:
+    """One transform in the named mode."""
+    builder = BLOCK_MODES[algorithm]
+    cipher = Cipher(algorithms.AES(key), builder(iv))
+    operation = cipher.encryptor() if encrypt else cipher.decryptor()
+    return operation.update(data) + operation.finalize()
+
+
+def _next_iv(
+    algorithm: str, key: bytes, iv: bytes, fed: bytes, produced: bytes, encrypt: bool
+) -> bytes:
+    """Advance the IV as a stateful implementation of this mode would."""
+    if algorithm == "ACVP-AES-ECB":
+        return b""
+    if algorithm == "ACVP-AES-OFB":
+        # OFB feeds back the raw keystream, which is neither input nor output.
+        return _block("ACVP-AES-ECB", key, b"", iv, True)
+    return produced if encrypt else fed
+
+
+def _shuffle(key: bytes, last: bytes, previous: bytes) -> bytes:
+    """The shared AES Monte Carlo key shuffle; wider keys reach further back."""
+    if len(key) == 16:
+        feed = last
+    elif len(key) == 24:
+        feed = previous[-8:] + last
+    else:
+        feed = previous + last
+    return bytes(a ^ b for a, b in zip(key, feed, strict=True))
+
+
+def block_transform(request: dict[str, Any]) -> dict[str, str]:
+    """Encrypt or decrypt one payload in an AES block or chaining mode."""
+    algorithm = request["algorithm"]
+    if algorithm not in BLOCK_MODES:
+        return {"error": "unsupported"}
+    produced = _block(
+        algorithm,
+        bytes.fromhex(request["key"]),
+        bytes.fromhex(request["iv"]),
+        bytes.fromhex(request["data"]),
+        request["direction"] == "encrypt",
+    )
+    return {"out": produced.hex().upper()}
+
+
+def block_mct(request: dict[str, Any]) -> dict[str, Any]:
+    """Run the whole AES Monte Carlo chain and return every outer iteration.
+
+    Delegated rather than driven case by case: 100 x 1000 iterations would be
+    100,000 exchanges over the wire, and running the chain is what a real
+    implementation under test does anyway.
+    """
+    algorithm = request["algorithm"]
+    if algorithm not in BLOCK_MODES or algorithm == "ACVP-AES-CTR":
+        return {"error": "unsupported"}
+    encrypt = request["direction"] == "encrypt"
+    key = bytes.fromhex(request["key"])
+    iv = bytes.fromhex(request["iv"])
+    data = bytes.fromhex(request["data"])
+
+    results: list[dict[str, str]] = []
+    for _ in range(MCT_OUTER):
+        first_input, feedback, payload = data, iv, data
+        previous = carried = b""
+        for iteration in range(MCT_INNER):
+            produced = _block(algorithm, key, feedback, payload, encrypt)
+            feedback = _next_iv(algorithm, key, feedback, payload, produced, encrypt)
+            if iteration == 0:
+                previous = iv if algorithm != "ACVP-AES-ECB" else produced
+            if algorithm == "ACVP-AES-ECB":
+                carried, previous, payload = previous, produced, produced
+            else:
+                carried, payload, previous = previous, previous, produced
+        results.append(
+            {
+                "key": key.hex().upper(),
+                "iv": iv.hex().upper(),
+                "in": first_input.hex().upper(),
+                "out": previous.hex().upper(),
+            }
+        )
+        key = _shuffle(key, previous, carried)
+        iv = previous if algorithm != "ACVP-AES-ECB" else b""
+        data = previous if algorithm == "ACVP-AES-ECB" else carried
+    return {"resultsArray": results}
+
+
+def cmac(request: dict[str, Any]) -> dict[str, str]:
+    """Compute a CMAC truncated to the requested bit length."""
+    context = cmac_mod.CMAC(algorithms.AES(bytes.fromhex(request["key"])))
+    context.update(bytes.fromhex(request["message"]))
+    return {"mac": context.finalize()[: request["macLen"] // 8].hex().upper()}
+
+
+def gmac(request: dict[str, Any]) -> dict[str, str]:
+    """Authenticate AAD with no payload, returning the requested tag prefix."""
+    encryptor = Cipher(
+        algorithms.AES(bytes.fromhex(request["key"])),
+        modes.GCM(bytes.fromhex(request["iv"])),
+    ).encryptor()
+    encryptor.authenticate_additional_data(bytes.fromhex(request["aad"]))
+    encryptor.finalize()
+    return {"tag": encryptor.tag[: request["tagLen"] // 8].hex().upper()}
+
+
+def key_wrap(request: dict[str, Any]) -> dict[str, str]:
+    """Wrap or unwrap key material.
+
+    A rejected unwrapping is reported as an authentication failure, not a
+    crash: half of each upstream unwrap set is a deliberately corrupt wrapping
+    where refusing it is the correct answer.
+    """
+    key = bytes.fromhex(request["key"])
+    data = bytes.fromhex(request["data"])
+    padded = bool(request["padded"])
+    try:
+        if request["direction"] == "wrap":
+            produced = (
+                keywrap.aes_key_wrap_with_padding(key, data)
+                if padded
+                else keywrap.aes_key_wrap(key, data)
+            )
+        else:
+            produced = (
+                keywrap.aes_key_unwrap_with_padding(key, data)
+                if padded
+                else keywrap.aes_key_unwrap(key, data)
+            )
+    except (keywrap.InvalidUnwrap, InvalidSignature):
+        return {"error": "authentication failed"}
+    return {"out": produced.hex().upper()}
+
+
 HANDLERS = {
+    "block-transform": block_transform,
+    "block-mct": block_mct,
+    "cmac": cmac,
+    "gmac": gmac,
+    "key-wrap": key_wrap,
     "metadata": lambda _: metadata(),
     "encrypt": encrypt,
     "decrypt": decrypt,
