@@ -505,8 +505,8 @@ def test_aes_mode_families_are_dispatched_and_reach_a_harness(tmp_path: Path) ->
     assert [r.status for r in harness_results] == [ResultStatus.PASS]
 
 
-def test_ctr_drbg_is_dispatched_and_refuses_a_harness(tmp_path: Path) -> None:
-    """ctrDRBG routes to its runner, and declines --provider-command.
+def test_ctr_drbg_is_dispatched_and_reaches_a_harness(tmp_path: Path) -> None:
+    """ctrDRBG routes to its runner, and reaches a harness.
 
     The known answer is NIST's own, from tgId 13 / tcId 181 of the pinned
     ctrDRBG-SP800-90Ar1 set.
@@ -586,16 +586,17 @@ def test_ctr_drbg_is_dispatched_and_refuses_a_harness(tmp_path: Path) -> None:
     assert [r.status for r in results] == [ResultStatus.PASS]
     assert "ctrDRBG" in supported_algorithms()
 
-    with pytest.raises(UnsupportedAlgorithmError, match="ctrDRBG"):
-        run_vector_file(
-            tmp_path / "prompt.json",
-            tmp_path / "expectedResults.json",
-            provider_command="python3 h.py",
-        )
+    harness_results, harness_metadata = run_vector_file(
+        tmp_path / "prompt.json",
+        tmp_path / "expectedResults.json",
+        provider_command=f"{sys.executable} {ROOT / 'examples/reference_harness.py'}",
+    )
+    assert harness_metadata.name == "reference-harness"
+    assert [r.status for r in harness_results] == [ResultStatus.PASS]
 
 
-def test_kdf_is_dispatched_and_refuses_a_harness(tmp_path: Path) -> None:
-    """KDF SP 800-108 routes to its runner, and declines --provider-command.
+def test_kdf_is_dispatched_and_reaches_a_harness(tmp_path: Path) -> None:
+    """KDF SP 800-108 routes to its runner, and reaches a harness.
 
     The known answer is NIST's own, from the pinned KDF-1.0 set: counter mode,
     CMAC-AES128, the counter after the fixed data.
@@ -641,12 +642,13 @@ def test_kdf_is_dispatched_and_refuses_a_harness(tmp_path: Path) -> None:
     assert [r.status for r in results] == [ResultStatus.PASS]
     assert "KDF" in supported_algorithms()
 
-    with pytest.raises(UnsupportedAlgorithmError, match="KDF SP 800-108"):
-        run_vector_file(
-            tmp_path / "prompt.json",
-            tmp_path / "expectedResults.json",
-            provider_command="python3 h.py",
-        )
+    harness_results, harness_metadata = run_vector_file(
+        tmp_path / "prompt.json",
+        tmp_path / "expectedResults.json",
+        provider_command=f"{sys.executable} {ROOT / 'examples/reference_harness.py'}",
+    )
+    assert harness_metadata.name == "reference-harness"
+    assert [r.status for r in harness_results] == [ResultStatus.PASS]
 
 
 def test_aes_chaining_modes_are_dispatched_and_reach_a_harness(tmp_path: Path) -> None:

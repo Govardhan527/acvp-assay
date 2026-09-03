@@ -49,6 +49,7 @@ from acvp_assay.providers.aes_block import (
 from acvp_assay.providers.aes_modes import AesModeProvider, CryptographyAesModeProvider
 from acvp_assay.providers.cryptography_aesgcm import CryptographyAesGcmProvider
 from acvp_assay.providers.ctr_drbg import CryptographyCtrDrbg, run_drbg_case
+from acvp_assay.providers.digest import (
     HASHLIB_ALGORITHMS,
     HashlibHashProvider,
     HashlibMacProvider,
