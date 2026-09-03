@@ -13,19 +13,12 @@ group needs no chain, and inventing one would answer a question nobody asked.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Protocol, cast, runtime_checkable
 
 import cryptography
 from cryptography.hazmat.backends.openssl.backend import backend
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
-
-try:  # pragma: no cover - which branch runs depends on the installed version
-    # CFB and OFB move here in cryptography 49 and warn before that.
-    from cryptography.hazmat.decrepit.ciphers.modes import CFB as _CFB
-    from cryptography.hazmat.decrepit.ciphers.modes import OFB as _OFB
-except ImportError:  # pragma: no cover - older cryptography has no `decrepit`
-    _CFB = modes.CFB
-    _OFB = modes.OFB
 
 from acvp_assay.models import ProviderMetadata
 from acvp_assay.providers.aes_modes import (
@@ -34,6 +27,18 @@ from acvp_assay.providers.aes_modes import (
     key_shuffle,
 )
 
+#: CFB and OFB move to `decrepit` in cryptography 49 and warn before that, so
+#: these follow the move where it exists rather than pinning to one side of it.
+_CFB: Callable[[bytes], modes.Mode]
+_OFB: Callable[[bytes], modes.Mode]
+try:  # pragma: no cover - which branch runs depends on the installed version
+    from cryptography.hazmat.decrepit.ciphers.modes import CFB as _decrepit_cfb
+    from cryptography.hazmat.decrepit.ciphers.modes import OFB as _decrepit_ofb
+
+    _CFB, _OFB = _decrepit_cfb, _decrepit_ofb
+except ImportError:  # pragma: no cover - older cryptography has no `decrepit`
+    _CFB, _OFB = modes.CFB, modes.OFB
+
 CBC = "ACVP-AES-CBC"
 CTR = "ACVP-AES-CTR"
 OFB = "ACVP-AES-OFB"
@@ -41,30 +46,6 @@ CFB128 = "ACVP-AES-CFB128"
 
 #: Modes this provider implements, and whether they define a Monte Carlo test.
 CHAINING_MODES: dict[str, bool] = {CBC: True, OFB: True, CFB128: True, CTR: False}
-
-#: Directions whose Monte Carlo chain is *verified* against NIST's own answers.
-#:
-#: The specification says the decrypt chain is the encrypt pseudocode with PT
-#: and CT swapped. Taken literally that is what this provider implements, and
-#: for CBC and CFB128 encryption it reproduces the live server's arrays exactly,
-#: field for field. Decryption does not, and OFB does not in either direction.
-#: An exhaustive search over 36 plausible feedback rules found nothing that
-#: does, so the real chain is something this runner has not established.
-#:
-#: Rather than ship a chain that runs to completion and quietly disagrees,
-#: the unverified combinations are declared. See docs/limitations.md.
-VERIFIED_MONTE_CARLO: dict[str, frozenset[str]] = {
-    CBC: frozenset({"encrypt"}),
-    CFB128: frozenset({"encrypt"}),
-    OFB: frozenset(),
-    CTR: frozenset(),
-}
-
-
-def monte_carlo_is_verified(algorithm: str, *, encrypt: bool) -> bool:
-    """Whether this runner can answer the Monte Carlo chain for this direction."""
-    return ("encrypt" if encrypt else "decrypt") in VERIFIED_MONTE_CARLO.get(algorithm, frozenset())
-
 
 #: One outer Monte Carlo iteration: the key, IV and input in force, and the output.
 McQuad = tuple[bytes, bytes, bytes, bytes]
@@ -136,51 +117,88 @@ class CryptographyAesBlockProvider:
         operation = cipher.encryptor() if encrypt else cipher.decryptor()
         return operation.update(data) + operation.finalize()
 
+    def _advance_iv(
+        self,
+        algorithm: str,
+        *,
+        key: bytes,
+        iv: bytes,
+        fed: bytes,
+        produced: bytes,
+        encrypt: bool,
+    ) -> bytes:
+        """Advance the cipher's IV exactly as a stateful implementation would.
+
+        This is the whole difficulty of these chains, and the specification's
+        pseudocode hides it: it writes the inner loop as a cipher that
+        "continues" from the previous call without saying what continuing does
+        to the IV. Each mode answers differently. Each answer below was taken
+        from NIST's own generator -- ``MonteCarloAesCbc.cs`` and its siblings in
+        usnistgov/ACVP-Server, where the encrypt and decrypt routines are
+        structurally identical and the asymmetry lives entirely inside the
+        cipher object -- and then confirmed against the live server's arrays.
+
+        * CBC and CFB128 **encrypting**: the IV becomes the ciphertext just
+          produced.
+        * CBC and CFB128 **decrypting**: the IV becomes the ciphertext just
+          *consumed*. Input, not output. This asymmetry is why a chain written
+          by mirroring the encrypt pseudocode runs to completion and disagrees
+          with NIST from the very first block.
+        * OFB in **either** direction: the IV becomes the raw keystream block,
+          which is neither the input nor the output, because OFB's feedback
+          never touches the data.
+        """
+        if algorithm == OFB:
+            # The keystream block is the bare block-cipher output over the IV.
+            return self.transform(
+                algorithm=CBC, key=key, iv=b"\x00" * len(iv), data=iv, encrypt=True
+            )
+        return produced if encrypt else fed
+
     def monte_carlo(
         self, *, algorithm: str, key: bytes, iv: bytes, data: bytes, encrypt: bool
     ) -> list[McQuad]:
-        """Run the shared CBC/OFB/CFB128 Monte Carlo chain.
+        """Run the CBC, OFB or CFB128 Monte Carlo chain.
 
-        The specification writes the inner loop as a stateful cipher that
-        continues from the previous call. For a one-block operation that is the
-        same as restarting with the previous output block as the IV, which is
-        what this does::
+        The payload chain is shared by all three modes and both directions::
 
-            For j = 0 to 999
-                If j = 0: CT[j] = ENC(Key, IV, PT[j]);      PT[j+1] = IV
-                Else:     CT[j] = ENC(Key, CT[j-1], PT[j]); PT[j+1] = CT[j-1]
+            payload[0] = the case's input
+            payload[1] = IV
+            payload[j] = output[j - 2]   for j >= 2
 
-        The feedback value and the next input are the same value, which is why
-        one variable serves both below.
+        Only the IV advance differs between them; see :meth:`_advance_iv`.
         """
         if not CHAINING_MODES.get(algorithm, False):
             raise ValueError(f"{algorithm} has no Monte Carlo test")
-        if not monte_carlo_is_verified(algorithm, encrypt=encrypt):
-            direction = "encrypt" if encrypt else "decrypt"
-            raise ValueError(
-                f"the {algorithm} {direction} Monte Carlo chain is not verified against "
-                "NIST's answers; this runner declines rather than guess"
-            )
 
         results: list[McQuad] = []
         for _ in range(MCT_OUTER_ITERATIONS):
             first_input = data
             feedback = iv
+            payload = data
             previous = b""
-            current = b""
-            block = data
-            for _ in range(MCT_INNER_ITERATIONS):
+            carried = b""
+            for iteration in range(MCT_INNER_ITERATIONS):
                 produced = self.transform(
-                    algorithm=algorithm, key=key, iv=feedback, data=block, encrypt=encrypt
+                    algorithm=algorithm, key=key, iv=feedback, data=payload, encrypt=encrypt
                 )
-                # The next input and the next feedback are both the value this
-                # iteration chained from, so they advance together.
-                block, feedback = feedback, produced
-                previous, current = current, produced
-            results.append((key, iv, first_input, current))
-            key = key_shuffle(key, current, previous)
-            iv = current
-            data = previous
+                feedback = self._advance_iv(
+                    algorithm,
+                    key=key,
+                    iv=feedback,
+                    fed=payload,
+                    produced=produced,
+                    encrypt=encrypt,
+                )
+                if iteration == 0:
+                    previous = iv
+                carried = previous
+                payload = previous
+                previous = produced
+            results.append((key, iv, first_input, previous))
+            key = key_shuffle(key, previous, carried)
+            iv = previous
+            data = carried
         return results
 
 
@@ -188,11 +206,9 @@ __all__ = [
     "CBC",
     "CFB128",
     "CHAINING_MODES",
-    "VERIFIED_MONTE_CARLO",
     "CTR",
     "OFB",
     "AesBlockProvider",
     "CryptographyAesBlockProvider",
     "McQuad",
-    "monte_carlo_is_verified",
 ]

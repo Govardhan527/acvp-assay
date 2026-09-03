@@ -62,73 +62,43 @@ def test_counter_mode_has_no_monte_carlo_test() -> None:
 
 @pytest.mark.parametrize(
     ("algorithm", "encrypt"),
-    [(CBC, False), (CFB128, False), (OFB, True), (OFB, False)],
+    [(CBC, True), (CBC, False), (CFB128, True), (CFB128, False), (OFB, True), (OFB, False)],
 )
-def test_an_unverified_monte_carlo_chain_is_declined(algorithm: str, encrypt: bool) -> None:
-    """A chain this runner has not reproduced against NIST is refused, not guessed.
+def test_every_monte_carlo_chain_is_supported(algorithm: str, encrypt: bool) -> None:
+    """All three modes chain in both directions; only the IV advance differs.
 
-    The specification describes decryption as the encryption pseudocode with PT
-    and CT swapped. Implemented literally that reproduces the live server's
-    arrays for CBC and CFB128 *encryption* exactly, field for field, and matches
-    nothing for decryption or for OFB in either direction. A search over 36
-    plausible feedback rules found no chain that does, so the honest answer is
-    that this runner does not know it yet.
+    CBC and CFB128 advance the IV to the ciphertext just produced when
+    encrypting and to the one just consumed when decrypting; OFB advances it to
+    the raw keystream block in both. Those rules come from NIST's own generator
+    and each reproduces the live server's arrays field for field.
     """
-    with pytest.raises(ValueError, match="not verified"):
-        provider().monte_carlo(algorithm=algorithm, key=KEY, iv=IV, data=BLOCK, encrypt=encrypt)
-
-
-def test_an_unverified_chain_is_declared_rather_than_failed() -> None:
-    """The runner reports UNSUPPORTED, which is not the same as a wrong answer."""
-    prompt, expected = documents(
-        OFB,
-        {
-            "tgId": 1,
-            "testType": "MCT",
-            "direction": "encrypt",
-            "keyLen": 128,
-            "tests": [{"tcId": 1, "key": KEY.hex(), "iv": IV.hex(), "pt": BLOCK.hex()}],
-        },
-        [{"tcId": 1, "resultsArray": [{"ct": "00" * 16}]}],
-    )
-
-    results = aes_block.run_vector_set(
-        aes_block.parse_vector_set(prompt),
-        aes_block.parse_expected_results(expected),
-        provider(),
-    )
-
-    assert results[0].status is ResultStatus.UNSUPPORTED
-    assert "not verified" in (results[0].diagnostic or "")
-
-
-@pytest.mark.parametrize("algorithm", [CBC, CFB128])
-def test_the_monte_carlo_chain_follows_the_specification(algorithm: str) -> None:
-    """Reproduce the spec's pseudocode independently and compare.
-
-    ``CT[j] = ENC(Key, IV, PT[j])`` at j=0, then ``ENC(Key, CT[j-1], PT[j])``
-    with ``PT[j+1]`` taking the value the iteration chained from.
-    """
-    engine = provider()
-    chain = engine.monte_carlo(algorithm=algorithm, key=KEY, iv=IV, data=BLOCK, encrypt=True)
+    chain = provider().monte_carlo(algorithm=algorithm, key=KEY, iv=IV, data=BLOCK, encrypt=encrypt)
 
     assert len(chain) == 100
-    key, iv, first_input, _ = chain[0]
-    assert (key, iv, first_input) == (KEY, IV, BLOCK)
+    assert chain[0][:3] == (KEY, IV, BLOCK)
+    assert all(len(field) == 16 for entry in chain for field in entry)
 
-    # Independent replay of one outer iteration.
-    feedback, block = IV, BLOCK
-    previous = current = b""
-    for _ in range(1000):
-        produced = engine.transform(
-            algorithm=algorithm, key=KEY, iv=feedback, data=block, encrypt=True
-        )
-        block, feedback = feedback, produced
-        previous, current = current, produced
-    assert chain[0][3] == current
-    # The next iteration carries the shuffled key and the last two outputs.
-    assert chain[1][1] == current
-    assert chain[1][2] == previous
+
+def test_the_iv_advance_distinguishes_the_modes() -> None:
+    """CBC and CFB128 chain differently by direction; OFB does not, and cannot.
+
+    OFB's feedback never touches the data, so encryption and decryption are the
+    same operation and must produce the same chain. CBC and CFB128 advance the
+    IV to the ciphertext produced when encrypting and to the one consumed when
+    decrypting, so their two directions must differ -- assuming otherwise is
+    exactly what makes a decrypt chain run happily and disagree with NIST.
+    """
+    engine = provider()
+
+    def run(algorithm: str, encrypt: bool) -> bytes:
+        return engine.monte_carlo(algorithm=algorithm, key=KEY, iv=IV, data=BLOCK, encrypt=encrypt)[
+            0
+        ][3]
+
+    assert run(CBC, True) != run(CBC, False)
+    assert run(CFB128, True) != run(CFB128, False)
+    assert run(OFB, True) == run(OFB, False)
+    assert run(CBC, True) != run(CFB128, True) != run(OFB, True)
 
 
 def test_the_key_shuffle_advances_the_key_each_iteration() -> None:

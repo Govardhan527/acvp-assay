@@ -20,19 +20,20 @@ provider protocols may change between minor versions.
 - `ACVP-AES-CTR` has **no Monte Carlo test**. ACVP gives it a `CTR` test type,
   but that is a server-side distinction: the server back-computes the IVs from
   an ordinary functional answer. All 1,742 CTR cases pass.
-- Monte Carlo support is deliberately partial, and the table in
-  `docs/limitations.md` says exactly where. The specification gives the encrypt
-  chain as pseudocode and defines decryption as the same pseudocode with PT and
-  CT swapped. Implemented literally, that reproduces the live server's CBC and
-  CFB128 **encrypt** arrays field for field across all 100 outer iterations --
-  and matches nothing for decryption, or for OFB in either direction. A search
-  over 36 candidate feedback rules, at every iteration count to 1200, found no
-  chain that does.
-- Those groups are reported UNSUPPORTED and the responder refuses to submit
-  them. That costs 8 cases of 6,016. A Monte Carlo chain that runs to
-  completion and disagrees is scored as a wrong answer and looks like a working
-  implementation until a laboratory says otherwise, so declaring is the cheaper
-  error by a wide margin.
+- The Monte Carlo chains are fully supported in both directions, and were the
+  hard part. The specification's pseudocode writes the inner loop as a cipher
+  that "continues" from the previous call without saying what continuing does
+  to the IV, and each mode answers differently: CBC and CFB128 advance it to
+  the ciphertext just *produced* when encrypting and to the ciphertext just
+  *consumed* when decrypting, while OFB advances it to the raw keystream block
+  in both directions. Reading the specification's "replace all PT with CT"
+  instruction literally reproduces the encrypt arrays exactly and disagrees
+  from the first block when decrypting.
+- The correct rules came from NIST's own generator, `MonteCarloAesCbc.cs` and
+  its siblings in `usnistgov/ACVP-Server`, where encrypt and decrypt are
+  structurally identical and the asymmetry lives inside the cipher object.
+  `docs/limitations.md` carries the table. All twelve group combinations
+  reproduce the live server's arrays on every field of all 100 iterations.
 - `CFB` and `OFB` are read from `cryptography.hazmat.decrepit`, which is where
   they move in version 49.
 

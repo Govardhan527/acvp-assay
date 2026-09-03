@@ -1102,7 +1102,7 @@ def test_aes_chaining_modes_answer_their_transform(tmp_path: Path) -> None:
         assert len(bytes.fromhex(case[name])) == 16
 
 
-def test_a_verified_chaining_monte_carlo_is_answered(tmp_path: Path) -> None:
+def test_a_chaining_monte_carlo_is_answered(tmp_path: Path) -> None:
     """CBC encrypt reproduces NIST's array, so it can be submitted."""
     key, iv, block = bytes(range(16)), bytes(range(16, 32)), bytes(range(32, 48))
     prompt = write_prompt(
@@ -1127,31 +1127,6 @@ def test_a_verified_chaining_monte_carlo_is_answered(tmp_path: Path) -> None:
 
     assert len(case["resultsArray"]) == 100
     assert set(case["resultsArray"][0]) == {"key", "iv", "pt", "ct"}
-
-
-def test_an_unverified_chaining_monte_carlo_is_refused(tmp_path: Path) -> None:
-    """Submitting a chain this runner has not reproduced would score as wrong."""
-    key, iv, block = bytes(range(16)), bytes(range(16, 32)), bytes(range(32, 48))
-    prompt = write_prompt(
-        tmp_path,
-        {
-            "vsId": 1,
-            "algorithm": "ACVP-AES-OFB",
-            "revision": "1.0",
-            "testGroups": [
-                {
-                    "tgId": 1,
-                    "testType": "MCT",
-                    "direction": "encrypt",
-                    "keyLen": 128,
-                    "tests": [{"tcId": 1, "key": key.hex(), "iv": iv.hex(), "pt": block.hex()}],
-                }
-            ],
-        },
-    )
-
-    with pytest.raises(ResponseError, match="not verified"):
-        build_response(prompt)
 
 
 def test_counter_mode_has_no_monte_carlo_group_to_answer(tmp_path: Path) -> None:

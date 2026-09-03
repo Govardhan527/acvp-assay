@@ -36,7 +36,6 @@ from acvp_assay.providers.aes_block import (
     CHAINING_MODES,
     AesBlockProvider,
     CryptographyAesBlockProvider,
-    monte_carlo_is_verified,
 )
 from acvp_assay.providers.aes_modes import AesModeProvider, CryptographyAesModeProvider
 from acvp_assay.providers.cryptography_aesgcm import CryptographyAesGcmProvider
@@ -309,11 +308,6 @@ def _aes_block_groups(document: dict[str, object]) -> list[dict[str, object]]:
             if group.test_type == aes_block.MCT:
                 if not CHAINING_MODES[algorithm]:
                     raise ResponseError(f"{algorithm} has no Monte Carlo test to answer")
-                if not monte_carlo_is_verified(algorithm, encrypt=encrypt):
-                    raise ResponseError(
-                        f"the {algorithm} {group.direction} Monte Carlo chain is not verified "
-                        "against NIST's answers; submitting a guess would be scored as wrong"
-                    )
                 chain = provider.monte_carlo(
                     algorithm=algorithm,
                     key=case.fields["key"],

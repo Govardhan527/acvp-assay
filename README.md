@@ -72,7 +72,7 @@ The algorithm is read from the vector file itself and routed automatically. Curr
 | `ACVP-AES-GMAC` | AFT | Tag generation, and verification including deliberate forgeries |
 | `ACVP-AES-KW`, `ACVP-AES-KWP` | AFT | `kwCipher: cipher`; the `inverse` variant is reported UNSUPPORTED |
 | `CMAC-AES` | AFT (gen and ver) | Honours per-group `macLen` truncation |
-| `ACVP-AES-CBC`, `ACVP-AES-CTR`, `ACVP-AES-OFB`, `ACVP-AES-CFB128` | AFT, MCT, CTR | CTR defines no MCT; CBC/CFB128 encrypt chains are verified, the rest are declared (see `docs/limitations.md`) |
+| `ACVP-AES-CBC`, `ACVP-AES-CTR`, `ACVP-AES-OFB`, `ACVP-AES-CFB128` | AFT, MCT, CTR | Both directions of every Monte Carlo chain; CTR defines none. The IV advance differs per mode — see `docs/limitations.md` |
 | `ctrDRBG` | AFT | Both revisions; AES-128/192/256, with and without the derivation function. TDES is reported UNSUPPORTED |
 | `KDF` (SP 800-108) | AFT | Counter, feedback and double-pipeline modes over 14 PRFs. CMAC-TDES is reported UNSUPPORTED |
 

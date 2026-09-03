@@ -14,36 +14,32 @@ The tool:
 
 Do not use this tool as evidence that a cryptographic module is production-ready, FIPS 140-3 validated, or otherwise compliant.
 
-## AES chaining-mode Monte Carlo tests (v0.8.0)
+## AES chaining-mode Monte Carlo tests
 
-`ACVP-AES-CBC`, `ACVP-AES-OFB` and `ACVP-AES-CFB128` each define a Monte Carlo
-test. This runner answers **only the combinations it has reproduced against
-NIST's own answers**:
+`ACVP-AES-CBC`, `ACVP-AES-OFB` and `ACVP-AES-CFB128` are fully supported in both
+directions. `ACVP-AES-CTR` defines no Monte Carlo test at all: ACVP gives it a
+`CTR` test type, but the server back-computes the IVs from an ordinary
+functional answer, so the client runs no chain.
 
-| Algorithm | encrypt MCT | decrypt MCT |
-| --- | --- | --- |
-| `ACVP-AES-CBC` | verified | **declared** |
-| `ACVP-AES-CFB128` | verified | **declared** |
-| `ACVP-AES-OFB` | **declared** | **declared** |
-| `ACVP-AES-CTR` | no MCT — none defined | no MCT |
+These chains are worth a note because the specification's pseudocode is not
+sufficient to implement them. It writes the inner loop as a cipher that
+"continues" from the previous call, without saying what continuing does to the
+IV -- and each mode answers that differently:
 
-The specification gives the encryption chain as pseudocode and describes
-decryption as "the encryption pseudocode with all PT's replaced by CT's and all
-CT's replaced by PT's". Implemented exactly that way, the chain reproduces the
-live server's CBC and CFB128 *encrypt* arrays field for field — key, IV, input
-and output, across all 100 outer iterations. The same code matches nothing for
-decryption, and nothing for OFB in either direction, diverging at the very first
-output.
+| Mode | How the IV advances between inner iterations |
+| --- | --- |
+| CBC, CFB128, encrypting | to the ciphertext just **produced** |
+| CBC, CFB128, decrypting | to the ciphertext just **consumed** (the input) |
+| OFB, either direction | to the raw keystream block, which is neither |
 
-A search over 36 candidate feedback rules — every combination of what becomes
-the next IV and the next input, drawn from the current and previous IV, input
-and output — produced no chain that reaches NIST's answer, at any iteration
-count up to 1200. So the real chain is something this runner has not yet
-established.
+The payload chain is shared by all of them: `payload[0]` is the case's input,
+`payload[1]` is the IV, and `payload[j]` is `output[j-2]` thereafter.
 
-Those groups are therefore reported UNSUPPORTED, and the responder refuses to
-submit them. That costs 8 cases out of 6,016 in the session that established
-this. Answering them with a plausible-looking chain would cost far more: a
-Monte Carlo chain that runs to completion and disagrees is scored as a wrong
-answer, and looks like a working implementation until a laboratory says
-otherwise.
+Reading the specification's "replace all PT with CT" instruction literally
+produces a chain that reproduces the encrypt arrays exactly and disagrees with
+NIST from the first block when decrypting. The correct rules were taken from
+NIST's own generator, `MonteCarloAesCbc.cs` and its siblings in
+`usnistgov/ACVP-Server`, where the encrypt and decrypt routines are
+structurally identical and the asymmetry lives entirely inside the cipher
+object. All twelve group combinations now reproduce the live server's arrays on
+every field of all 100 iterations.

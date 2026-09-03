@@ -28,11 +28,7 @@ from acvp_assay.parser import (
     optional_hex_bytes,
     string_field,
 )
-from acvp_assay.providers.aes_block import (
-    CHAINING_MODES,
-    AesBlockProvider,
-    monte_carlo_is_verified,
-)
+from acvp_assay.providers.aes_block import CHAINING_MODES, AesBlockProvider
 
 SUPPORTED = tuple(CHAINING_MODES)
 MCT = "MCT"
@@ -218,12 +214,6 @@ def _run_monte_carlo(
     if expected.results_array is None:
         return _unsupported(group.tg_id, case.tc_id, "MCT case has no expected resultsArray")
     encrypt = group.direction == "encrypt"
-    if not monte_carlo_is_verified(algorithm, encrypt=encrypt):
-        return _unsupported(
-            group.tg_id,
-            case.tc_id,
-            f"the {algorithm} {group.direction} Monte Carlo chain is not verified",
-        )
     name = "ct" if encrypt else "pt"
     produced = provider.monte_carlo(
         algorithm=algorithm,
