@@ -5,6 +5,43 @@ All notable changes to this project are recorded here. The format follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Before 1.0.0 the
 provider protocols may change between minor versions.
 
+## [0.13.0] - 2026-09-04
+
+### Added
+
+- **ML-KEM and ML-DSA response builders**, the last two of the forty algorithm
+  names without one. Both require `--provider-command` and refuse clearly
+  without it: every other family falls back to a built-in provider, PQC has
+  none, and inventing a value is not an option when ACVP scores a missing case
+  as a wrong answer.
+- **Every supported algorithm has now been judged by NIST.** Two further
+  sessions on `demo.acvts.nist.gov` took live coverage from 38 of 40 to
+  **40 of 40**:
+  - Session 765724: `ML-KEM` encapDecap, 165 cases, `passed`.
+  - Session 765727: `ML-DSA` sigVer, 45 cases, `passed`.
+  - Running total: **45 vector sets, 32,674 cases, every verdict `passed`.**
+- `acvts-capabilities/ml-kem.json` and `ml-dsa.json`.
+
+### Notes
+
+- **What the PQC verdicts do and do not mean.** Both sessions were answered by
+  `examples/pqc_reference_harness.py`, backed by `kyber-py` and `dilithium-py`
+  — educational implementations that are not constant-time. The verdicts are
+  evidence that this runner parses, routes and answers PQC vector sets
+  correctly. They are not evidence that any implementation is fit to ship, and
+  the README says so in the banner rather than in a footnote.
+- These are also the first submissions answered entirely by a harness rather
+  than by the built-in providers, which is the configuration M12 was built for.
+- The ML-DSA registration declares `pure` and `external` only. `preHash` and
+  `externalMu` groups are refused by the builder rather than answered, so
+  registering for them would produce a document that could not be completed.
+  NIST generated exactly the three groups the runner supports.
+- Getting that registration accepted took four attempts, each corrected by the
+  server's own validation message: `capabilities` must be a non-empty array;
+  `externalMu` is rejected when only the external interface is declared;
+  `messageLength` and `contextLength` are required; and `preHash` belongs at
+  the top level rather than inside a capability.
+
 ## [0.12.0] - 2026-09-03
 
 ### Added
@@ -416,6 +453,7 @@ Initial release: an offline AES-GCM vector runner.
 - Clean-checkout Linux CI, and a pinned, hash-verified upstream vector source
   that is referenced rather than redistributed.
 
+[0.13.0]: https://github.com/Govardhan527/acvp-assay/releases/tag/v0.13.0
 [0.12.0]: https://github.com/Govardhan527/acvp-assay/releases/tag/v0.12.0
 [0.11.0]: https://github.com/Govardhan527/acvp-assay/releases/tag/v0.11.0
 [0.10.0]: https://github.com/Govardhan527/acvp-assay/releases/tag/v0.10.0

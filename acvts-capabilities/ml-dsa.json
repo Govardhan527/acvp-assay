@@ -1,0 +1,16 @@
+[
+  {
+    "algorithm": "ML-DSA",
+    "mode": "sigVer",
+    "revision": "FIPS204",
+    "signatureInterfaces": ["external"],
+    "preHash": ["pure"],
+    "capabilities": [
+      {
+        "parameterSets": ["ML-DSA-44", "ML-DSA-65", "ML-DSA-87"],
+        "messageLength": [{"min": 8, "max": 65536, "increment": 8}],
+        "contextLength": [{"min": 0, "max": 2040, "increment": 8}]
+      }
+    ]
+  }
+]

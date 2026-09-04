@@ -85,6 +85,10 @@ Aimed at demand rather than portfolio scope; supersedes the v0.1.0 non-goals whe
       Gaps left deliberately: AES `kwCipher: inverse` and SHA LDT are not merely
       capability checks — neither operation is on the wire at all — and GCM
       `ivGen: internal` needs the provider to report the IV it chose.
-- [ ] M13: publish to PyPI.
+- [x] M13: publish to PyPI. Released 2026-09-04 as `acvp-assay`; `pip install acvp-assay`
+      installs and runs vector files from a clean environment.
+- [x] M14: response builders for ML-KEM and ML-DSA, taking live NIST coverage to 40 of 40
+      algorithm names. Both require `--provider-command`, since there is no built-in PQC
+      provider and a submission must carry values something actually computed.
 
 Still out of scope: a full ACVP protocol client, algorithm count as a goal, an HTML dashboard, and any hosted service.

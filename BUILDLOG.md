@@ -357,3 +357,18 @@
 - Commit/link/path: `scripts/acvts_client.py`, `acvts-capabilities/remaining-digests-gmac.json`, `acvts-capabilities/gmac.json`, `README.md`.
 - Blocker, if any: ML-KEM and ML-DSA need a response builder in `responder.py` before they can be submitted. That is the remaining item for live coverage.
 - Next unchecked ID: M13 - publish to PyPI.
+
+## 2026-09-04 - Every supported algorithm judged by NIST: 40 of 40
+
+- Project and task ID: ACVP Assay - closing the live-coverage gap
+- Done condition: no algorithm the runner supports is left without a verdict from NIST's own server.
+- Evidence produced: response builders for ML-KEM and ML-DSA in `responder.py`, then two sessions on `demo.acvts.nist.gov` - **765724** (ML-KEM encapDecap, 165 cases, `passed`) and **765727** (ML-DSA sigVer, 45 cases, `passed`). Running total: **45 vector sets, 32,674 cases, every verdict `passed`, 40 of 40 algorithm names**. `supported_response_algorithms()` now equals `supported_algorithms()`, and a test asserts they stay equal.
+- These were the first submissions answered **entirely by a harness** rather than by the built-in providers, which is precisely the configuration M12 existed to enable. The mechanism a vendor would use is now the mechanism that produced two of the verdicts.
+- The honesty that has to travel with the number: both PQC sessions were answered by `examples/pqc_reference_harness.py`, backed by `kyber-py` and `dilithium-py` - educational, pure-Python, **not constant-time**. A passing verdict is evidence that this runner handles PQC vector sets correctly. It is not evidence that any implementation is fit to ship, and there is still no built-in PQC provider. That statement sits in the README banner rather than in a footnote, because "40 of 40 judged by NIST" invites exactly the wrong reading if it stands alone.
+- Registering narrowly is the point, not a workaround: the ML-DSA builder refuses `preHash` and `externalMu` groups, so the registration declares `pure`/`external` only and NIST generated exactly the three groups the runner supports - 45 cases, all answerable. Registering for a capability you refuse produces a document that cannot be completed.
+- Four rejected registrations preceded the accepted one, each corrected by the server's own validation text rather than by guessing: `capabilities` must be a non-empty array; `externalMu` is rejected when only the external signature interface is declared; `messageLength` and `contextLength` are required; and `preHash` belongs at the top level rather than inside a capability. Reading the error is faster than reading the spec, and it is authoritative.
+- Also hit and worth remembering: two logins inside one 30-second TOTP step return `403 TOTP Window has already been used`. Wait for the next window rather than retrying immediately.
+- Tests run and result: `scripts/dev.py verify` - 572 passed, 99.74% branch coverage, `responder.py` at 100%.
+- Commit/link/path: `src/acvp_assay/responder.py`, `acvts-capabilities/ml-kem.json`, `acvts-capabilities/ml-dsa.json`, `tests/unit/test_responder_harness.py`.
+- Blocker, if any: none. Live coverage is complete for the current algorithm set; raising it further means implementing new families.
+- Next unchecked ID: none outstanding. M13 shipped to PyPI on 2026-09-04.
