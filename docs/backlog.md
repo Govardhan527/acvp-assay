@@ -111,5 +111,9 @@ Aimed at demand rather than portfolio scope; supersedes the v0.1.0 non-goals whe
       AFT only: the Demo server generates no other test type for a FIPS202 SHAKE
       registration, and a Monte Carlo chain written without vectors would be a guess.
       Session 765794 returned `passed` on both sets, 508 cases.
+- [x] M19: KDA (SP 800-56C), HKDF mode. The derivation that pairs with key agreement,
+      and the highest-value name remaining after the coverage analysis was re-run against
+      the live registry. The work is assembling fixedInfo from the pattern the group
+      declares, not the HKDF itself. Session 765811 returned `passed` on all 300 cases.
 
 Still out of scope: a full ACVP protocol client, algorithm count as a goal, an HTML dashboard, and any hosted service.

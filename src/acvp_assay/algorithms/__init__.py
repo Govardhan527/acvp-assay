@@ -27,6 +27,7 @@ from acvp_assay.algorithms import (
     ecdsa,
     hmac_mac,
     kas_ecc,
+    kda,
     kdf,
     pqc,
     rsa,
@@ -100,6 +101,7 @@ def supported_algorithms() -> list[str]:
         *shake.SUPPORTED,
         aes_xts.ALGORITHM,
         kas_ecc.ALGORITHM,
+        kda.ALGORITHM,
         kdf.ALGORITHM,
         *aes_block.SUPPORTED,
         *aes_modes.SUPPORTED,
@@ -371,6 +373,19 @@ def _run_shake(
     return shake.run_vector_set(vector_set, expected, provider), metadata
 
 
+def _run_kda(
+    vector_file: Path,
+    expected_file: Path,
+    provider_command: str | None,
+    provider_timeout: float,
+) -> tuple[list[TestCaseResult], ProviderMetadata]:
+    provider = kda.provider_for(provider_command, provider_timeout)
+    metadata = provider.metadata()
+    vector_set = kda.load_vector_set(vector_file)
+    expected = kda.load_expected_results(expected_file)
+    return kda.run_vector_set(vector_set, expected, provider), metadata
+
+
 def run_vector_file(
     vector_file: Path,
     expected_file: Path,
@@ -416,6 +431,10 @@ def run_vector_file(
         )
     elif algorithm == "ECDSA":
         runners[algorithm] = lambda: _run_ecdsa(
+            vector_file, expected_file, provider_command, provider_timeout
+        )
+    elif algorithm == kda.ALGORITHM:
+        runners[algorithm] = lambda: _run_kda(
             vector_file, expected_file, provider_command, provider_timeout
         )
     elif algorithm in shake.SUPPORTED:

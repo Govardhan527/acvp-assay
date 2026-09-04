@@ -35,6 +35,7 @@ from cryptography.hazmat.primitives import hashes, keywrap
 from cryptography.hazmat.primitives.asymmetric import ec, padding, rsa, utils
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.primitives.ciphers.aead import AESCCM
+from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 
 try:  # pragma: no cover - CFB and OFB move to `decrepit` in cryptography 49
     from cryptography.hazmat.decrepit.ciphers.modes import CFB as _CFB
@@ -237,6 +238,25 @@ def ecdsa_sign_group(request: dict[str, Any]) -> dict[str, Any]:
         "qy": numbers.y.to_bytes(size, "big").hex().upper(),
         "signatures": signatures,
     }
+
+
+def kda_hkdf(request: dict[str, Any]) -> dict[str, Any]:
+    """SP 800-56C key derivation, HKDF mode: extract with the salt, then expand.
+
+    ``fixedInfo`` arrives already assembled. The runner builds it from the
+    pattern the group declares, so a harness is asked only to derive -- which
+    is the part the implementation is being tested on.
+    """
+    algorithm = KDA_HASHES.get(request["hmacAlg"])
+    if algorithm is None:
+        return {"error": "unsupported"}
+    derived = HKDF(
+        algorithm=algorithm(),
+        length=int(request["l"]) // 8,
+        salt=bytes.fromhex(request["salt"]),
+        info=bytes.fromhex(request["fixedInfo"]),
+    ).derive(bytes.fromhex(request["z"]))
+    return {"dkm": derived.hex().upper()}
 
 
 def xof(request: dict[str, Any]) -> dict[str, Any]:
@@ -620,6 +640,15 @@ def rsa_primitive_decrypt(request: dict[str, Any]) -> dict[str, Any]:
 #: absent on purpose: disallowed for this use since 2023.
 XOF = {"SHAKE-128": hashlib.shake_128, "SHAKE-256": hashlib.shake_256}
 
+KDA_HASHES = {
+    "SHA2-224": hashes.SHA224,
+    "SHA2-256": hashes.SHA256,
+    "SHA2-384": hashes.SHA384,
+    "SHA2-512": hashes.SHA512,
+    "SHA2-512/224": hashes.SHA512_224,
+    "SHA2-512/256": hashes.SHA512_256,
+}
+
 HMAC_FOR_KDF = {f"HMAC-{name}": digest for name, digest in HASHLIB.items()}
 CMAC_KEY_BYTES = {"CMAC-AES128": 16, "CMAC-AES192": 24, "CMAC-AES256": 32}
 
@@ -947,6 +976,7 @@ HANDLERS = {
     "ecdsa-sign-group": ecdsa_sign_group,
     "kas-ecc-ssc": kas_ecc_ssc,
     "xts-transform": xts_transform,
+    "kda-hkdf": kda_hkdf,
     "xof": xof,
     "ccm-encrypt": ccm_encrypt,
     "ccm-decrypt": ccm_decrypt,

@@ -43,6 +43,7 @@ from acvp_assay.algorithms import (
     ecdsa,
     hmac_mac,
     kas_ecc,
+    kda,
     kdf,
     pqc,
     rsa,
@@ -50,6 +51,7 @@ from acvp_assay.algorithms import (
     shake,
 )
 from acvp_assay.models import Direction
+from acvp_assay.providers import kda as kda_providers
 from acvp_assay.providers.aes_block import (
     CHAINING_MODES,
     AesBlockProvider,
@@ -90,6 +92,7 @@ from acvp_assay.providers.kas_ecc import (
     KasEccProvider,
     SubprocessKasEcc,
 )
+from acvp_assay.providers.kda import CryptographyKda, KdaProvider, SubprocessKda
 from acvp_assay.providers.kdf import (
     CMAC_MODES,
     HMAC_MODES,
@@ -806,6 +809,53 @@ def _rsa_groups(
     return groups
 
 
+# --------------------------------------------------------------------------- KDA
+
+
+def _kda_groups(
+    document: dict[str, object], harness: Harness | None = None
+) -> list[dict[str, object]]:
+    """Derived keying material per case; a verdict where one is supplied."""
+    vector_set = kda.parse_vector_set(document)
+    provider: KdaProvider = (
+        CryptographyKda()
+        if harness is None
+        else harness.open(
+            SubprocessKda.from_command_string(
+                harness.command, timeout_seconds=harness.timeout_seconds
+            )
+        )
+    )
+    groups: list[dict[str, object]] = []
+    for group in vector_set.groups:
+        if group.kdf_type.lower() != kda_providers.HKDF_MODE.lower():
+            raise ResponseError(
+                f"tgId {group.tg_id} uses kdfType {group.kdf_type!r}; only HKDF is "
+                "implemented, so register only that for a submission"
+            )
+        if group.pattern != kda_providers.UPARTY_VPARTY:
+            raise ResponseError(
+                f"tgId {group.tg_id} uses fixedInfoPattern {group.pattern!r}, which this "
+                f"runner does not assemble; register {kda_providers.UPARTY_VPARTY!r}"
+            )
+        cases: list[dict[str, object]] = []
+        for case in group.tests:
+            info = kda_providers.fixed_info(group.pattern, case.party_u, case.party_v)
+            derived = provider.derive(
+                hmac_alg=group.hmac_alg,
+                salt=case.salt,
+                shared_secret=case.shared_secret,
+                info=info,
+                output_bytes=case.output_bits // 8,
+            )
+            if group.test_type == kda.VAL:
+                cases.append({"tcId": case.tc_id, "testPassed": derived == case.claimed_dkm})
+            else:
+                cases.append({"tcId": case.tc_id, "dkm": _hex(derived)})
+        groups.append({"tgId": group.tg_id, "tests": cases})
+    return groups
+
+
 # --------------------------------------------------------------------------- SHAKE
 
 
@@ -1190,6 +1240,7 @@ def _builder_for(algorithm: str) -> _Builder | None:
         kdf.ALGORITHM: _kdf_groups,
         "ECDSA": _ecdsa_groups,
         rsa.ALGORITHM: _rsa_groups,
+        kda.ALGORITHM: _kda_groups,
         **dict.fromkeys(shake.SUPPORTED, _shake_groups),
         aes_ccm.ALGORITHM: _aes_ccm_groups,
         aes_xts.ALGORITHM: _aes_xts_groups,
@@ -1250,6 +1301,7 @@ def supported_response_algorithms() -> tuple[str, ...]:
         kas_ecc.ALGORITHM,
         aes_ccm.ALGORITHM,
         *shake.SUPPORTED,
+        kda.ALGORITHM,
         aes_xts.ALGORITHM,
         "ACVP-AES-GCM",
         aes_modes.ECB,

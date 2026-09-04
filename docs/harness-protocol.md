@@ -128,6 +128,7 @@ declining is a first-class answer, see below.
 | `rsa-primitive-decrypt` | `n`, `d`, `ct` | `testPassed`, `pt` |
 | `drbg` | `mechanism`, `mode`, `derFunc`, `counterFieldLen`, `returnedBitsLen`, `entropyInput`, `nonce`, `persoString`, `otherInput` (array) | `returnedBits` |
 | `kdf-108` | `kdfMode`, `macMode`, `counterLocation`, `counterLength`, `keyOutLength`, `keyIn`, `fixedData`, `iv`, `breakLocation` | `keyOut` |
+| `kda-hkdf` | `hmacAlg`, `salt`, `z`, `fixedInfo` (already assembled), `l` | `dkm` |
 
 A **whole DRBG case** crosses in one request — the seed material plus the
 ordered `otherInput` steps — rather than as a conversation. A DRBG is a state

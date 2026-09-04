@@ -1,19 +1,19 @@
 # ACVP Assay
 
 [![CI](https://github.com/Govardhan527/acvp-assay/actions/workflows/ci.yml/badge.svg)](https://github.com/Govardhan527/acvp-assay/actions/workflows/ci.yml)
-[![Verified against NIST ACVTS](https://img.shields.io/badge/NIST%20ACVTS%20Demo-45%2F45%20algorithms%20passed-2ea44f)](#verified-against-nists-own-server)
+[![Verified against NIST ACVTS](https://img.shields.io/badge/NIST%20ACVTS%20Demo-46%2F46%20algorithms%20passed-2ea44f)](#verified-against-nists-own-server)
 [![Coverage](https://img.shields.io/badge/coverage-99.7%25-2ea44f)](#development-commands)
 
 > ## ✅ Judged by NIST's own server
 >
-> **All 45 supported algorithm names** have been run against **vectors NIST generated live** and
-> submitted back for NIST to judge. On `demo.acvts.nist.gov`, **50 vector sets, covering 38,512
+> **All 46 supported algorithm names** have been run against **vectors NIST generated live** and
+> submitted back for NIST to judge. On `demo.acvts.nist.gov`, **51 vector sets, covering 38,812
 > test cases, each came back `"passed"`**, and that verdict is the server's, not this project's.
 > [Exactly which, per algorithm](#coverage).
 >
-> Read those two numbers precisely: ACVP returns one verdict **per vector set**, so 50 is the
-> count of verdicts NIST issued and 38,512 is the number of cases inside them. The server never
-> issued 38,512 separate verdicts, and this project does not claim it did.
+> Read those two numbers precisely: ACVP returns one verdict **per vector set**, so 51 is the
+> count of verdicts NIST issued and 38,812 is the number of cases inside them. The server never
+> issued 38,812 separate verdicts, and this project does not claim it did.
 >
 > **What this does and does not say about ML-KEM and ML-DSA.** Those two sessions were answered
 > by `examples/pqc_reference_harness.py`, which is backed by `kyber-py` and `dilithium-py` —
@@ -45,18 +45,18 @@ Two things distinguish it from `libacvp` and ACVP Proxy, which cover more algori
 Implemented today:
 
 - **43 algorithm names across 25 families** — AES in GCM, CCM, ECB, CBC, CTR, OFB, CFB128,
-  GMAC, KW, KWP and XTS; CMAC-AES; all three SP 800-90A DRBGs; KDF SP 800-108; SHA-1, SHA-2, SHA-3 and the
-  SHAKE XOFs;
+  GMAC, KW, KWP and XTS; CMAC-AES; all three SP 800-90A DRBGs; KDF SP 800-108; KDA SP 800-56C;
+  SHA-1, SHA-2, SHA-3 and the SHAKE XOFs;
   HMAC over each; RSA; ECDSA; KAS-ECC-SSC; ML-KEM and ML-DSA
 - a replaceable provider boundary, in-process or an external harness over JSON — **all 40
   names reach a harness**, so nothing silently tests this project's OpenSSL binding when you
   asked for your own implementation
 - **live ACVTS submission from your implementation**: `acvts_client.py submit
   --provider-command ...` answers NIST-generated vectors from your code and returns NIST's
-  verdict — all 45 names, ML-KEM and ML-DSA included
+  verdict — all 46 names, ML-KEM and ML-DSA included
 - run-over-run regression diffing, including coverage that silently disappeared
 - typed parsing that preserves `vsId`, `tgId`, and `tcId`
-- deterministic tests on Linux, verified against pinned NIST vectors, and for **all 45 names
+- deterministic tests on Linux, verified against pinned NIST vectors, and for **all 46 names
   against vectors generated live by NIST's ACVTS server** — see [Coverage](#coverage)
 
 Deliberately out of scope: a general-purpose ACVP protocol client (`libacvp` and
@@ -144,6 +144,7 @@ Three questions a vendor actually needs answered, in one table:
 | `ctrDRBG` | AFT | ✅ | ✅ | `passed` — 765342 |
 | `hashDRBG`, `hmacDRBG` | AFT | ✅ | ✅ | `passed` — 765354 |
 | `KDF` (SP 800-108) | AFT | ✅ | ✅ | `passed` — 765343 |
+| `KDA` (SP 800-56C, HKDF) | AFT, VAL | ✅ | ✅ | `passed` — 765811 |
 | `ECDSA` | sigGen, sigVer | ✅ | ✅ | `passed` — 765343 |
 | `KAS-ECC-SSC` | AFT, VAL (ephemeralUnified) | partial ³ | ✅ | `passed` — 765769 |
 | `RSA` | sigGen, sigVer, signaturePrimitive, decryptionPrimitive | ✅ | ✅ | `passed` — 765356 |
@@ -152,8 +153,8 @@ Three questions a vendor actually needs answered, in one table:
 
 ¹ Answered by the educational reference harness, not a shippable implementation — see the banner.
 
-**45 algorithm names across 26 families. All 45 reach a harness, all 45 can be submitted to a
-live session, and all 45 have been.**
+**46 algorithm names across 27 families. All 46 reach a harness, all 46 can be submitted to a
+live session, and all 46 have been.**
 
 The harness path is checked against the built-in one by answering each pinned NIST prompt both
 ways and comparing: **24,048 cases across ten families, byte-identical wherever the answer is
@@ -190,6 +191,7 @@ VAL cases supply every input and are fully checked offline.
 | ctrDRBG | Both revisions; AES-128/192/256, with and without the derivation function. TDES reported UNSUPPORTED |
 | hashDRBG, hmacDRBG | SHA-1, the SHA-2 family and both truncated SHA-512 variants |
 | KDF SP 800-108 | Counter, feedback and double-pipeline modes over 14 PRFs. CMAC-TDES reported UNSUPPORTED |
+| KDA SP 800-56C | HKDF mode, revisions Cr1 and Cr2. Only the `uPartyInfo||vPartyInfo` fixed-info pattern is assembled; others are declined rather than guessed at, since a wrongly built fixedInfo is wrong on every case |
 | ML-KEM, ML-DSA | Require `--provider-command`: no built-in PQC implementation |
 
 PQC has no built-in provider on purpose. `cryptography` 50.0.1 implements neither ML-KEM nor ML-DSA, and in a real engagement the implementation under test is the customer's — OpenSSL 3.5+, liboqs, an HSM, or their own module. `examples/pqc_reference_harness.py` drives the pinned NIST ML-KEM and ML-DSA sets end to end using `kyber-py` and `dilithium-py`, which are educational, **not constant-time**, and exist here to verify this runner and to demonstrate it, never as an implementation to ship or validate.
@@ -383,7 +385,7 @@ This second fixture's tag is deliberately corrupted (see `fixtures/README.md`); 
 ## Verified against NIST's own server
 
 Static vector files tell you whether a runner agrees with a snapshot. They cannot tell you whether
-it agrees with the system that issues the vectors. So all 45 supported algorithm names have been
+it agrees with the system that issues the vectors. So all 46 supported algorithm names have been
 through a live test session on NIST's ACVTS Demo server:
 register capabilities, fetch vectors NIST generated for this client, compute answers, submit them,
 and read back the verdict.
@@ -412,7 +414,8 @@ production ACVTS, which is available to accredited laboratories rather than to t
 | 765786 | ACVP-AES-XTS | 1 | 480 | `passed` |
 | 765788 | ACVP-AES-CCM | 1 | 4,830 | `passed` |
 | 765794 | SHAKE-128, SHAKE-256 | 2 | 508 | `passed` |
-| | **Completed** | **50** | **38,512** | **all `passed`** |
+| 765811 | KDA (HKDF) | 1 | 300 | `passed` |
+| | **Completed** | **51** | **38,812** | **all `passed`** |
 
 ² Answered through `examples/pqc_reference_harness.py`. `cryptography` implements neither
 ML-KEM nor ML-DSA, so there is nothing built in to answer with; the harness is backed by

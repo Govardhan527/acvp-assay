@@ -5,6 +5,34 @@ All notable changes to this project are recorded here. The format follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Before 1.0.0 the
 provider protocols may change between minor versions.
 
+## [0.18.0] - 2026-09-04
+
+### Added
+
+- **KDA** (SP 800-56C), HKDF mode, revisions Cr1 and Cr2 — the key-derivation
+  half of key agreement. `KAS-ECC-SSC` produces the shared secret; this turns it
+  into keying material, and a module doing TLS validates both.
+- Session 765811 returned `passed` on all 300 cases. Running total:
+  **51 vector sets, 38,812 cases, 46 of 46 algorithm names**.
+- Harness operation `kda-hkdf`, and `acvts-capabilities/kda-hkdf.json`.
+
+### Notes
+
+- The derivation is the easy half. The work is assembling **`fixedInfo`**: the
+  group declares a pattern, the case supplies each party's contribution
+  separately, and a string built even slightly differently gives keying
+  material that is wrong on *every* case rather than some of them. Only
+  `uPartyInfo||vPartyInfo` under `concatenation` is built; other patterns name
+  literals, algorithm identifiers or labels, and are declined with the remedy.
+- `fixedInfo` reaches a harness **already assembled**. Putting the pattern on
+  the wire would make every harness reimplement the same string-building and
+  get it wrong in the same places; sending bytes keeps the question to "derive
+  this", which is what the implementation is being tested on.
+- VAL cases carry deliberately wrong keying material, so rejecting is a correct
+  answer. Both directions of that inversion have a test.
+- `usesHybridSharedSecret` is required in the registration for Cr2 and has no
+  default — the server rejects a registration without it.
+
 ## [0.17.0] - 2026-09-04
 
 ### Added
@@ -569,6 +597,7 @@ Initial release: an offline AES-GCM vector runner.
 - Clean-checkout Linux CI, and a pinned, hash-verified upstream vector source
   that is referenced rather than redistributed.
 
+[0.18.0]: https://github.com/Govardhan527/acvp-assay/releases/tag/v0.18.0
 [0.17.0]: https://github.com/Govardhan527/acvp-assay/releases/tag/v0.17.0
 [0.16.0]: https://github.com/Govardhan527/acvp-assay/releases/tag/v0.16.0
 [0.15.0]: https://github.com/Govardhan527/acvp-assay/releases/tag/v0.15.0
