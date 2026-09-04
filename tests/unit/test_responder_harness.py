@@ -13,11 +13,17 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
+from typing import cast
 
 import pytest
 from drbg_known_answers import HASH_KNOWN, HMAC_KNOWN
 
-from acvp_assay.responder import Harness, ResponseError, build_response
+from acvp_assay.responder import (
+    Harness,
+    ResponseError,
+    build_response,
+    supported_response_algorithms,
+)
 
 ROOT = Path(__file__).resolve().parents[2]
 REFERENCE = f"{sys.executable} {ROOT / 'examples/reference_harness.py'}"
@@ -239,3 +245,251 @@ def test_the_other_drbg_mechanisms_answer_with_nists_own_bits(
     answer = build_response(prompt)["testGroups"][0]["tests"][0]  # type: ignore[index]
 
     assert answer == {"tcId": 1, "returnedBits": expected}
+
+
+PQC_HARNESS = f"{sys.executable} {ROOT / 'examples/pqc_reference_harness.py'}"
+
+
+def test_pqc_refuses_without_a_harness(tmp_path: Path) -> None:
+    """There is no built-in ML-KEM, so a submission cannot be invented.
+
+    Every other family can answer from the built-in providers. PQC cannot, and
+    saying so plainly is better than emitting a document nobody computed --
+    ACVP would score the missing cases as wrong answers.
+    """
+    prompt = write_prompt(
+        tmp_path,
+        {
+            "vsId": 1,
+            "algorithm": "ML-KEM",
+            "mode": "encapDecap",
+            "revision": "FIPS203",
+            "testGroups": [
+                {
+                    "tgId": 1,
+                    "testType": "AFT",
+                    "parameterSet": "ML-KEM-768",
+                    "function": "encapsulation",
+                    "tests": [{"tcId": 1, "ek": "00", "m": "11"}],
+                }
+            ],
+        },
+    )
+
+    with pytest.raises(ResponseError, match="no built-in provider"):
+        build_response(prompt)
+
+
+def test_ml_dsa_answers_with_a_verdict_per_case(tmp_path: Path) -> None:
+    """sigVer is verdict-only: ACVP supplies signatures that may be invalid."""
+    source = json.loads(
+        (ROOT / "vectors/ML-DSA-sigVer-FIPS204/prompt.json").read_text(encoding="utf-8")
+    )
+    groups = [
+        group
+        for group in source["testGroups"]
+        if group.get("preHash", "pure") == "pure" and not group.get("externalMu")
+    ][:1]
+    prompt = write_prompt(tmp_path, dict(source, testGroups=groups))
+
+    answered = build_response(prompt, harness=Harness(PQC_HARNESS, timeout_seconds=300.0))
+
+    cases = answered["testGroups"][0]["tests"]  # type: ignore[index]
+    assert cases
+    assert all(set(case) == {"tcId", "testPassed"} for case in cases)
+    assert all(isinstance(case["testPassed"], bool) for case in cases)
+
+
+def test_ml_dsa_refuses_a_prehash_group(tmp_path: Path) -> None:
+    """A capability the runner cannot answer stops the document, not the case.
+
+    preHash groups are refused rather than answered wrongly; the fix is to
+    register only 'pure', which the message says.
+    """
+    source = json.loads(
+        (ROOT / "vectors/ML-DSA-sigVer-FIPS204/prompt.json").read_text(encoding="utf-8")
+    )
+    groups = [group for group in source["testGroups"] if group.get("preHash") == "preHash"][:1]
+    prompt = write_prompt(tmp_path, dict(source, testGroups=groups))
+
+    with pytest.raises(ResponseError, match="preHash"):
+        build_response(prompt, harness=Harness(PQC_HARNESS, timeout_seconds=300.0))
+
+
+def test_every_runnable_algorithm_can_now_be_submitted() -> None:
+    """The two lists finally agree, which is the point of the PQC builders."""
+    from acvp_assay.algorithms import supported_algorithms
+
+    assert set(supported_algorithms()) == set(supported_response_algorithms())
+
+
+def cases_of(response: dict[str, object]) -> list[dict[str, object]]:
+    """Every case across every group of a response document."""
+    groups = cast("list[dict[str, object]]", response["testGroups"])
+    return [case for group in groups for case in cast("list[dict[str, object]]", group["tests"])]
+
+
+def ml_kem_prompt(tmp_path: Path, *functions: str) -> Path:
+    """The pinned ML-KEM set, narrowed to the named functions."""
+    source = json.loads(
+        (ROOT / "vectors/ML-KEM-encapDecap-FIPS203/prompt.json").read_text(encoding="utf-8")
+    )
+    groups = [group for group in source["testGroups"] if group["function"] in functions]
+    assert groups, functions  # noqa: S101 - the pinned set is expected to carry these
+    return write_prompt(tmp_path, dict(source, testGroups=groups[:2]))
+
+
+def test_ml_kem_encapsulation_answers_with_ciphertext_and_shared_secret(
+    tmp_path: Path,
+) -> None:
+    """Encapsulation produces both values ACVP scores."""
+    prompt = ml_kem_prompt(tmp_path, "encapsulation")
+
+    answered = build_response(prompt, harness=Harness(PQC_HARNESS, timeout_seconds=300.0))
+
+    cases = cases_of(answered)
+    assert cases
+    assert all(set(case) == {"tcId", "c", "k"} for case in cases)
+
+
+def test_ml_kem_decapsulation_answers_with_the_shared_secret(tmp_path: Path) -> None:
+    """Decapsulation reports only k -- the ciphertext was supplied."""
+    prompt = ml_kem_prompt(tmp_path, "decapsulation")
+
+    answered = build_response(prompt, harness=Harness(PQC_HARNESS, timeout_seconds=300.0))
+
+    cases = cases_of(answered)
+    assert cases
+    assert all(set(case) == {"tcId", "k"} for case in cases)
+
+
+def test_ml_kem_key_checks_answer_with_a_verdict(tmp_path: Path) -> None:
+    """ACVP supplies deliberately malformed keys; rejecting one is the answer."""
+    prompt = ml_kem_prompt(tmp_path, "encapsulationKeyCheck", "decapsulationKeyCheck")
+
+    answered = build_response(prompt, harness=Harness(PQC_HARNESS, timeout_seconds=300.0))
+
+    cases = cases_of(answered)
+    assert cases
+    assert all(set(case) == {"tcId", "testPassed"} for case in cases)
+    assert not all(case["testPassed"] for case in cases), "a key check set with no rejection"
+
+
+def test_ml_kem_refuses_an_unknown_parameter_set(tmp_path: Path) -> None:
+    """A parameter set outside FIPS 203 is refused rather than guessed at."""
+    prompt = write_prompt(
+        tmp_path,
+        {
+            "vsId": 1,
+            "algorithm": "ML-KEM",
+            "mode": "encapDecap",
+            "revision": "FIPS203",
+            "testGroups": [
+                {
+                    "tgId": 1,
+                    "testType": "AFT",
+                    "parameterSet": "ML-KEM-1536",
+                    "function": "encapsulation",
+                    "tests": [{"tcId": 1, "ek": "00", "m": "11"}],
+                }
+            ],
+        },
+    )
+
+    with pytest.raises(ResponseError, match="ML-KEM-1536"):
+        build_response(prompt, harness=Harness(PQC_HARNESS, timeout_seconds=60.0))
+
+
+def pqc_prompt(tmp_path: Path, algorithm: str, mode: str, group: dict[str, object]) -> Path:
+    """A one-group PQC prompt, for exercising the refusal paths."""
+    revision = "FIPS203" if algorithm == "ML-KEM" else "FIPS204"
+    return write_prompt(
+        tmp_path,
+        {
+            "vsId": 1,
+            "algorithm": algorithm,
+            "mode": mode,
+            "revision": revision,
+            "testGroups": [dict({"tgId": 1, "testType": "AFT"}, **group)],
+        },
+    )
+
+
+@pytest.mark.parametrize(
+    ("group", "expected"),
+    [
+        (
+            {
+                "parameterSet": "ML-KEM-768",
+                "function": "encapsulation",
+                "tests": [{"tcId": 1, "ek": "00"}],
+            },
+            "missing ek or m",
+        ),
+        (
+            {
+                "parameterSet": "ML-KEM-768",
+                "function": "decapsulation",
+                "tests": [{"tcId": 1, "dk": "00"}],
+            },
+            "missing dk or c",
+        ),
+        (
+            {
+                "parameterSet": "ML-KEM-768",
+                "function": "encapsulationKeyCheck",
+                "tests": [{"tcId": 1}],
+            },
+            "missing ek",
+        ),
+        (
+            {
+                "parameterSet": "ML-KEM-768",
+                "function": "keyGen",
+                "tests": [{"tcId": 1, "ek": "00"}],
+            },
+            "does not answer",
+        ),
+    ],
+    ids=["encap-missing", "decap-missing", "keycheck-missing", "unknown-function"],
+)
+def test_ml_kem_refuses_a_case_it_cannot_answer_faithfully(
+    tmp_path: Path, group: dict[str, object], expected: str
+) -> None:
+    """A malformed or unanswerable case stops the document rather than guessing.
+
+    Emitting a case computed from absent input would be scored as a wrong
+    answer, which is worse than sending nothing.
+    """
+    prompt = pqc_prompt(tmp_path, "ML-KEM", "encapDecap", group)
+
+    with pytest.raises(ResponseError, match=expected):
+        build_response(prompt, harness=Harness(PQC_HARNESS, timeout_seconds=60.0))
+
+
+@pytest.mark.parametrize(
+    ("group", "expected"),
+    [
+        (
+            {"parameterSet": "ML-DSA-99", "tests": [{"tcId": 1}]},
+            "ML-DSA-99",
+        ),
+        (
+            {"parameterSet": "ML-DSA-65", "externalMu": True, "tests": [{"tcId": 1}]},
+            "externalMu",
+        ),
+        (
+            {"parameterSet": "ML-DSA-65", "tests": [{"tcId": 1, "pk": "00"}]},
+            "missing message, signature",
+        ),
+    ],
+    ids=["unknown-parameter-set", "external-mu", "missing-fields"],
+)
+def test_ml_dsa_refuses_a_group_it_cannot_answer_faithfully(
+    tmp_path: Path, group: dict[str, object], expected: str
+) -> None:
+    """Same rule for ML-DSA: refuse the document, and say what to register instead."""
+    prompt = pqc_prompt(tmp_path, "ML-DSA", "sigVer", group)
+
+    with pytest.raises(ResponseError, match=expected):
+        build_response(prompt, harness=Harness(PQC_HARNESS, timeout_seconds=60.0))

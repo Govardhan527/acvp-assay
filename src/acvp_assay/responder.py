@@ -39,6 +39,7 @@ from acvp_assay.algorithms import (
     ecdsa,
     hmac_mac,
     kdf,
+    pqc,
     rsa,
     sha2,
 )
@@ -80,6 +81,12 @@ from acvp_assay.providers.kdf import (
     KdfProvider,
     KdfRequest,
     SubprocessKdfProvider,
+)
+from acvp_assay.providers.pqc import (
+    ML_DSA_PARAMETER_SETS,
+    ML_KEM_PARAMETER_SETS,
+    SubprocessMlDsaProvider,
+    SubprocessMlKemProvider,
 )
 from acvp_assay.providers.rsa import (
     CryptographyRsaProvider,
@@ -782,6 +789,152 @@ def _rsa_groups(
     return groups
 
 
+# --------------------------------------------------------------------------- PQC
+
+
+def _require_harness(harness: Harness | None, algorithm: str) -> Harness:
+    """PQC has no built-in provider, so a submission must come from a harness.
+
+    ``cryptography`` implements neither ML-KEM nor ML-DSA, and inventing an
+    answer is not an option: ACVP scores a missing case as a wrong answer. So
+    this refuses clearly rather than emitting a document nobody computed.
+    """
+    if harness is None:
+        raise ResponseError(
+            f"{algorithm} has no built-in provider, so a submission cannot be built from this "
+            "runner alone. Pass --provider-command naming your implementation; "
+            "examples/pqc_reference_harness.py shows the shape."
+        )
+    return harness
+
+
+def _ml_kem_groups(
+    document: dict[str, object], harness: Harness | None = None
+) -> list[dict[str, object]]:
+    """Ciphertext and shared secret when encapsulating, the secret when decapsulating.
+
+    The two key-check functions answer with a verdict instead: ACVP supplies
+    keys that are deliberately malformed, and rejecting one is the correct
+    answer rather than an error.
+    """
+    vector_set = pqc.parse_vector_set(document)
+    provider = _require_harness(harness, vector_set.algorithm).open(
+        SubprocessMlKemProvider.from_command_string(
+            harness.command,  # type: ignore[union-attr]
+            timeout_seconds=harness.timeout_seconds,  # type: ignore[union-attr]
+        )
+    )
+    groups: list[dict[str, object]] = []
+    for group in vector_set.test_groups:
+        if group.parameter_set not in ML_KEM_PARAMETER_SETS:
+            raise ResponseError(
+                f"tgId {group.tg_id} uses parameter set {group.parameter_set!r}, which is not "
+                "an ML-KEM parameter set this runner recognises"
+            )
+        cases: list[dict[str, object]] = []
+        for case in group.tests:
+            if group.function in pqc.KEY_CHECKS:
+                key_type = "ek" if group.function == pqc.ENCAP_KEY_CHECK else "dk"
+                if key_type not in case.fields:
+                    raise ResponseError(
+                        f"tgId {group.tg_id} tcId {case.tc_id} is missing {key_type}"
+                    )
+                cases.append(
+                    {
+                        "tcId": case.tc_id,
+                        "testPassed": provider.check_key(
+                            parameter_set=group.parameter_set,
+                            key_type=key_type,
+                            key=case.fields[key_type],
+                        ),
+                    }
+                )
+            elif group.function == pqc.ENCAPSULATION:
+                if not {"ek", "m"} <= set(case.fields):
+                    raise ResponseError(f"tgId {group.tg_id} tcId {case.tc_id} is missing ek or m")
+                ciphertext, shared = provider.encapsulate(
+                    parameter_set=group.parameter_set,
+                    encapsulation_key=case.fields["ek"],
+                    seed=case.fields["m"],
+                )
+                cases.append({"tcId": case.tc_id, "c": _hex(ciphertext), "k": _hex(shared)})
+            elif group.function == pqc.DECAPSULATION:
+                if not {"dk", "c"} <= set(case.fields):
+                    raise ResponseError(f"tgId {group.tg_id} tcId {case.tc_id} is missing dk or c")
+                cases.append(
+                    {
+                        "tcId": case.tc_id,
+                        "k": _hex(
+                            provider.decapsulate(
+                                parameter_set=group.parameter_set,
+                                decapsulation_key=case.fields["dk"],
+                                ciphertext=case.fields["c"],
+                            )
+                        ),
+                    }
+                )
+            else:
+                raise ResponseError(
+                    f"tgId {group.tg_id} uses function {group.function!r}, which this runner "
+                    "does not answer"
+                )
+        groups.append({"tgId": group.tg_id, "tests": cases})
+    return groups
+
+
+def _ml_dsa_groups(
+    document: dict[str, object], harness: Harness | None = None
+) -> list[dict[str, object]]:
+    """A verdict per case: ACVP supplies signatures that may be deliberately invalid."""
+    vector_set = pqc.parse_vector_set(document)
+    provider = _require_harness(harness, vector_set.algorithm).open(
+        SubprocessMlDsaProvider.from_command_string(
+            harness.command,  # type: ignore[union-attr]
+            timeout_seconds=harness.timeout_seconds,  # type: ignore[union-attr]
+        )
+    )
+    groups: list[dict[str, object]] = []
+    for group in vector_set.test_groups:
+        if group.parameter_set not in ML_DSA_PARAMETER_SETS:
+            raise ResponseError(
+                f"tgId {group.tg_id} uses parameter set {group.parameter_set!r}, which is not "
+                "an ML-DSA parameter set this runner recognises"
+            )
+        if group.external_mu:
+            raise ResponseError(
+                f"tgId {group.tg_id} is an externalMu group, which supplies a precomputed mu "
+                "this runner does not pass to an implementation; do not register externalMu "
+                "for a submission"
+            )
+        if group.pre_hash != "pure":
+            raise ResponseError(
+                f"tgId {group.tg_id} uses preHash {group.pre_hash!r}, which this runner does "
+                "not answer; register only 'pure' for a submission"
+            )
+        cases: list[dict[str, object]] = []
+        for case in group.tests:
+            missing = [n for n in ("pk", "message", "signature") if n not in case.fields]
+            if missing:
+                raise ResponseError(
+                    f"tgId {group.tg_id} tcId {case.tc_id} is missing {', '.join(missing)}"
+                )
+            cases.append(
+                {
+                    "tcId": case.tc_id,
+                    "testPassed": provider.verify(
+                        parameter_set=group.parameter_set,
+                        public_key=case.fields["pk"],
+                        message=case.fields["message"],
+                        signature=case.fields["signature"],
+                        context=case.fields.get("context", b""),
+                        signature_interface=group.signature_interface,
+                    ),
+                }
+            )
+        groups.append({"tgId": group.tg_id, "tests": cases})
+    return groups
+
+
 # --------------------------------------------------------------------------- dispatch
 
 
@@ -803,6 +956,8 @@ def _builder_for(algorithm: str) -> _Builder | None:
         kdf.ALGORITHM: _kdf_groups,
         "ECDSA": _ecdsa_groups,
         rsa.ALGORITHM: _rsa_groups,
+        "ML-KEM": _ml_kem_groups,
+        "ML-DSA": _ml_dsa_groups,
     }.get(algorithm)
 
 
@@ -845,8 +1000,15 @@ def build_response(prompt_file: Path, *, harness: Harness | None = None) -> dict
 
 
 def supported_response_algorithms() -> tuple[str, ...]:
-    """Algorithms for which a submission can be constructed."""
+    """Algorithms for which a submission can be constructed.
+
+    ML-KEM and ML-DSA are included, but only reachable with
+    ``--provider-command``: there is no built-in post-quantum implementation,
+    and a submission must carry values something actually computed.
+    """
     names = {
+        "ML-KEM",
+        "ML-DSA",
         "ACVP-AES-GCM",
         aes_modes.ECB,
         aes_modes.CMAC,
