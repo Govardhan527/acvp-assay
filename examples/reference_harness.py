@@ -238,6 +238,36 @@ def ecdsa_sign_group(request: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def kas_ecc_ssc(request: dict[str, Any]) -> dict[str, Any]:
+    """Compute an ECDH shared secret, generating a key pair when none is given.
+
+    A VAL case supplies ``privateKey`` and the answer is deterministic. An AFT
+    case supplies only the peer's public key, so the implementation generates
+    its own ephemeral pair -- which is why an AFT case can only be judged by
+    the ACVP server, which holds the peer private key.
+    """
+    curve = CURVES.get(request["curve"])
+    if curve is None:
+        return {"error": "unsupported"}
+    instance = curve()
+    peer = ec.EllipticCurvePublicNumbers(
+        int(request["serverX"], 16), int(request["serverY"], 16), instance
+    ).public_key()
+    supplied = request.get("privateKey")
+    key = (
+        ec.generate_private_key(instance)
+        if supplied is None
+        else ec.derive_private_key(int(supplied, 16), instance)
+    )
+    numbers = key.public_key().public_numbers()
+    size = (instance.key_size + 7) // 8
+    return {
+        "iutX": numbers.x.to_bytes(size, "big").hex().upper(),
+        "iutY": numbers.y.to_bytes(size, "big").hex().upper(),
+        "z": key.exchange(ec.ECDH(), peer).hex().upper(),
+    }
+
+
 def ecdsa_verify(request: dict[str, Any]) -> dict[str, Any]:
     """Report a verification verdict. An off-curve key is a false verdict, not an error."""
     parameters = _ecdsa_parameters(request)
@@ -846,6 +876,7 @@ HANDLERS = {
     "mac": mac,
     "ecdsa-sign": ecdsa_sign,
     "ecdsa-sign-group": ecdsa_sign_group,
+    "kas-ecc-ssc": kas_ecc_ssc,
     "ecdsa-verify": ecdsa_verify,
 }
 

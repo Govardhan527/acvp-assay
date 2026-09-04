@@ -5,6 +5,37 @@ All notable changes to this project are recorded here. The format follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Before 1.0.0 the
 provider protocols may change between minor versions.
 
+## [0.14.0] - 2026-09-04
+
+### Added
+
+- **KAS-ECC-SSC**, revision `Sp800-56Ar3` — elliptic-curve shared-secret
+  computation, the `ephemeralUnified` scheme on P-224/256/384/521. Key
+  agreement appears wherever TLS is validated and was the last item on this
+  project's own commercial priority list.
+- Session 765769 on `demo.acvts.nist.gov` returned `passed` on all 20 cases,
+  taking the running total to **46 vector sets, 32,694 cases, 41 of 41
+  algorithm names**.
+- Harness operation `kas-ecc-ssc`, and `acvts-capabilities/kas-ecc-ssc.json`.
+
+### Notes
+
+- **AFT and VAL are not variations on one theme.** A VAL case supplies every
+  input, including the implementation's own private key, so the answer is a
+  verdict and is fully checked offline. An AFT case supplies only the peer's
+  public key, so the implementation generates an ephemeral pair — and Z then
+  differs on every run, which cannot be compared with the value NIST recorded
+  from its own. Those cases are reported UNSUPPORTED offline, with the reason,
+  rather than compared against something they cannot equal.
+- The live server has no such limitation: it holds the peer private key and
+  recomputes Z from the public key reported back to it. So `responder.py`
+  answers AFT in full, and session 765769 judged all 20 cases. That split is
+  the clearest case so far of a live session checking something no file-based
+  runner can.
+- A peer point off the curve yields a verdict of `false` rather than an error.
+  ACVP is entitled to send one, and refusing to agree a secret with an invalid
+  public key is correct behaviour, not a fault.
+
 ## [0.13.0] - 2026-09-04
 
 ### Added
@@ -453,6 +484,7 @@ Initial release: an offline AES-GCM vector runner.
 - Clean-checkout Linux CI, and a pinned, hash-verified upstream vector source
   that is referenced rather than redistributed.
 
+[0.14.0]: https://github.com/Govardhan527/acvp-assay/releases/tag/v0.14.0
 [0.13.0]: https://github.com/Govardhan527/acvp-assay/releases/tag/v0.13.0
 [0.12.0]: https://github.com/Govardhan527/acvp-assay/releases/tag/v0.12.0
 [0.11.0]: https://github.com/Govardhan527/acvp-assay/releases/tag/v0.11.0

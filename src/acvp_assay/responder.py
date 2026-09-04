@@ -38,6 +38,7 @@ from acvp_assay.algorithms import (
     ctr_drbg,
     ecdsa,
     hmac_mac,
+    kas_ecc,
     kdf,
     pqc,
     rsa,
@@ -73,6 +74,12 @@ from acvp_assay.providers.ecdsa import (
     SubprocessEcdsaProvider,
 )
 from acvp_assay.providers.hash_drbg import HashDrbg, HmacDrbg
+from acvp_assay.providers.kas_ecc import CURVES as KAS_CURVES
+from acvp_assay.providers.kas_ecc import (
+    CryptographyKasEcc,
+    KasEccProvider,
+    SubprocessKasEcc,
+)
 from acvp_assay.providers.kdf import (
     CMAC_MODES,
     HMAC_MODES,
@@ -789,6 +796,69 @@ def _rsa_groups(
     return groups
 
 
+# --------------------------------------------------------------------------- KAS-ECC
+
+
+def _kas_ecc_groups(
+    document: dict[str, object], harness: Harness | None = None
+) -> list[dict[str, object]]:
+    """Z per case, with the public key the implementation used to reach it.
+
+    This is the family where a live session can check something the offline
+    runner cannot. An AFT case has the implementation generate an ephemeral
+    key, so Z differs every run and cannot be compared with any recorded value
+    -- but the server holds the peer private key, so it can recompute Z from
+    the public key reported here. VAL cases answer with a verdict instead.
+    """
+    vector_set = kas_ecc.parse_vector_set(document)
+    provider: KasEccProvider = (
+        CryptographyKasEcc()
+        if harness is None
+        else harness.open(
+            SubprocessKasEcc.from_command_string(
+                harness.command, timeout_seconds=harness.timeout_seconds
+            )
+        )
+    )
+    groups: list[dict[str, object]] = []
+    for group in vector_set.groups:
+        if group.scheme != kas_ecc.EPHEMERAL_UNIFIED:
+            raise ResponseError(
+                f"tgId {group.tg_id} uses scheme {group.scheme!r}, which this runner does not "
+                "answer; register only 'ephemeralUnified' for a submission"
+            )
+        if harness is None and group.curve not in KAS_CURVES:
+            raise ResponseError(
+                f"tgId {group.tg_id} uses {group.curve}, which the built-in provider does not "
+                "offer; pass --provider-command to answer it from an implementation that does"
+            )
+        cases: list[dict[str, object]] = []
+        for case in group.tests:
+            computed = provider.shared_secret(
+                curve=group.curve,
+                peer_x=case.server_x,
+                peer_y=case.server_y,
+                private_key=case.private_key,
+            )
+            if group.test_type == kas_ecc.VAL:
+                if case.claimed_z is None:
+                    raise ResponseError(
+                        f"tgId {group.tg_id} tcId {case.tc_id} is a VAL case with no z"
+                    )
+                cases.append({"tcId": case.tc_id, "testPassed": computed.z == case.claimed_z})
+            else:
+                cases.append(
+                    {
+                        "tcId": case.tc_id,
+                        "ephemeralPublicIutX": _hex(computed.x),
+                        "ephemeralPublicIutY": _hex(computed.y),
+                        "z": _hex(computed.z),
+                    }
+                )
+        groups.append({"tgId": group.tg_id, "tests": cases})
+    return groups
+
+
 # --------------------------------------------------------------------------- PQC
 
 
@@ -956,6 +1026,7 @@ def _builder_for(algorithm: str) -> _Builder | None:
         kdf.ALGORITHM: _kdf_groups,
         "ECDSA": _ecdsa_groups,
         rsa.ALGORITHM: _rsa_groups,
+        kas_ecc.ALGORITHM: _kas_ecc_groups,
         "ML-KEM": _ml_kem_groups,
         "ML-DSA": _ml_dsa_groups,
     }.get(algorithm)
@@ -1009,6 +1080,7 @@ def supported_response_algorithms() -> tuple[str, ...]:
     names = {
         "ML-KEM",
         "ML-DSA",
+        kas_ecc.ALGORITHM,
         "ACVP-AES-GCM",
         aes_modes.ECB,
         aes_modes.CMAC,

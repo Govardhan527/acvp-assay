@@ -108,6 +108,7 @@ declining is a first-class answer, see below.
 | `ecdsa-sign` | `curve`, `hashAlg`, `message` | `qx`, `qy`, `r`, `s` |
 | `ecdsa-sign-group` | `curve`, `hashAlg`, `messages` (array) | `qx`, `qy`, `signatures` (array of `{r, s}`, same order) |
 | `ecdsa-verify` | `curve`, `hashAlg`, `message`, `qx`, `qy`, `r`, `s` | `testPassed` |
+| `kas-ecc-ssc` | `curve`, `serverX`, `serverY`, and `privateKey` for VAL only | `iutX`, `iutY`, `z` |
 | `ml-kem-encapsulate` | `parameterSet`, `ek` | `c`, `k` |
 | `ml-kem-decapsulate` | `parameterSet`, `dk`, `c` | `k` |
 | `ml-kem-key-check` | `parameterSet`, `ek`, `dk` | `testPassed` |

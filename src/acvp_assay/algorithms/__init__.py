@@ -24,6 +24,7 @@ from acvp_assay.algorithms import (
     ctr_drbg,
     ecdsa,
     hmac_mac,
+    kas_ecc,
     kdf,
     pqc,
     rsa,
@@ -92,6 +93,7 @@ def supported_algorithms() -> list[str]:
         "ML-DSA",
         "ML-KEM",
         *ctr_drbg.SUPPORTED,
+        kas_ecc.ALGORITHM,
         kdf.ALGORITHM,
         *aes_block.SUPPORTED,
         *aes_modes.SUPPORTED,
@@ -311,6 +313,19 @@ def _run_rsa(
     return rsa.run_vector_set(vector_set, expected, provider), metadata
 
 
+def _run_kas_ecc(
+    vector_file: Path,
+    expected_file: Path,
+    provider_command: str | None,
+    provider_timeout: float,
+) -> tuple[list[TestCaseResult], ProviderMetadata]:
+    provider = kas_ecc.provider_for(provider_command, provider_timeout)
+    metadata = provider.metadata()
+    vector_set = kas_ecc.load_vector_set(vector_file)
+    expected = kas_ecc.load_expected_results(expected_file)
+    return kas_ecc.run_vector_set(vector_set, expected, provider), metadata
+
+
 def run_vector_file(
     vector_file: Path,
     expected_file: Path,
@@ -356,6 +371,10 @@ def run_vector_file(
         )
     elif algorithm == "ECDSA":
         runners[algorithm] = lambda: _run_ecdsa(
+            vector_file, expected_file, provider_command, provider_timeout
+        )
+    elif algorithm == kas_ecc.ALGORITHM:
+        runners[algorithm] = lambda: _run_kas_ecc(
             vector_file, expected_file, provider_command, provider_timeout
         )
     elif algorithm.removeprefix("HMAC-") in HASHLIB_ALGORITHMS:

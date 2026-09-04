@@ -90,5 +90,12 @@ Aimed at demand rather than portfolio scope; supersedes the v0.1.0 non-goals whe
 - [x] M14: response builders for ML-KEM and ML-DSA, taking live NIST coverage to 40 of 40
       algorithm names. Both require `--provider-command`, since there is no built-in PQC
       provider and a submission must carry values something actually computed.
+- [x] M15: KAS-ECC-SSC (Sp800-56Ar3), the `ephemeralUnified` scheme. The last item on
+      the commercial priority list in the coverage-gap analysis, and the family where the
+      offline/live distinction is sharpest: a VAL case supplies every input and is fully
+      checkable here, while an AFT case has the implementation generate an ephemeral key,
+      so Z differs every run and only the server — which holds the peer private key — can
+      verify it. Declined offline with the reason; answered in full by the responder.
+      Session 765769 returned `passed` on all 20 cases.
 
 Still out of scope: a full ACVP protocol client, algorithm count as a goal, an HTML dashboard, and any hosted service.

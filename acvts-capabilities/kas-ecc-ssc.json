@@ -1,0 +1,12 @@
+[
+  {
+    "algorithm": "KAS-ECC-SSC",
+    "revision": "Sp800-56Ar3",
+    "scheme": {
+      "ephemeralUnified": {
+        "kasRole": ["initiator", "responder"]
+      }
+    },
+    "domainParameterGenerationMethods": ["P-224", "P-256", "P-384", "P-521"]
+  }
+]
