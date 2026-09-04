@@ -9,7 +9,7 @@ description = "Run NIST ACVP vectors against any implementation and catch confor
 readme = "README.md"
 requires-python = ">=3.12"
 license = "MIT"
-authors = [{ name = "Govardhan Yadava", email = "yadav.govardhan@hotmail.com" }]
+authors = [{ name = "Govardhan Yadava", email = "govardhan@seccrypto.dev" }]
 classifiers = [
   "Development Status :: 3 - Alpha",
   "License :: OSI Approved :: MIT License",
