@@ -55,6 +55,7 @@ shared as evidence.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import select
 import shlex
@@ -147,9 +148,18 @@ def _read_line(process: subprocess.Popen[str], timeout_seconds: float) -> str | 
             continue
         line: str = process.stdout.readline()
         if line == "":
-            status = process.poll()
+            # EOF on stdout can arrive before the child is reaped, in which
+            # case poll() answers None and the exit code is lost -- reported as
+            # a bare closed pipe. Give it a bounded moment to finish exiting: a
+            # vendor debugging a crashing harness needs that status, which is
+            # the entire point of this message.
+            with contextlib.suppress(subprocess.TimeoutExpired):
+                process.wait(timeout=_POLL_SECONDS)
+            status = process.returncode
             raise HarnessProtocolError(
-                f"harness exited with status {status}" if status else "harness closed its output"
+                "harness closed its output"
+                if not status
+                else f"harness exited with status {status}"
             )
         if line.strip():
             return line

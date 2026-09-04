@@ -33,6 +33,13 @@ dev = [
   "ruff>=0.16.5,<0.17",
 ]
 
+[project.urls]
+Homepage = "https://github.com/Govardhan527/acvp-assay"
+Repository = "https://github.com/Govardhan527/acvp-assay"
+Changelog = "https://github.com/Govardhan527/acvp-assay/blob/main/CHANGELOG.md"
+"Harness protocol" = "https://github.com/Govardhan527/acvp-assay/blob/main/docs/harness-protocol.md"
+Issues = "https://github.com/Govardhan527/acvp-assay/issues"
+
 [project.scripts]
 acvp-assay = "acvp_assay.cli:main"
 
