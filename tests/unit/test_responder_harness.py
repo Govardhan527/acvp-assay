@@ -248,6 +248,18 @@ def test_the_other_drbg_mechanisms_answer_with_nists_own_bits(
 
 
 PQC_HARNESS = f"{sys.executable} {ROOT / 'examples/pqc_reference_harness.py'}"
+ML_KEM_PROMPT = ROOT / "vectors/ML-KEM-encapDecap-FIPS203/prompt.json"
+ML_DSA_PROMPT = ROOT / "vectors/ML-DSA-sigVer-FIPS204/prompt.json"
+
+#: The pinned NIST sets are fetched on demand and never committed, so tests
+#: that read them skip rather than fail on a clean checkout. See
+#: ``docs/vector-sources.md`` for why they are referenced and not redistributed.
+needs_ml_kem = pytest.mark.skipif(
+    not ML_KEM_PROMPT.is_file(), reason="run scripts/dev.py vectors to fetch the ML-KEM set"
+)
+needs_ml_dsa = pytest.mark.skipif(
+    not ML_DSA_PROMPT.is_file(), reason="run scripts/dev.py vectors to fetch the ML-DSA set"
+)
 
 
 def test_pqc_refuses_without_a_harness(tmp_path: Path) -> None:
@@ -280,11 +292,10 @@ def test_pqc_refuses_without_a_harness(tmp_path: Path) -> None:
         build_response(prompt)
 
 
+@needs_ml_dsa
 def test_ml_dsa_answers_with_a_verdict_per_case(tmp_path: Path) -> None:
     """sigVer is verdict-only: ACVP supplies signatures that may be invalid."""
-    source = json.loads(
-        (ROOT / "vectors/ML-DSA-sigVer-FIPS204/prompt.json").read_text(encoding="utf-8")
-    )
+    source = json.loads(ML_DSA_PROMPT.read_text(encoding="utf-8"))
     groups = [
         group
         for group in source["testGroups"]
@@ -300,15 +311,14 @@ def test_ml_dsa_answers_with_a_verdict_per_case(tmp_path: Path) -> None:
     assert all(isinstance(case["testPassed"], bool) for case in cases)
 
 
+@needs_ml_dsa
 def test_ml_dsa_refuses_a_prehash_group(tmp_path: Path) -> None:
     """A capability the runner cannot answer stops the document, not the case.
 
     preHash groups are refused rather than answered wrongly; the fix is to
     register only 'pure', which the message says.
     """
-    source = json.loads(
-        (ROOT / "vectors/ML-DSA-sigVer-FIPS204/prompt.json").read_text(encoding="utf-8")
-    )
+    source = json.loads(ML_DSA_PROMPT.read_text(encoding="utf-8"))
     groups = [group for group in source["testGroups"] if group.get("preHash") == "preHash"][:1]
     prompt = write_prompt(tmp_path, dict(source, testGroups=groups))
 
@@ -331,14 +341,13 @@ def cases_of(response: dict[str, object]) -> list[dict[str, object]]:
 
 def ml_kem_prompt(tmp_path: Path, *functions: str) -> Path:
     """The pinned ML-KEM set, narrowed to the named functions."""
-    source = json.loads(
-        (ROOT / "vectors/ML-KEM-encapDecap-FIPS203/prompt.json").read_text(encoding="utf-8")
-    )
+    source = json.loads(ML_KEM_PROMPT.read_text(encoding="utf-8"))
     groups = [group for group in source["testGroups"] if group["function"] in functions]
     assert groups, functions  # noqa: S101 - the pinned set is expected to carry these
     return write_prompt(tmp_path, dict(source, testGroups=groups[:2]))
 
 
+@needs_ml_kem
 def test_ml_kem_encapsulation_answers_with_ciphertext_and_shared_secret(
     tmp_path: Path,
 ) -> None:
@@ -352,6 +361,7 @@ def test_ml_kem_encapsulation_answers_with_ciphertext_and_shared_secret(
     assert all(set(case) == {"tcId", "c", "k"} for case in cases)
 
 
+@needs_ml_kem
 def test_ml_kem_decapsulation_answers_with_the_shared_secret(tmp_path: Path) -> None:
     """Decapsulation reports only k -- the ciphertext was supplied."""
     prompt = ml_kem_prompt(tmp_path, "decapsulation")
@@ -363,6 +373,7 @@ def test_ml_kem_decapsulation_answers_with_the_shared_secret(tmp_path: Path) -> 
     assert all(set(case) == {"tcId", "k"} for case in cases)
 
 
+@needs_ml_kem
 def test_ml_kem_key_checks_answer_with_a_verdict(tmp_path: Path) -> None:
     """ACVP supplies deliberately malformed keys; rejecting one is the answer."""
     prompt = ml_kem_prompt(tmp_path, "encapsulationKeyCheck", "decapsulationKeyCheck")
