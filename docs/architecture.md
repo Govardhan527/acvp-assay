@@ -1,5 +1,10 @@
 # Architecture
 
+> Diagrams for all of this — system context, layers, and end-to-end sequences — are in
+> [`design.md`](design.md). This file states the boundaries and the rules; that one shows
+> the shapes.
+
+
 There are two paths through this code, and they share everything below the
 provider boundary.
 

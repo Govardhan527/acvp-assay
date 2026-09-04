@@ -154,6 +154,8 @@ implementation under test, not to the vector.
 own and does not care whether the keys differ. Only a live submission needs
 `ecdsa-sign-group`; implement it if you intend to submit ECDSA sigGen.
 
+The exchange is drawn as a sequence diagram in [`design.md`](design.md#the-harness-contract).
+
 ### Starting points
 
 `examples/reference_harness.py` implements every operation below except the four PQC

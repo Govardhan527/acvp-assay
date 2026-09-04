@@ -92,6 +92,10 @@ python3.12 scripts/dev.py demo
 
 The demo prints machine-readable runtime metadata, including the `cryptography` and OpenSSL versions that identify the provider. The last command executes a tiny local fixture end to end and prints a JSON report.
 
+New to the project? **[`docs/design.md`](docs/design.md) has the diagrams** — what the
+system is for, how the two paths differ, and the end-to-end sequence for a run, a live
+submission and the harness exchange.
+
 ## Running vectors
 
 ```bash
@@ -553,6 +557,8 @@ python3.12 scripts/dev.py demo
 - `tests/unit/`: focused unit tests
 - `tests/integration/`: subprocess and full-path tests
 - `fixtures/`: small, rights-safe local test vectors
+- `docs/design.md`: **HLD and LLD diagrams** — system context, layers, and end-to-end
+  sequences for verifying, answering a live session, and the harness exchange
 - `docs/architecture.md`: component boundaries and data flow
 - `docs/harness-protocol.md`: the full harness specification for vendors
 - `docs/limitations.md`: security and assurance boundaries
