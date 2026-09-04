@@ -68,7 +68,7 @@ flowchart TB
         direction TB
         a1["prompt.json only<br/><i>no answers supplied</i>"] --> a2["compute answers"]
         a2 --> a3["build the response document"]
-        a3 --> a4["submit; NIST judges"]
+        a3 --> a4["submit, and NIST judges"]
     end
 ```
 
@@ -218,7 +218,7 @@ sequenceDiagram
     V->>C: register capabilities.json
     C->>N: POST /testSessions
     N-->>C: session id + vector set URLs<br/>+ scoped access token
-    Note over C: the token is scoped to this session;<br/>losing it orphans the session permanently
+    Note over C: the token is scoped to this session, and<br/>losing it orphans the session permanently
 
     V->>C: fetch
     C->>N: GET each vector set
@@ -311,8 +311,8 @@ mode that hides: the totals still look clean once the case stops being counted.
 ```mermaid
 flowchart LR
     subgraph new["Write"]
-        a["algorithms/&lt;family&gt;.py<br/><i>models · parser · runner</i>"]
-        p["providers/&lt;family&gt;.py<br/><i>Protocol · built-in · Subprocess</i>"]
+        a["algorithms/FAMILY.py<br/><i>models · parser · runner</i>"]
+        p["providers/FAMILY.py<br/><i>Protocol · built-in · Subprocess</i>"]
     end
     subgraph wire["Wire in — one line each"]
         d["algorithms/__init__.py<br/><i>dispatch + supported_algorithms</i>"]
