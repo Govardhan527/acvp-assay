@@ -238,6 +238,29 @@ def ecdsa_sign_group(request: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def xts_transform(request: dict[str, Any]) -> dict[str, Any]:
+    """AES-XTS over one payload, split into data units.
+
+    The key is two AES keys concatenated, the tweak is already 16 bytes by the
+    time it arrives, and a payload longer than the data unit is several units
+    with the tweak incremented -- as a little-endian integer -- once per unit.
+    """
+    key = bytes.fromhex(request["key"])
+    tweak = bytes.fromhex(request["tweak"])
+    data = bytes.fromhex(request["data"])
+    encrypt = request["direction"] == "encrypt"
+    unit = request["dataUnitLen"] // 8
+    width = min(unit, len(data)) or len(data)
+    base = int.from_bytes(tweak, "little")
+    out = bytearray()
+    for index, start in enumerate(range(0, len(data), width)):
+        mode = modes.XTS(((base + index) % (1 << 128)).to_bytes(16, "little"))
+        cipher = Cipher(algorithms.AES(key), mode)
+        operation = cipher.encryptor() if encrypt else cipher.decryptor()
+        out += operation.update(data[start : start + width]) + operation.finalize()
+    return {"out": bytes(out).hex().upper()}
+
+
 def kas_ecc_ssc(request: dict[str, Any]) -> dict[str, Any]:
     """Compute an ECDH shared secret, generating a key pair when none is given.
 
@@ -877,6 +900,7 @@ HANDLERS = {
     "ecdsa-sign": ecdsa_sign,
     "ecdsa-sign-group": ecdsa_sign_group,
     "kas-ecc-ssc": kas_ecc_ssc,
+    "xts-transform": xts_transform,
     "ecdsa-verify": ecdsa_verify,
 }
 

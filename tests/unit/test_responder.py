@@ -164,7 +164,7 @@ def test_an_algorithm_without_a_builder_is_refused(tmp_path: Path) -> None:
     """Silence would be scored as wrong answers, so this raises instead."""
     prompt = write_prompt(
         tmp_path,
-        {"vsId": 1, "algorithm": "ACVP-AES-XTS", "revision": "1.0", "testGroups": []},
+        {"vsId": 1, "algorithm": "ACVP-AES-FF1", "revision": "1.0", "testGroups": []},
     )
 
     with pytest.raises(ResponseError, match="no response builder"):

@@ -5,6 +5,36 @@ All notable changes to this project are recorded here. The format follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Before 1.0.0 the
 provider protocols may change between minor versions.
 
+## [0.15.0] - 2026-09-04
+
+### Added
+
+- **ACVP-AES-XTS**, revision 2.0 — the mode disk and storage encryption is
+  validated under, with 128 and 256-bit keys and both tweak conventions.
+- Session 765786 on `demo.acvts.nist.gov` returned `passed` on all 480 cases,
+  taking the running total to **47 vector sets, 33,174 cases, 42 of 42
+  algorithm names**.
+- Harness operation `xts-transform`, and `acvts-capabilities/aes-xts.json`.
+
+### Notes
+
+Three things about XTS are easy to get wrong, each fails quietly, and each was
+settled against NIST's own vectors before any module code was written:
+
+- **The key is two AES keys concatenated.** `keyLen` 128 means a 32-byte key.
+  A provider validating against the usual AES sizes rejects every vector.
+- **A `number` tweak is a little-endian 128-bit sequence number.** Big-endian
+  reproduces exactly 240 of the 480 cases — the half where the value happens to
+  be symmetric enough not to matter, which is the worst kind of near-miss.
+- **A payload longer than `dataUnitLen` spans several data units, each with its
+  own tweak**, advanced by one per unit. `cryptography` treats its input as a
+  single unit, so the split is the provider's job. 161 of the 480 cases span
+  more than one unit; encrypting the payload whole passes the other 319.
+
+XTS also forbids the two key halves being equal, and the provider raises rather
+than encrypting. That is now a bounded ERROR result carrying only
+`provider error`, never the library's own message, which can quote key material.
+
 ## [0.14.0] - 2026-09-04
 
 ### Added
@@ -484,6 +514,7 @@ Initial release: an offline AES-GCM vector runner.
 - Clean-checkout Linux CI, and a pinned, hash-verified upstream vector source
   that is referenced rather than redistributed.
 
+[0.15.0]: https://github.com/Govardhan527/acvp-assay/releases/tag/v0.15.0
 [0.14.0]: https://github.com/Govardhan527/acvp-assay/releases/tag/v0.14.0
 [0.13.0]: https://github.com/Govardhan527/acvp-assay/releases/tag/v0.13.0
 [0.12.0]: https://github.com/Govardhan527/acvp-assay/releases/tag/v0.12.0

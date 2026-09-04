@@ -21,6 +21,7 @@ from acvp_assay import runner as aes_runner
 from acvp_assay.algorithms import (
     aes_block,
     aes_modes,
+    aes_xts,
     ctr_drbg,
     ecdsa,
     hmac_mac,
@@ -93,6 +94,7 @@ def supported_algorithms() -> list[str]:
         "ML-DSA",
         "ML-KEM",
         *ctr_drbg.SUPPORTED,
+        aes_xts.ALGORITHM,
         kas_ecc.ALGORITHM,
         kdf.ALGORITHM,
         *aes_block.SUPPORTED,
@@ -326,6 +328,19 @@ def _run_kas_ecc(
     return kas_ecc.run_vector_set(vector_set, expected, provider), metadata
 
 
+def _run_aes_xts(
+    vector_file: Path,
+    expected_file: Path,
+    provider_command: str | None,
+    provider_timeout: float,
+) -> tuple[list[TestCaseResult], ProviderMetadata]:
+    provider = aes_xts.provider_for(provider_command, provider_timeout)
+    metadata = provider.metadata()
+    vector_set = aes_xts.load_vector_set(vector_file)
+    expected = aes_xts.load_expected_results(expected_file)
+    return aes_xts.run_vector_set(vector_set, expected, provider), metadata
+
+
 def run_vector_file(
     vector_file: Path,
     expected_file: Path,
@@ -371,6 +386,10 @@ def run_vector_file(
         )
     elif algorithm == "ECDSA":
         runners[algorithm] = lambda: _run_ecdsa(
+            vector_file, expected_file, provider_command, provider_timeout
+        )
+    elif algorithm == aes_xts.ALGORITHM:
+        runners[algorithm] = lambda: _run_aes_xts(
             vector_file, expected_file, provider_command, provider_timeout
         )
     elif algorithm == kas_ecc.ALGORITHM:

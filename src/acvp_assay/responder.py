@@ -35,6 +35,7 @@ from acvp_assay import parser
 from acvp_assay.algorithms import (
     aes_block,
     aes_modes,
+    aes_xts,
     ctr_drbg,
     ecdsa,
     hmac_mac,
@@ -56,6 +57,7 @@ from acvp_assay.providers.aes_modes import (
     CryptographyAesModeProvider,
     SubprocessAesModeProvider,
 )
+from acvp_assay.providers.aes_xts import AesXtsProvider, CryptographyAesXts, SubprocessAesXts
 from acvp_assay.providers.base import AesGcmProvider
 from acvp_assay.providers.cryptography_aesgcm import CryptographyAesGcmProvider
 from acvp_assay.providers.ctr_drbg import CryptographyCtrDrbg, SubprocessDrbg, run_drbg_case
@@ -796,6 +798,53 @@ def _rsa_groups(
     return groups
 
 
+# --------------------------------------------------------------------------- AES-XTS
+
+
+def _aes_xts_groups(
+    document: dict[str, object], harness: Harness | None = None
+) -> list[dict[str, object]]:
+    """Ciphertext or plaintext per case, one data unit at a time."""
+    vector_set = aes_xts.parse_vector_set(document)
+    provider: AesXtsProvider = (
+        CryptographyAesXts()
+        if harness is None
+        else harness.open(
+            SubprocessAesXts.from_command_string(
+                harness.command, timeout_seconds=harness.timeout_seconds
+            )
+        )
+    )
+    groups: list[dict[str, object]] = []
+    for group in vector_set.groups:
+        encrypt = group.direction == "encrypt"
+        field = "ct" if encrypt else "pt"
+        cases: list[dict[str, object]] = []
+        for case in group.tests:
+            tweak = aes_xts.tweak_of(group, case)
+            if tweak is None:
+                raise ResponseError(
+                    f"tgId {group.tg_id} uses tweakMode {group.tweak_mode!r}, which this "
+                    "runner does not answer; register 'hex' or 'number' for a submission"
+                )
+            cases.append(
+                {
+                    "tcId": case.tc_id,
+                    field: _hex(
+                        provider.transform(
+                            key=case.key,
+                            tweak=tweak,
+                            data=case.data,
+                            data_unit_bytes=case.data_unit_bits // 8,
+                            encrypt=encrypt,
+                        )
+                    ),
+                }
+            )
+        groups.append({"tgId": group.tg_id, "tests": cases})
+    return groups
+
+
 # --------------------------------------------------------------------------- KAS-ECC
 
 
@@ -1026,6 +1075,7 @@ def _builder_for(algorithm: str) -> _Builder | None:
         kdf.ALGORITHM: _kdf_groups,
         "ECDSA": _ecdsa_groups,
         rsa.ALGORITHM: _rsa_groups,
+        aes_xts.ALGORITHM: _aes_xts_groups,
         kas_ecc.ALGORITHM: _kas_ecc_groups,
         "ML-KEM": _ml_kem_groups,
         "ML-DSA": _ml_dsa_groups,
@@ -1081,6 +1131,7 @@ def supported_response_algorithms() -> tuple[str, ...]:
         "ML-KEM",
         "ML-DSA",
         kas_ecc.ALGORITHM,
+        aes_xts.ALGORITHM,
         "ACVP-AES-GCM",
         aes_modes.ECB,
         aes_modes.CMAC,

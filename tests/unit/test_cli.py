@@ -132,7 +132,7 @@ def test_unsupported_algorithm_is_reported_clearly(
     """A vector file for an algorithm we do not implement names what we do."""
     prompt = tmp_path / "prompt.json"
     prompt.write_text(
-        json.dumps({"vsId": 1, "algorithm": "ACVP-AES-XTS", "revision": "1.0", "testGroups": []}),
+        json.dumps({"vsId": 1, "algorithm": "ACVP-AES-FF1", "revision": "1.0", "testGroups": []}),
         encoding="utf-8",
     )
     (tmp_path / "expectedResults.json").write_text("{}", encoding="utf-8")
@@ -141,7 +141,7 @@ def test_unsupported_algorithm_is_reported_clearly(
 
     captured = capsys.readouterr()
     assert exit_code == 2
-    assert "unsupported algorithm 'ACVP-AES-XTS'" in captured.err
+    assert "unsupported algorithm 'ACVP-AES-FF1'" in captured.err
     assert "SHA2-256" in captured.err
 
 

@@ -1,0 +1,11 @@
+[
+  {
+    "algorithm": "ACVP-AES-XTS",
+    "revision": "2.0",
+    "direction": ["encrypt", "decrypt"],
+    "keyLen": [128, 256],
+    "payloadLen": [{"min": 128, "max": 1024, "increment": 128}],
+    "tweakMode": ["hex", "number"],
+    "dataUnitLen": [{"min": 128, "max": 1024, "increment": 128}]
+  }
+]

@@ -118,6 +118,7 @@ declining is a first-class answer, see below.
 | `cmac` | `key`, `message`, `macLen` | `mac` |
 | `gmac` | `key`, `iv`, `aad`, `tagLen` | `tag` |
 | `key-wrap` | `direction` (`wrap`/`unwrap`), `padded`, `key`, `data` | `out` |
+| `xts-transform` | `direction`, `key` (two AES keys), `tweak` (16 bytes), `dataUnitLen`, `data` | `out` |
 | `rsa-sign-group` | `sigType`, `hashAlg`, `maskFunction`, `saltLen`, `modulo`, `messages` (array) | `n`, `e`, `signatures` (array, same order) |
 | `rsa-verify` | `sigType`, `hashAlg`, `maskFunction`, `saltLen`, `n`, `e`, `message`, `signature` | `testPassed` |
 | `rsa-primitive-sign` | `n`, `message`, and either `d` or `p`/`q`/`dmp1`/`dmq1`/`iqmp` | `testPassed`, `signature` |

@@ -435,7 +435,7 @@ def test_dispatch_rejects_an_unimplemented_algorithm(tmp_path: Path) -> None:
     """An unknown algorithm names what this runner does implement."""
     prompt = tmp_path / "prompt.json"
     prompt.write_text(
-        json.dumps({"vsId": 1, "algorithm": "ACVP-AES-XTS", "revision": "1.0"}),
+        json.dumps({"vsId": 1, "algorithm": "ACVP-AES-FF1", "revision": "1.0"}),
         encoding="utf-8",
     )
 

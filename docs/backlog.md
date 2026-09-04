@@ -97,5 +97,11 @@ Aimed at demand rather than portfolio scope; supersedes the v0.1.0 non-goals whe
       so Z differs every run and only the server — which holds the peer private key — can
       verify it. Declined offline with the reason; answered in full by the responder.
       Session 765769 returned `passed` on all 20 cases.
+- [x] M16: ACVP-AES-XTS, revision 2.0. Storage encryption, and the next family by
+      commercial value after key agreement. Three details settled against NIST's own
+      vectors before any module code was written: the key is two AES keys concatenated,
+      a `number` tweak is a little-endian sequence number, and a payload longer than
+      `dataUnitLen` spans several data units each with its own tweak. Session 765786
+      returned `passed` on all 480 cases.
 
 Still out of scope: a full ACVP protocol client, algorithm count as a goal, an HTML dashboard, and any hosted service.
