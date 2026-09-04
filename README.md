@@ -216,9 +216,17 @@ acvp-assay run vectors/SHA2-256-1.0/prompt.json \
     --provider-timeout 30
 ```
 
-Start from `examples/reference_harness.py` — a complete worked implementation of the 20
-non-PQC operations, which imports nothing from this package. (`examples/pqc_reference_harness.py`
-covers the four ML-KEM and ML-DSA operations separately, since it needs different dependencies.)
+Two worked starting points, neither importing anything from this package:
+
+- **`examples/reference_harness.py`** — all 20 non-PQC operations in Python.
+  (`examples/pqc_reference_harness.py` covers the four ML-KEM and ML-DSA operations
+  separately, since it needs different dependencies.)
+- **`examples/pkcs11/`** — a complete harness **in C, dispatching to a PKCS#11 token**, in
+  one file with no dependencies beyond `libdl` and a PKCS#11 header. If your implementation
+  is an HSM, start here: it answers AES-GCM, AES-ECB/CBC, the SHA-2 family including the
+  Monte Carlo chain, and HMAC, verified through SoftHSM against 3,461 pinned NIST cases with
+  no failures.
+
 Implement only the families you are testing; decline the rest with `{"error": "unsupported"}`
 and they are reported UNSUPPORTED rather than as failures.
 
@@ -528,7 +536,8 @@ python3.12 scripts/dev.py demo
 - `scripts/acvts_client.py`: live ACVTS client — register, fetch, submit, results
 - `scripts/fetch_vectors.py`: downloads and hash-verifies the pinned upstream vectors
 - `acvts-capabilities/`: capability registrations used for the live sessions
-- `examples/`: worked reference harnesses that import nothing from the package
+- `examples/`: worked reference harnesses that import nothing from the package —
+  Python, and a PKCS#11 one in C under `examples/pkcs11/`
 - `tests/unit/`: focused unit tests
 - `tests/integration/`: subprocess and full-path tests
 - `fixtures/`: small, rights-safe local test vectors

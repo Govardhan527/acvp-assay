@@ -152,6 +152,19 @@ implementation under test, not to the vector.
 own and does not care whether the keys differ. Only a live submission needs
 `ecdsa-sign-group`; implement it if you intend to submit ECDSA sigGen.
 
+### Starting points
+
+`examples/reference_harness.py` implements every operation below except the four PQC
+ones, which are in `examples/pqc_reference_harness.py`.
+
+`examples/pkcs11/` is the same contract in **C**, dispatching to a PKCS#11 token: one
+file, no dependencies beyond `libdl` and a PKCS#11 header, including its own JSON
+handling so there is nothing to vendor. It is the closest starting point if the thing
+under test is an HSM, and it demonstrates two mappings worth copying — a rejected GCM
+tag becoming `authentication failed` rather than a crash, and `CK_RV` values such as
+`CKR_KEY_SIZE_RANGE` mapping to `unsupported`, since a token refusing a key length is
+declaring capability rather than failing.
+
 ### Answering a live session
 
 `acvts_client.py submit --provider-command ...` builds the document NIST scores

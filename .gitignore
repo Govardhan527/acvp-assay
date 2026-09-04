@@ -34,3 +34,6 @@ docs/acvts-demo-access-request.md
 
 # Local credential paths (points outside the repo; not a secret, but not shared)
 .acvts-env
+
+# Built C harness (source is committed; the binary is not)
+examples/pkcs11/acvp_harness
