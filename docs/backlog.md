@@ -106,5 +106,10 @@ Aimed at demand rather than portfolio scope; supersedes the v0.1.0 non-goals whe
 - [x] M17: ACVP-AES-CCM. The AEAD of 802.11 and constrained devices, and the twin of
       AES-GCM in shape: 613 of its decrypt cases are deliberate forgeries where rejecting
       the tag is the correct answer. Session 765788 returned `passed` on all 4,830 cases.
+- [x] M18: SHAKE-128 and SHAKE-256. The extendable-output functions, and the first
+      family whose output length is an input rather than a property of the algorithm.
+      AFT only: the Demo server generates no other test type for a FIPS202 SHAKE
+      registration, and a Monte Carlo chain written without vectors would be a guess.
+      Session 765794 returned `passed` on both sets, 508 cases.
 
 Still out of scope: a full ACVP protocol client, algorithm count as a goal, an HTML dashboard, and any hosted service.

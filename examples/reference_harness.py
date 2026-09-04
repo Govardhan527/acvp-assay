@@ -239,6 +239,23 @@ def ecdsa_sign_group(request: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def xof(request: dict[str, Any]) -> dict[str, Any]:
+    """SHAKE, squeezed to exactly the requested length.
+
+    The output length is an input here, which is what separates an
+    extendable-output function from a hash: the same message squeezed to a
+    different length is a different answer.
+    """
+    constructor = XOF.get(request["algorithm"])
+    if constructor is None:
+        return {"error": "unsupported"}
+    out_bits = int(request["outLen"])
+    if out_bits % 8:
+        return {"error": "unsupported"}
+    digest = constructor(bytes.fromhex(request["message"])).digest(out_bits // 8)
+    return {"md": digest.hex().upper()}
+
+
 def ccm_encrypt(request: dict[str, Any]) -> dict[str, str]:
     """AES-CCM encrypt. The tag is appended to the ciphertext, as ACVP reports it."""
     ccm = AESCCM(bytes.fromhex(request["key"]), tag_length=int(request["tagLen"]) // 8)
@@ -601,6 +618,8 @@ def rsa_primitive_decrypt(request: dict[str, Any]) -> dict[str, Any]:
 
 #: Every PRF SP 800-108 admits that this harness can compute. CMAC-TDES is
 #: absent on purpose: disallowed for this use since 2023.
+XOF = {"SHAKE-128": hashlib.shake_128, "SHAKE-256": hashlib.shake_256}
+
 HMAC_FOR_KDF = {f"HMAC-{name}": digest for name, digest in HASHLIB.items()}
 CMAC_KEY_BYTES = {"CMAC-AES128": 16, "CMAC-AES192": 24, "CMAC-AES256": 32}
 
@@ -928,6 +947,7 @@ HANDLERS = {
     "ecdsa-sign-group": ecdsa_sign_group,
     "kas-ecc-ssc": kas_ecc_ssc,
     "xts-transform": xts_transform,
+    "xof": xof,
     "ccm-encrypt": ccm_encrypt,
     "ccm-decrypt": ccm_decrypt,
     "ecdsa-verify": ecdsa_verify,

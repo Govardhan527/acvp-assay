@@ -47,6 +47,7 @@ from acvp_assay.algorithms import (
     pqc,
     rsa,
     sha2,
+    shake,
 )
 from acvp_assay.models import Direction
 from acvp_assay.providers.aes_block import (
@@ -69,10 +70,13 @@ from acvp_assay.providers.digest import (
     HASHLIB_ALGORITHMS,
     HashlibHashProvider,
     HashlibMacProvider,
+    HashlibXofProvider,
     HashProvider,
     MacProvider,
     SubprocessHashProvider,
     SubprocessMacProvider,
+    SubprocessXofProvider,
+    XofProvider,
 )
 from acvp_assay.providers.ecdsa import (
     CryptographyEcdsaProvider,
@@ -802,6 +806,53 @@ def _rsa_groups(
     return groups
 
 
+# --------------------------------------------------------------------------- SHAKE
+
+
+def _shake_groups(
+    document: dict[str, object], harness: Harness | None = None
+) -> list[dict[str, object]]:
+    """One squeezed output per case, at the length the case asks for."""
+    vector_set = shake.parse_vector_set(document)
+    provider: XofProvider = (
+        HashlibXofProvider()
+        if harness is None
+        else harness.open(
+            SubprocessXofProvider.from_command_string(
+                harness.command, timeout_seconds=harness.timeout_seconds
+            )
+        )
+    )
+    groups: list[dict[str, object]] = []
+    for group in vector_set.groups:
+        if group.test_type != shake.AFT:
+            raise ResponseError(
+                f"tgId {group.tg_id} is a {group.test_type} group; the SHAKE Monte Carlo "
+                "chain is not implemented, so register only AFT for a submission"
+            )
+        cases: list[dict[str, object]] = []
+        for case in group.tests:
+            if case.output_bits % 8:
+                raise ResponseError(
+                    f"tgId {group.tg_id} tcId {case.tc_id} asks for {case.output_bits} bits, "
+                    "which is not a whole number of bytes"
+                )
+            cases.append(
+                {
+                    "tcId": case.tc_id,
+                    "md": _hex(
+                        provider.squeeze(
+                            algorithm=vector_set.algorithm,
+                            message=case.message,
+                            output_bytes=case.output_bits // 8,
+                        )
+                    ),
+                }
+            )
+        groups.append({"tgId": group.tg_id, "tests": cases})
+    return groups
+
+
 # --------------------------------------------------------------------------- AES-CCM
 
 
@@ -1139,6 +1190,7 @@ def _builder_for(algorithm: str) -> _Builder | None:
         kdf.ALGORITHM: _kdf_groups,
         "ECDSA": _ecdsa_groups,
         rsa.ALGORITHM: _rsa_groups,
+        **dict.fromkeys(shake.SUPPORTED, _shake_groups),
         aes_ccm.ALGORITHM: _aes_ccm_groups,
         aes_xts.ALGORITHM: _aes_xts_groups,
         kas_ecc.ALGORITHM: _kas_ecc_groups,
@@ -1197,6 +1249,7 @@ def supported_response_algorithms() -> tuple[str, ...]:
         "ML-DSA",
         kas_ecc.ALGORITHM,
         aes_ccm.ALGORITHM,
+        *shake.SUPPORTED,
         aes_xts.ALGORITHM,
         "ACVP-AES-GCM",
         aes_modes.ECB,

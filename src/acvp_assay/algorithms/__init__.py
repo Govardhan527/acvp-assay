@@ -31,6 +31,7 @@ from acvp_assay.algorithms import (
     pqc,
     rsa,
     sha2,
+    shake,
 )
 from acvp_assay.models import ProviderMetadata, TestCaseResult
 from acvp_assay.providers.aes_block import AesBlockProvider as AesBlockProviderProtocol
@@ -96,6 +97,7 @@ def supported_algorithms() -> list[str]:
         "ML-KEM",
         *ctr_drbg.SUPPORTED,
         aes_ccm.ALGORITHM,
+        *shake.SUPPORTED,
         aes_xts.ALGORITHM,
         kas_ecc.ALGORITHM,
         kdf.ALGORITHM,
@@ -356,6 +358,19 @@ def _run_aes_ccm(
     return aes_ccm.run_vector_set(vector_set, expected, provider), metadata
 
 
+def _run_shake(
+    vector_file: Path,
+    expected_file: Path,
+    provider_command: str | None,
+    provider_timeout: float,
+) -> tuple[list[TestCaseResult], ProviderMetadata]:
+    provider = shake.provider_for(provider_command, provider_timeout)
+    metadata = provider.metadata()
+    vector_set = shake.load_vector_set(vector_file)
+    expected = shake.load_expected_results(expected_file)
+    return shake.run_vector_set(vector_set, expected, provider), metadata
+
+
 def run_vector_file(
     vector_file: Path,
     expected_file: Path,
@@ -401,6 +416,10 @@ def run_vector_file(
         )
     elif algorithm == "ECDSA":
         runners[algorithm] = lambda: _run_ecdsa(
+            vector_file, expected_file, provider_command, provider_timeout
+        )
+    elif algorithm in shake.SUPPORTED:
+        runners[algorithm] = lambda: _run_shake(
             vector_file, expected_file, provider_command, provider_timeout
         )
     elif algorithm == aes_ccm.ALGORITHM:

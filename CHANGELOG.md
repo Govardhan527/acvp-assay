@@ -5,6 +5,34 @@ All notable changes to this project are recorded here. The format follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Before 1.0.0 the
 provider protocols may change between minor versions.
 
+## [0.17.0] - 2026-09-04
+
+### Added
+
+- **SHAKE-128 and SHAKE-256**, revision FIPS202 — the extendable-output
+  functions, and the first family here whose output length is an *input*.
+- Session 765794 returned `passed` on both vector sets, 508 cases. Running
+  total: **50 vector sets, 38,512 cases, 45 of 45 algorithm names**.
+- Harness operation `xof`, and `acvts-capabilities/shake.json`.
+
+### Notes
+
+- An XOF needs its own boundary rather than an extra argument on the hash one.
+  The same message squeezed to a different length is a different answer, and a
+  fixed-length interface can only express that by inventing a digest size.
+- `XOF_ALGORITHMS` holds the constructors rather than hashlib's names, because
+  `hashlib.new` is typed as returning a fixed-length hash whose `digest` takes
+  no argument. Going through it would not typecheck, and would hide the one
+  thing that makes an XOF different.
+- **Only AFT is answered.** The Demo server generates nothing else for a
+  FIPS202 SHAKE registration, including when explicitly asked, so the Monte
+  Carlo chain is declared rather than implemented — a chain written without
+  vectors to check it against would be a guess, and a wrong one fails every
+  case of a group that looks supported.
+- FIPS 202 is explicit that the XOFs are **not approved as hash functions**;
+  their approved uses are named in NIST Special Publications. This runner tests
+  what ACVP asks for and makes no claim about where a SHAKE output may be used.
+
 ## [0.16.0] - 2026-09-04
 
 ### Added
@@ -541,6 +569,7 @@ Initial release: an offline AES-GCM vector runner.
 - Clean-checkout Linux CI, and a pinned, hash-verified upstream vector source
   that is referenced rather than redistributed.
 
+[0.17.0]: https://github.com/Govardhan527/acvp-assay/releases/tag/v0.17.0
 [0.16.0]: https://github.com/Govardhan527/acvp-assay/releases/tag/v0.16.0
 [0.15.0]: https://github.com/Govardhan527/acvp-assay/releases/tag/v0.15.0
 [0.14.0]: https://github.com/Govardhan527/acvp-assay/releases/tag/v0.14.0

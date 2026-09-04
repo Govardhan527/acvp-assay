@@ -1,0 +1,14 @@
+[
+  {
+    "algorithm": "SHAKE-128",
+    "revision": "FIPS202",
+    "messageLength": [{"min": 0, "max": 65536, "increment": 8}],
+    "outputLen": [{"min": 16, "max": 1024, "increment": 8}]
+  },
+  {
+    "algorithm": "SHAKE-256",
+    "revision": "FIPS202",
+    "messageLength": [{"min": 0, "max": 65536, "increment": 8}],
+    "outputLen": [{"min": 16, "max": 1024, "increment": 8}]
+  }
+]

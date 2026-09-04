@@ -104,6 +104,7 @@ declining is a first-class answer, see below.
 | `decrypt` | `key`, `iv`, `ct`, `aad`, `tag` | `pt` |
 | `digest` | `algorithm`, `message` | `md` |
 | `digest-mct` | `algorithm`, `seed`, `alternate` | `md` — an **array** of 100 digests |
+| `xof` | `algorithm`, `message`, `outLen` (bits) | `md` — exactly that many bits |
 | `mac` | `algorithm`, `key`, `message`, `macLen` | `mac` |
 | `ecdsa-sign` | `curve`, `hashAlg`, `message` | `qx`, `qy`, `r`, `s` |
 | `ecdsa-sign-group` | `curve`, `hashAlg`, `messages` (array) | `qx`, `qy`, `signatures` (array of `{r, s}`, same order) |
