@@ -103,5 +103,8 @@ Aimed at demand rather than portfolio scope; supersedes the v0.1.0 non-goals whe
       a `number` tweak is a little-endian sequence number, and a payload longer than
       `dataUnitLen` spans several data units each with its own tweak. Session 765786
       returned `passed` on all 480 cases.
+- [x] M17: ACVP-AES-CCM. The AEAD of 802.11 and constrained devices, and the twin of
+      AES-GCM in shape: 613 of its decrypt cases are deliberate forgeries where rejecting
+      the tag is the correct answer. Session 765788 returned `passed` on all 4,830 cases.
 
 Still out of scope: a full ACVP protocol client, algorithm count as a goal, an HTML dashboard, and any hosted service.

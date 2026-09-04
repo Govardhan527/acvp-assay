@@ -34,6 +34,7 @@ from cryptography.hazmat.primitives import cmac as cmac_mod
 from cryptography.hazmat.primitives import hashes, keywrap
 from cryptography.hazmat.primitives.asymmetric import ec, padding, rsa, utils
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+from cryptography.hazmat.primitives.ciphers.aead import AESCCM
 
 try:  # pragma: no cover - CFB and OFB move to `decrepit` in cryptography 49
     from cryptography.hazmat.decrepit.ciphers.modes import CFB as _CFB
@@ -236,6 +237,32 @@ def ecdsa_sign_group(request: dict[str, Any]) -> dict[str, Any]:
         "qy": numbers.y.to_bytes(size, "big").hex().upper(),
         "signatures": signatures,
     }
+
+
+def ccm_encrypt(request: dict[str, Any]) -> dict[str, str]:
+    """AES-CCM encrypt. The tag is appended to the ciphertext, as ACVP reports it."""
+    ccm = AESCCM(bytes.fromhex(request["key"]), tag_length=int(request["tagLen"]) // 8)
+    aad = bytes.fromhex(request.get("aad") or "")
+    produced = ccm.encrypt(bytes.fromhex(request["iv"]), bytes.fromhex(request["pt"]), aad or None)
+    return {"ct": produced.hex().upper()}
+
+
+def ccm_decrypt(request: dict[str, Any]) -> dict[str, str]:
+    """AES-CCM decrypt. A forged tag is an answer, not a crash.
+
+    Roughly a quarter of NIST's CCM decrypt cases are deliberate forgeries
+    where refusing is the correct behaviour, so this reports the reserved
+    error rather than dying.
+    """
+    ccm = AESCCM(bytes.fromhex(request["key"]), tag_length=int(request["tagLen"]) // 8)
+    aad = bytes.fromhex(request.get("aad") or "")
+    try:
+        recovered = ccm.decrypt(
+            bytes.fromhex(request["iv"]), bytes.fromhex(request["ct"]), aad or None
+        )
+    except InvalidTag:
+        return {"error": "authentication failed"}
+    return {"pt": recovered.hex().upper()}
 
 
 def xts_transform(request: dict[str, Any]) -> dict[str, Any]:
@@ -901,6 +928,8 @@ HANDLERS = {
     "ecdsa-sign-group": ecdsa_sign_group,
     "kas-ecc-ssc": kas_ecc_ssc,
     "xts-transform": xts_transform,
+    "ccm-encrypt": ccm_encrypt,
+    "ccm-decrypt": ccm_decrypt,
     "ecdsa-verify": ecdsa_verify,
 }
 

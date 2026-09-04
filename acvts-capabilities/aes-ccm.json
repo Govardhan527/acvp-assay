@@ -1,0 +1,12 @@
+[
+  {
+    "algorithm": "ACVP-AES-CCM",
+    "revision": "1.0",
+    "direction": ["encrypt", "decrypt"],
+    "keyLen": [128, 192, 256],
+    "payloadLen": [{"min": 0, "max": 256, "increment": 8}],
+    "ivLen": [56, 64, 72, 80, 88, 96, 104],
+    "tagLen": [32, 64, 128],
+    "aadLen": [{"min": 0, "max": 524288, "increment": 8}]
+  }
+]

@@ -5,6 +5,33 @@ All notable changes to this project are recorded here. The format follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Before 1.0.0 the
 provider protocols may change between minor versions.
 
+## [0.16.0] - 2026-09-04
+
+### Added
+
+- **ACVP-AES-CCM**, revision 1.0 — counter with CBC-MAC, the AEAD of 802.11 and
+  constrained devices. 128/192/256-bit keys, 7 to 13-byte nonces, 32 to 128-bit
+  tags.
+- Session 765788 on `demo.acvts.nist.gov` returned `passed` on all **4,830**
+  cases, the largest single vector set answered so far. Running total:
+  **48 vector sets, 38,004 cases, 43 of 43 algorithm names**.
+- Harness operations `ccm-encrypt` and `ccm-decrypt`, and
+  `acvts-capabilities/aes-ccm.json`.
+
+### Notes
+
+- **613 of the decrypt cases are deliberate forgeries**, where rejecting the tag
+  is the correct answer and a PASS. Getting that inversion wrong is the worst
+  output this tool can produce: reported as failures it accuses a conforming
+  module of hundreds of defects, and inverted the other way it stays quiet about
+  a module that accepts forgeries. Both directions now have a test against real
+  vectors.
+- The tag is **appended to the ciphertext** rather than reported separately, so a
+  zero-length payload still produces a non-empty `ct` — the tag alone. ACVP
+  records it that way and so does `cryptography`.
+- Tag length is a property of the cipher object rather than of the call, so
+  building it with a length CCM does not define fails rather than truncating.
+
 ## [0.15.0] - 2026-09-04
 
 ### Added
@@ -514,6 +541,7 @@ Initial release: an offline AES-GCM vector runner.
 - Clean-checkout Linux CI, and a pinned, hash-verified upstream vector source
   that is referenced rather than redistributed.
 
+[0.16.0]: https://github.com/Govardhan527/acvp-assay/releases/tag/v0.16.0
 [0.15.0]: https://github.com/Govardhan527/acvp-assay/releases/tag/v0.15.0
 [0.14.0]: https://github.com/Govardhan527/acvp-assay/releases/tag/v0.14.0
 [0.13.0]: https://github.com/Govardhan527/acvp-assay/releases/tag/v0.13.0

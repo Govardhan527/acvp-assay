@@ -31,9 +31,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol, TypeVar
 
+from cryptography.exceptions import InvalidTag
+
 from acvp_assay import parser
 from acvp_assay.algorithms import (
     aes_block,
+    aes_ccm,
     aes_modes,
     aes_xts,
     ctr_drbg,
@@ -52,6 +55,7 @@ from acvp_assay.providers.aes_block import (
     CryptographyAesBlockProvider,
     SubprocessAesBlockProvider,
 )
+from acvp_assay.providers.aes_ccm import AesCcmProvider, CryptographyAesCcm, SubprocessAesCcm
 from acvp_assay.providers.aes_modes import (
     AesModeProvider,
     CryptographyAesModeProvider,
@@ -798,6 +802,66 @@ def _rsa_groups(
     return groups
 
 
+# --------------------------------------------------------------------------- AES-CCM
+
+
+def _aes_ccm_groups(
+    document: dict[str, object], harness: Harness | None = None
+) -> list[dict[str, object]]:
+    """Ciphertext with the tag appended; a verdict where the tag may be forged."""
+    vector_set = aes_ccm.parse_vector_set(document)
+    provider: AesCcmProvider = (
+        CryptographyAesCcm()
+        if harness is None
+        else harness.open(
+            SubprocessAesCcm.from_command_string(
+                harness.command, timeout_seconds=harness.timeout_seconds
+            )
+        )
+    )
+    groups: list[dict[str, object]] = []
+    for group in vector_set.groups:
+        if group.tag_bits not in aes_ccm.TAG_LENGTHS:
+            raise ResponseError(
+                f"tgId {group.tg_id} uses tagLen {group.tag_bits}, which CCM does not define; "
+                "register only 32 through 128 in steps of 16 for a submission"
+            )
+        encrypt = group.direction == "encrypt"
+        cases: list[dict[str, object]] = []
+        for case in group.tests:
+            if encrypt:
+                cases.append(
+                    {
+                        "tcId": case.tc_id,
+                        "ct": _hex(
+                            provider.encrypt(
+                                key=case.key,
+                                nonce=case.nonce,
+                                plaintext=case.payload,
+                                aad=case.aad,
+                                tag_bits=group.tag_bits,
+                            )
+                        ),
+                    }
+                )
+                continue
+            try:
+                recovered = provider.decrypt(
+                    key=case.key,
+                    nonce=case.nonce,
+                    ciphertext=case.payload,
+                    aad=case.aad,
+                    tag_bits=group.tag_bits,
+                )
+            except InvalidTag:
+                # The answer to a forged tag is the verdict, not any bytes.
+                cases.append({"tcId": case.tc_id, "testPassed": False})
+            else:
+                cases.append({"tcId": case.tc_id, "pt": _hex(recovered)})
+        groups.append({"tgId": group.tg_id, "tests": cases})
+    return groups
+
+
 # --------------------------------------------------------------------------- AES-XTS
 
 
@@ -1075,6 +1139,7 @@ def _builder_for(algorithm: str) -> _Builder | None:
         kdf.ALGORITHM: _kdf_groups,
         "ECDSA": _ecdsa_groups,
         rsa.ALGORITHM: _rsa_groups,
+        aes_ccm.ALGORITHM: _aes_ccm_groups,
         aes_xts.ALGORITHM: _aes_xts_groups,
         kas_ecc.ALGORITHM: _kas_ecc_groups,
         "ML-KEM": _ml_kem_groups,
@@ -1131,6 +1196,7 @@ def supported_response_algorithms() -> tuple[str, ...]:
         "ML-KEM",
         "ML-DSA",
         kas_ecc.ALGORITHM,
+        aes_ccm.ALGORITHM,
         aes_xts.ALGORITHM,
         "ACVP-AES-GCM",
         aes_modes.ECB,

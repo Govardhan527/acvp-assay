@@ -117,6 +117,8 @@ declining is a first-class answer, see below.
 | `block-mct` | `algorithm`, `direction`, `key`, `iv`, `data` | `resultsArray` — 100 × `{key, iv, in, out}` |
 | `cmac` | `key`, `message`, `macLen` | `mac` |
 | `gmac` | `key`, `iv`, `aad`, `tagLen` | `tag` |
+| `ccm-encrypt` | `key`, `iv`, `pt`, `aad`, `tagLen` | `ct` — with the tag appended |
+| `ccm-decrypt` | `key`, `iv`, `ct`, `aad`, `tagLen` | `pt`, or `authentication failed` |
 | `key-wrap` | `direction` (`wrap`/`unwrap`), `padded`, `key`, `data` | `out` |
 | `xts-transform` | `direction`, `key` (two AES keys), `tweak` (16 bytes), `dataUnitLen`, `data` | `out` |
 | `rsa-sign-group` | `sigType`, `hashAlg`, `maskFunction`, `saltLen`, `modulo`, `messages` (array) | `n`, `e`, `signatures` (array, same order) |

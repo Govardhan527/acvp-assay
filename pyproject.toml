@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "acvp-assay"
-version = "0.15.0"
+version = "0.16.0"
 description = "Run NIST ACVP vectors against any implementation and catch conformance regressions"
 readme = "README.md"
 requires-python = ">=3.12"
