@@ -38,6 +38,7 @@ Homepage = "https://github.com/Govardhan527/acvp-assay"
 Repository = "https://github.com/Govardhan527/acvp-assay"
 Changelog = "https://github.com/Govardhan527/acvp-assay/blob/main/CHANGELOG.md"
 "Harness protocol" = "https://github.com/Govardhan527/acvp-assay/blob/main/docs/harness-protocol.md"
+"Commercial support" = "https://github.com/Govardhan527/acvp-assay/blob/main/SERVICES.md"
 Issues = "https://github.com/Govardhan527/acvp-assay/issues"
 
 [project.scripts]

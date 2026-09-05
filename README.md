@@ -40,15 +40,27 @@ Two things distinguish it from `libacvp` and ACVP Proxy, which cover more algori
 - **It reaches implementations they cannot.** A harness reads one JSON request on stdin and writes one on stdout, so an HSM, a smartcard, an embedded device over a serial link, or a library in any language can be tested without linking anything.
 - **It answers "are we *still* conformant?"** `acvp-assay diff` compares two runs and reports regressions, including coverage that silently disappeared. With re-validation running well over a year, that is the failure mode that costs a cycle.
 
+## Commercial support
+
+The tool is MIT-licensed and free, and nothing here is gated. If you would rather have the work
+done than the tool handed over — a readiness assessment before you engage a laboratory, a harness
+built against your HSM or embedded target, or conformance regression wired into your CI — see
+[SERVICES.md](SERVICES.md).
+
+Written and maintained by Govardhan Yadava: seven years owning cryptographic validation for an
+enterprise HSM and key-management platform, FIPS 140-2/140-3 mode behaviour across a five-client
+matrix, and twelve review comments submitted to the OASIS KMIP Profiles v3.0 public review
+(August 2026). Contact: govardhan@seccrypto.dev
+
 ## Scope
 
 Implemented today:
 
-- **43 algorithm names across 25 families** — AES in GCM, CCM, ECB, CBC, CTR, OFB, CFB128,
+- **46 algorithm names across 27 families** — AES in GCM, CCM, ECB, CBC, CTR, OFB, CFB128,
   GMAC, KW, KWP and XTS; CMAC-AES; all three SP 800-90A DRBGs; KDF SP 800-108; KDA SP 800-56C;
   SHA-1, SHA-2, SHA-3 and the SHAKE XOFs;
   HMAC over each; RSA; ECDSA; KAS-ECC-SSC; ML-KEM and ML-DSA
-- a replaceable provider boundary, in-process or an external harness over JSON — **all 40
+- a replaceable provider boundary, in-process or an external harness over JSON — **all 46
   names reach a harness**, so nothing silently tests this project's OpenSSL binding when you
   asked for your own implementation
 - **live ACVTS submission from your implementation**: `acvts_client.py submit
@@ -575,6 +587,7 @@ python3.12 scripts/dev.py demo
 - `docs/vector-sources.md`: pinned upstream source, hashes, licensing, and redistribution policy
 - `docs/decisions/`: committed design decisions
 - `docs/backlog.md`: what is built and what is next
+- `SERVICES.md`: paid engagements — readiness assessment, harness build, regression retainer
 - `CHANGELOG.md`: release history
 - `BUILDLOG.md`: running record of how each family was built and verified
 
