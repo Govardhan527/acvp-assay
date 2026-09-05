@@ -23,8 +23,9 @@ The frozen v0.1.0 AES-GCM MVP is complete.
 
 Aimed at demand rather than portfolio scope; supersedes the v0.1.0 non-goals where they conflict.
 
-- [~] M00: request ACVTS Demo credentials from `acvts-demo@nist.gov` — sent 2026-09-02,
-      awaiting CSR requirements. See `docs/acvts-demo-access-request.md`.
+- [x] M00: request ACVTS Demo credentials from `acvts-demo@nist.gov` — sent 2026-09-02,
+      granted, and used for every live session from 765339 onward. See
+      `docs/acvts-demo-access-request.md`.
 - [x] M01: fetch and SHA-256-verify the pinned upstream NIST vectors, and run them end to end.
 - [x] M02: add a subprocess provider that speaks JSON on stdin/stdout, so any language or device can be tested.
 - [x] M03: add SHA2 with Monte Carlo test support, then HMAC.
@@ -49,11 +50,13 @@ Aimed at demand rather than portfolio scope; supersedes the v0.1.0 non-goals whe
       harness rather than deadlocking on it. Spawning per case cost ~75 ms, about
       fifty times the cryptography, and forced a PKCS#11 harness to log in once per
       case. See `docs/harness-protocol.md`.
-- [x] M11: harness operations for every family. All forty algorithms now reach an
-      external implementation, verified through the wire against NIST's vectors with
-      the shipped reference harness. A DRBG case crosses in one exchange rather than
-      as a conversation, because putting a state machine on a wire makes the two sides
-      agree about a sequence of calls rather than about an answer.
+- [x] M11: harness operations for every family. All forty algorithm names implemented
+      at the time reached an external implementation, verified through the wire against
+      NIST's vectors with the shipped reference harness; every family added since has
+      shipped with its operations, so the property still holds at forty-six. A DRBG
+      case crosses in one exchange rather than as a conversation, because putting a
+      state machine on a wire makes the two sides agree about a sequence of calls
+      rather than about an answer.
       This is what makes the coverage claim true for a *vendor's* module rather than
       for this project's OpenSSL binding, so it is the highest-value item left.
       Planned operations, in the order they are worth building:
@@ -115,5 +118,45 @@ Aimed at demand rather than portfolio scope; supersedes the v0.1.0 non-goals whe
       and the highest-value name remaining after the coverage analysis was re-run against
       the live registry. The work is assembling fixedInfo from the pattern the group
       declares, not the HKDF itself. Session 765811 returned `passed` on all 300 cases.
+- [x] M20: state the paid half in the repository. `SERVICES.md` carries the four
+      engagements — readiness assessment, harness build, regression retainer, advisory —
+      and the README points at it from just after the differentiator bullets. The
+      pricing rationale stays outside the repository; only the numbers are public.
+      Two claims were reconciled in the same pass: Scope still said 43 algorithm names
+      and 40 reaching a harness while the banner and the coverage table said 46, and a
+      services page selling 46 three lines below a scope claiming 43 invites the one
+      question you do not want asked.
+
+## Open
+
+Measured against the live Demo registry as pulled on 2026-09-03 — 178
+algorithm/revision entries, **97 distinct algorithm names**, of which acvp-assay now
+covers **46**. Of the 51 uncovered, 14 are three-key TDES, disallowed for new
+validations since 2023 and not worth building. Another seventeen are niche —
+FF1/FF3-1, CBC-CS1/2/3, CFB1/CFB8, XPN, GCM-SIV, Ascon, ParallelHash-128/256,
+TupleHash-128/256, DSA, XECDH, safePrimes — which leaves about twenty that a real
+certificate is likely to carry.
+
+The ordering below is reasoned from what modules typically validate, not measured.
+M25 is what would replace that judgement with evidence, and it may well reorder the
+list.
+
+- [ ] M21: cSHAKE-128/256 and KMAC-128/256. They follow directly from the XOF boundary
+      that SHAKE established in `providers/digest.py`, which makes them the cheapest
+      four names left. KMAC is also a MAC, so it reuses the gen/ver inversion already
+      proven by CMAC and GMAC.
+- [ ] M22: `kdf-components`, TLS-v1.2 and TLS-v1.3. Three registry names of one shape,
+      and every module that terminates TLS validates them.
+- [ ] M23: KAS-FFC-SSC and KAS-IFC-SSC. Siblings of the ECC variant already built, so
+      the offline/live split M15 settled — a VAL case fully checkable here, an AFT case
+      answerable only by the server that holds the peer private key — applies unchanged.
+- [ ] M24: KTS-IFC, PBKDF, EDDSA, then LMS, SLH-DSA, ConditioningComponent, and the
+      non-SSC KAS variants. Each is a real build rather than a reuse; ordered by how
+      often a certificate carries it.
+- [ ] M25: replace the reasoned ranking with a measured one. Scrape NIST's CAVP
+      validated-modules database and count algorithm frequency across issued
+      certificates, the way M07 was chosen by reading certificates rather than by
+      guessing. Do this before M24 rather than after: it is the item most likely to
+      change what the others should be.
 
 Still out of scope: a full ACVP protocol client, algorithm count as a goal, an HTML dashboard, and any hosted service.
