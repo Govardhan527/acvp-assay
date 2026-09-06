@@ -139,14 +139,30 @@ The median module is **84% testable today** and 112 of the 690 are fully
 testable. 118 more are exactly one name away, which is what the second table in
 that document ranks.
 
-- [ ] M21: the AES modes the measurement rescued — `ACVP-AES-CFB8` (36% of
+- [x] M21: the AES modes the measurement rescued — `ACVP-AES-CFB8` (36% of
       modules), `ACVP-AES-CBC-CS3` (27%), `CBC-CS1` (24%), `CBC-CS2` (23%) and
-      `ACVP-AES-CFB1` (21%). All five were written off as niche by the reasoned
-      ranking and all five reuse the mode machinery `aes_modes.py` already
-      carries, which makes this the best rate of coverage per day of work on the
-      list. CFB1 is a strict subset of CFB8: every one of the 148 modules
-      validating it validates CFB8 too, so the pair is one piece of work.
-      Ciphertext stealing is the only new idea among them.
+      `ACVP-AES-CFB1` (21%). All five had been written off as niche by the reasoned
+      ranking. Session 766208 returned `passed` on all five vector sets, 17,656
+      cases, taking the project to 51 algorithm names.
+      Three things this settled that reuse did not make free:
+      - **CFB8 and CFB1 need their own Monte Carlo chain.** A segment mode feeds
+        back one segment per step, so a block's worth of feedback takes 16 steps
+        or 128 rather than one, and the plaintext for a step comes from the IV
+        until the register has shifted past it. Every rule was checked against
+        the server's own 100 outer iterations, in both directions, before any
+        module code was written.
+      - **CFB1 is the only mode whose payload is bits.** The hex pads to a byte,
+        so the declared `payloadLen` is the only thing that says where the
+        payload ends. It now travels on the wire, and only for CFB1.
+      - **CS1, CS2 and CS3 are one algorithm and three orderings.** CS3 always
+        reverses the last two ciphertext blocks, CS2 only when the final block is
+        partial, CS1 never. A payload of exactly one block has nothing to steal
+        from and is plain CBC.
+      And one defect only the live server could find: the response builder never
+      passed CFB1's bit count, so the submission answered over the padding while
+      the offline runner — a different code path — passed all 2,144 cases against
+      NIST's own sample file. Session 766207 returned `fail`; the fix is pinned by
+      `tests/unit/test_responder_payload_bits.py`.
 - [ ] M22: `PBKDF` — 42% of modules, and second on the unlock table: adding it
       alone completes 26 modules that are otherwise one name away. One name,
       built on the HMAC provider that already exists.

@@ -21,6 +21,7 @@ from acvp_assay import runner as aes_runner
 from acvp_assay.algorithms import (
     aes_block,
     aes_ccm,
+    aes_cs,
     aes_modes,
     aes_xts,
     ctr_drbg,
@@ -100,6 +101,7 @@ def supported_algorithms() -> list[str]:
         aes_ccm.ALGORITHM,
         *shake.SUPPORTED,
         aes_xts.ALGORITHM,
+        *aes_cs.SUPPORTED,
         kas_ecc.ALGORITHM,
         kda.ALGORITHM,
         kdf.ALGORITHM,
@@ -334,6 +336,19 @@ def _run_kas_ecc(
     return kas_ecc.run_vector_set(vector_set, expected, provider), metadata
 
 
+def _run_aes_cs(
+    vector_file: Path,
+    expected_file: Path,
+    provider_command: str | None,
+    provider_timeout: float,
+) -> tuple[list[TestCaseResult], ProviderMetadata]:
+    provider = aes_cs.provider_for(provider_command, provider_timeout)
+    metadata = provider.metadata()
+    vector_set = aes_cs.load_vector_set(vector_file)
+    expected = aes_cs.load_expected_results(expected_file)
+    return aes_cs.run_vector_set(vector_set, expected, provider), metadata
+
+
 def _run_aes_xts(
     vector_file: Path,
     expected_file: Path,
@@ -443,6 +458,10 @@ def run_vector_file(
         )
     elif algorithm == aes_ccm.ALGORITHM:
         runners[algorithm] = lambda: _run_aes_ccm(
+            vector_file, expected_file, provider_command, provider_timeout
+        )
+    elif algorithm in aes_cs.SUPPORTED:
+        runners[algorithm] = lambda: _run_aes_cs(
             vector_file, expected_file, provider_command, provider_timeout
         )
     elif algorithm == aes_xts.ALGORITHM:

@@ -37,6 +37,7 @@ from acvp_assay import parser
 from acvp_assay.algorithms import (
     aes_block,
     aes_ccm,
+    aes_cs,
     aes_modes,
     aes_xts,
     ctr_drbg,
@@ -59,6 +60,7 @@ from acvp_assay.providers.aes_block import (
     SubprocessAesBlockProvider,
 )
 from acvp_assay.providers.aes_ccm import AesCcmProvider, CryptographyAesCcm, SubprocessAesCcm
+from acvp_assay.providers.aes_cs import AesCsProvider, CryptographyAesCs, SubprocessAesCs
 from acvp_assay.providers.aes_modes import (
     AesModeProvider,
     CryptographyAesModeProvider,
@@ -463,6 +465,7 @@ def _aes_block_groups(
                     iv=case.fields["iv"],
                     data=case.fields[source],
                     encrypt=encrypt,
+                    payload_bits=case.payload_bits,
                 )
                 cases.append(
                     {
@@ -489,6 +492,13 @@ def _aes_block_groups(
                             iv=case.fields["iv"],
                             data=case.fields[source],
                             encrypt=encrypt,
+                            # CFB1 alone needs this: its payload is a bit count,
+                            # not a byte count, and without it the answer covers
+                            # the zero padding the hex encoding added. The
+                            # offline runner passed it and agreed with the
+                            # sample; this path did not, and only the server
+                            # said so.
+                            payload_bits=case.payload_bits,
                         )
                     ),
                 }
@@ -963,6 +973,46 @@ def _aes_ccm_groups(
     return groups
 
 
+# --------------------------------------------------------------------------- AES-CBC-CS
+
+
+def _aes_cs_groups(
+    document: dict[str, object], harness: Harness | None = None
+) -> list[dict[str, object]]:
+    """Ciphertext or plaintext per case, with ciphertext stealing."""
+    vector_set = aes_cs.parse_vector_set(document)
+    provider: AesCsProvider = (
+        CryptographyAesCs()
+        if harness is None
+        else harness.open(
+            SubprocessAesCs.from_command_string(
+                harness.command, timeout_seconds=harness.timeout_seconds
+            )
+        )
+    )
+    groups: list[dict[str, object]] = []
+    for group in vector_set.test_groups:
+        encrypt = group.direction == "encrypt"
+        field = "ct" if encrypt else "pt"
+        cases: list[dict[str, object]] = [
+            {
+                "tcId": case.tc_id,
+                field: _hex(
+                    provider.transform(
+                        algorithm=vector_set.algorithm,
+                        key=case.key,
+                        iv=case.iv,
+                        data=case.data,
+                        encrypt=encrypt,
+                    )
+                ),
+            }
+            for case in group.tests
+        ]
+        groups.append({"tgId": group.tg_id, "tests": cases})
+    return groups
+
+
 # --------------------------------------------------------------------------- AES-XTS
 
 
@@ -1244,6 +1294,7 @@ def _builder_for(algorithm: str) -> _Builder | None:
         **dict.fromkeys(shake.SUPPORTED, _shake_groups),
         aes_ccm.ALGORITHM: _aes_ccm_groups,
         aes_xts.ALGORITHM: _aes_xts_groups,
+        **dict.fromkeys(aes_cs.SUPPORTED, _aes_cs_groups),
         kas_ecc.ALGORITHM: _kas_ecc_groups,
         "ML-KEM": _ml_kem_groups,
         "ML-DSA": _ml_dsa_groups,
@@ -1303,6 +1354,7 @@ def supported_response_algorithms() -> tuple[str, ...]:
         *shake.SUPPORTED,
         kda.ALGORITHM,
         aes_xts.ALGORITHM,
+        *aes_cs.SUPPORTED,
         "ACVP-AES-GCM",
         aes_modes.ECB,
         aes_modes.CMAC,

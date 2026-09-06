@@ -39,9 +39,10 @@ from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 
 try:  # pragma: no cover - CFB and OFB move to `decrepit` in cryptography 49
     from cryptography.hazmat.decrepit.ciphers.modes import CFB as _CFB
+    from cryptography.hazmat.decrepit.ciphers.modes import CFB8 as _CFB8
     from cryptography.hazmat.decrepit.ciphers.modes import OFB as _OFB
 except ImportError:  # pragma: no cover
-    _CFB, _OFB = modes.CFB, modes.OFB
+    _CFB, _OFB, _CFB8 = modes.CFB, modes.OFB, modes.CFB8
 
 HASHLIB = {
     "SHA-1": "sha1",
@@ -381,7 +382,91 @@ BLOCK_MODES = {
     "ACVP-AES-CTR": modes.CTR,
     "ACVP-AES-OFB": _OFB,
     "ACVP-AES-CFB128": _CFB,
+    "ACVP-AES-CFB8": _CFB8,
+    # CFB1 has no library mode anywhere; it is driven a bit at a time below.
+    "ACVP-AES-CFB1": None,
 }
+
+#: CFB modes whose feedback advances by less than a block, and by how many bits.
+#: Their Monte Carlo chain is a different algorithm from the whole-block one.
+SEGMENT_BITS = {"ACVP-AES-CFB8": 8, "ACVP-AES-CFB1": 1}
+BLOCK_BITS = 128
+
+
+def _to_bits(data: bytes, count: int) -> list[int]:
+    """The first ``count`` bits of ``data``, most significant bit first."""
+    return [(data[index // 8] >> (7 - index % 8)) & 1 for index in range(count)]
+
+
+def _from_bits(values: list[int]) -> bytes:
+    """Pack bits most significant first; ACVP carries a bit string that way."""
+    packed = bytearray((len(values) + 7) // 8)
+    for index, bit in enumerate(values):
+        if bit:
+            packed[index // 8] |= 1 << (7 - index % 8)
+    return bytes(packed)
+
+
+def _raw_block(key: bytes, block: bytes) -> bytes:
+    """One raw AES block encryption, the primitive every CFB mode calls."""
+    cipher = Cipher(algorithms.AES(key), modes.ECB()).encryptor()  # noqa: S305 - CFB primitive
+    return cipher.update(block) + cipher.finalize()
+
+
+def _cfb1(key: bytes, iv: bytes, data: bytes, encrypt: bool, count: int) -> bytes:
+    """AES-CFB1, one bit at a time.
+
+    The register takes the *ciphertext* bit each step: the output bit when
+    encrypting, the input bit when decrypting.
+    """
+    register = _to_bits(iv, BLOCK_BITS)
+    produced: list[int] = []
+    for bit in _to_bits(data, count):
+        output = ((_raw_block(key, _from_bits(register))[0] >> 7) & 1) ^ bit
+        produced.append(output)
+        register = register[1:] + [output if encrypt else bit]
+    return _from_bits(produced)
+
+
+def _segment_mct(
+    algorithm: str, key: bytes, iv: bytes, data: bytes, encrypt: bool
+) -> list[dict[str, str]]:
+    """The Monte Carlo chain for CFB8 and CFB1.
+
+    A segment mode feeds back one segment per step, so a block's worth of
+    feedback takes ``BLOCK_BITS // segment`` steps. The input for step ``j``
+    comes from the IV while the register still holds it and from the output a
+    block's worth of segments back once it does not.
+    """
+    segment = SEGMENT_BITS[algorithm]
+    span = BLOCK_BITS // segment
+    results: list[dict[str, str]] = []
+    for _ in range(MCT_OUTER):
+        register = _to_bits(iv, BLOCK_BITS)
+        iv_segments = [register[i * segment : (i + 1) * segment] for i in range(span)]
+        fed = _to_bits(data, segment)
+        produced: list[list[int]] = []
+        for step in range(MCT_INNER):
+            keystream = _to_bits(_raw_block(key, _from_bits(register)), segment)
+            output = [a ^ b for a, b in zip(keystream, fed, strict=True)]
+            produced.append(output)
+            register = register[segment:] + (output if encrypt else fed)
+            fed = iv_segments[step] if step < span else produced[step - span]
+        stream = [bit for chunk in produced for bit in chunk]
+        results.append(
+            {
+                "key": key.hex().upper(),
+                "iv": iv.hex().upper(),
+                "in": data.hex().upper(),
+                "out": _from_bits(produced[-1]).hex().upper(),
+            }
+        )
+        material = _from_bits(stream[-len(key) * 8 :])
+        key = bytes(a ^ b for a, b in zip(key, material, strict=True))
+        data = _from_bits(produced[-span - 1])
+        iv = _from_bits(stream[-BLOCK_BITS:])
+    return results
+
 
 #: How the cipher's IV advances between Monte Carlo iterations. The
 #: specification writes the inner loop as a cipher that "continues" from the
@@ -427,13 +512,16 @@ def block_transform(request: dict[str, Any]) -> dict[str, str]:
     algorithm = request["algorithm"]
     if algorithm not in BLOCK_MODES:
         return {"error": "unsupported"}
-    produced = _block(
-        algorithm,
-        bytes.fromhex(request["key"]),
-        bytes.fromhex(request["iv"]),
-        bytes.fromhex(request["data"]),
-        request["direction"] == "encrypt",
-    )
+    key = bytes.fromhex(request["key"])
+    iv = bytes.fromhex(request["iv"])
+    data = bytes.fromhex(request["data"])
+    encrypt = request["direction"] == "encrypt"
+    if algorithm == "ACVP-AES-CFB1":
+        # payloadLen is in bits and is the only way to tell payload from the
+        # zero padding the hex encoding adds.
+        count = request.get("payloadLen", len(data) * 8)
+        return {"out": _cfb1(key, iv, data, encrypt, count).hex().upper()}
+    produced = _block(algorithm, key, iv, data, encrypt)
     return {"out": produced.hex().upper()}
 
 
@@ -451,6 +539,8 @@ def block_mct(request: dict[str, Any]) -> dict[str, Any]:
     key = bytes.fromhex(request["key"])
     iv = bytes.fromhex(request["iv"])
     data = bytes.fromhex(request["data"])
+    if algorithm in SEGMENT_BITS:
+        return {"resultsArray": _segment_mct(algorithm, key, iv, data, encrypt)}
 
     results: list[dict[str, str]] = []
     for _ in range(MCT_OUTER):
@@ -477,6 +567,77 @@ def block_mct(request: dict[str, Any]) -> dict[str, Any]:
         iv = previous if algorithm != "ACVP-AES-ECB" else b""
         data = previous if algorithm == "ACVP-AES-ECB" else carried
     return {"resultsArray": results}
+
+
+CS_MODES = ("ACVP-AES-CBC-CS1", "ACVP-AES-CBC-CS2", "ACVP-AES-CBC-CS3")
+
+
+def _cs_swaps(algorithm: str, partial: bool) -> bool:
+    """Whether this variant writes the last two blocks in reverse order.
+
+    CS3 always does, CS2 only when the final block is partial, CS1 never. The
+    cryptography is identical across all three.
+    """
+    if algorithm == "ACVP-AES-CBC-CS3":
+        return True
+    return partial if algorithm == "ACVP-AES-CBC-CS2" else False
+
+
+def cbc_cs(request: dict[str, Any]) -> dict[str, str]:
+    """CBC with ciphertext stealing, in any of the three orderings."""
+    algorithm = request["algorithm"]
+    if algorithm not in CS_MODES:
+        return {"error": "unsupported"}
+    key = bytes.fromhex(request["key"])
+    iv = bytes.fromhex(request["iv"])
+    data = bytes.fromhex(request["data"])
+    encrypt = request["direction"] == "encrypt"
+    if len(data) < 16:
+        return {"error": "unsupported"}
+
+    def enc(block: bytes) -> bytes:
+        c = Cipher(algorithms.AES(key), modes.ECB()).encryptor()  # noqa: S305 - CBC primitive
+        return c.update(block) + c.finalize()
+
+    def dec(block: bytes) -> bytes:
+        c = Cipher(algorithms.AES(key), modes.ECB()).decryptor()  # noqa: S305 - CBC primitive
+        return c.update(block) + c.finalize()
+
+    def xor(a: bytes, b: bytes) -> bytes:
+        return bytes(x ^ y for x, y in zip(a, b, strict=True))
+
+    if len(data) == 16:  # nothing to steal from; this is plain CBC
+        out = enc(xor(data, iv)) if encrypt else xor(dec(data), iv)
+        return {"out": out.hex().upper()}
+
+    whole, remainder = divmod(len(data), 16)
+    if remainder == 0:
+        whole, remainder = whole - 1, 16
+    swap = _cs_swaps(algorithm, remainder != 16)
+
+    if encrypt:
+        blocks, previous = [], iv
+        for index in range(whole):
+            previous = enc(xor(data[16 * index : 16 * index + 16], previous))
+            blocks.append(previous)
+        head = blocks[-1]
+        tail = enc(xor(data[16 * whole :] + b"\x00" * (16 - remainder), head))
+        body = b"".join(blocks[:-1])
+        out = body + (tail + head[:remainder] if swap else head[:remainder] + tail)
+        return {"out": out.hex().upper()}
+
+    body, rest = data[: 16 * (whole - 1)], data[16 * (whole - 1) :]
+    tail, stolen = (rest[:16], rest[16:]) if swap else (rest[remainder:], rest[:remainder])
+    plain, previous = [], iv
+    for index in range(whole - 1):
+        block = body[16 * index : 16 * index + 16]
+        plain.append(xor(dec(block), previous))
+        previous = block
+    zeroed = dec(tail)
+    head = stolen + zeroed[remainder:]
+    plain.append(xor(dec(head), previous))
+    plain.append(xor(zeroed, head)[:remainder])
+    return {"out": b"".join(plain).hex().upper()}
 
 
 def cmac(request: dict[str, Any]) -> dict[str, str]:
@@ -963,6 +1124,7 @@ HANDLERS = {
     "rsa-primitive-decrypt": rsa_primitive_decrypt,
     "block-transform": block_transform,
     "block-mct": block_mct,
+    "cbc-cs": cbc_cs,
     "cmac": cmac,
     "gmac": gmac,
     "key-wrap": key_wrap,

@@ -26,6 +26,7 @@ from acvp_assay.parser import (
     list_field,
     mapping,
     optional_hex_bytes,
+    optional_integer,
     string_field,
 )
 from acvp_assay.providers.aes_block import CHAINING_MODES, AesBlockProvider
@@ -42,6 +43,10 @@ class BlockCase:
 
     tc_id: int
     fields: Mapping[str, bytes] = field(default_factory=dict)
+    #: Payload length in bits, carried only by CFB1 -- the one mode whose
+    #: payload is not a whole number of bytes, so the hex alone cannot say how
+    #: many of the trailing bits are payload and how many are padding.
+    payload_bits: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -88,7 +93,11 @@ def _parse_case(value: object, *, path: str) -> BlockCase:
         found = optional_hex_bytes(document, name, path=path)
         if found is not None:
             values[name] = found
-    return BlockCase(tc_id=integer(document, "tcId", path=path), fields=values)
+    return BlockCase(
+        tc_id=integer(document, "tcId", path=path),
+        fields=values,
+        payload_bits=optional_integer(document, "payloadLen", path=path),
+    )
 
 
 def _parse_group(value: object, *, path: str) -> BlockGroup:
@@ -292,6 +301,7 @@ def run_vector_set(
                     iv=case.fields["iv"],
                     data=case.fields["pt" if encrypt else "ct"],
                     encrypt=encrypt,
+                    payload_bits=case.payload_bits,
                 )
             except HarnessUnsupportedError:
                 results.append(

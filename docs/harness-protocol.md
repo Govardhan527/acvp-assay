@@ -114,8 +114,9 @@ declining is a first-class answer, see below.
 | `ml-kem-decapsulate` | `parameterSet`, `dk`, `c` | `k` |
 | `ml-kem-key-check` | `parameterSet`, `ek`, `dk` | `testPassed` |
 | `ml-dsa-verify` | `parameterSet`, `pk`, `message`, `signature`, `signatureInterface`, `context` | `testPassed` |
-| `block-transform` | `algorithm`, `direction`, `key`, `iv`, `data` | `out` |
-| `block-mct` | `algorithm`, `direction`, `key`, `iv`, `data` | `resultsArray` — 100 × `{key, iv, in, out}` |
+| `block-transform` | `algorithm`, `direction`, `key`, `iv`, `data`, `payloadLen` ⁺ | `out` |
+| `block-mct` | `algorithm`, `direction`, `key`, `iv`, `data`, `payloadLen` ⁺ | `resultsArray` — 100 × `{key, iv, in, out}` |
+| `cbc-cs` | `algorithm`, `direction`, `key`, `iv`, `data` | `out` |
 | `cmac` | `key`, `message`, `macLen` | `mac` |
 | `gmac` | `key`, `iv`, `aad`, `tagLen` | `tag` |
 | `ccm-encrypt` | `key`, `iv`, `pt`, `aad`, `tagLen` | `ct` — with the tag appended |
@@ -199,7 +200,7 @@ cases on both sides of each precisely to catch an implementation that shares
 one rule between them. Half the upstream signaturePrimitive groups supply the
 CRT parameters instead of `d`.
 
-`block-transform` and `block-mct` serve ECB, CBC, CTR, OFB and CFB128 alike —
+`block-transform` and `block-mct` serve ECB, CBC, CTR, OFB, CFB128, CFB8 and CFB1 alike —
 ECB is a block transform like the rest, and giving it its own pair would mean
 implementing the same thing twice. ECB sends an empty `iv`. CTR has **no**
 Monte Carlo test, so `block-mct` is never asked for it.
@@ -209,6 +210,28 @@ error, not as a crash: half of each upstream unwrap set is a deliberately
 corrupt wrapping where refusing is the correct answer.
 
 ### The block-mode Monte Carlo chain
+
+⁺ `payloadLen` is sent **only for `ACVP-AES-CFB1`**, and is the payload length in
+*bits*. Every other mode measures its payload in whole bytes, so the hex already
+says how long it is; CFB1 does not, and the hex is zero padded to a byte
+boundary. A harness that ignores the field will answer over the padding too —
+which agrees with the sample file it is checked against and disagrees with NIST.
+It is not sent for the other modes, so an existing harness sees no change.
+
+**The Monte Carlo chain for CFB8 and CFB1 is a different algorithm from the
+whole-block one.** A segment mode feeds back one segment per inner step, so a
+block's worth of feedback takes 16 steps for CFB8 and 128 for CFB1. The input
+for step *j* comes from the IV while the register still holds it, and from the
+output a block's worth of segments back once it does not. The key is then XORed
+with the last *keyLen* bits of output — which is more than one block once the
+key is 192 or 256 bits — and the next IV is the last block's worth. A harness
+that reuses its CFB128 chain here will return 100 plausible iterations that
+disagree with NIST from the first one.
+
+`cbc-cs` covers `ACVP-AES-CBC-CS1`, `-CS2` and `-CS3`. The cryptography is
+identical across the three; only the order of the last two ciphertext blocks
+differs. CS3 always reverses them, CS2 only when the final block is partial, CS1
+never. There is no Monte Carlo test for any of them.
 
 `block-mct` runs the whole 100 × 1000 chain and returns each outer iteration's
 key, IV, input and output. Those are the four values ACVP records, and the last

@@ -6,14 +6,14 @@
 
 > ## ✅ Judged by NIST's own server
 >
-> **All 46 supported algorithm names** have been run against **vectors NIST generated live** and
-> submitted back for NIST to judge. On `demo.acvts.nist.gov`, **51 vector sets, covering 38,812
+> **All 51 supported algorithm names** have been run against **vectors NIST generated live** and
+> submitted back for NIST to judge. On `demo.acvts.nist.gov`, **56 vector sets, covering 56,468
 > test cases, each came back `"passed"`**, and that verdict is the server's, not this project's.
 > [Exactly which, per algorithm](#coverage).
 >
-> Read those two numbers precisely: ACVP returns one verdict **per vector set**, so 51 is the
-> count of verdicts NIST issued and 38,812 is the number of cases inside them. The server never
-> issued 38,812 separate verdicts, and this project does not claim it did.
+> Read those two numbers precisely: ACVP returns one verdict **per vector set**, so 56 is the
+> count of verdicts NIST issued and 56,468 is the number of cases inside them. The server never
+> issued 56,468 separate verdicts, and this project does not claim it did.
 >
 > **What this does and does not say about ML-KEM and ML-DSA.** Those two sessions were answered
 > by `examples/pqc_reference_harness.py`, which is backed by `kyber-py` and `dilithium-py` —
@@ -56,19 +56,20 @@ matrix, and twelve review comments submitted to the OASIS KMIP Profiles v3.0 pub
 
 Implemented today:
 
-- **46 algorithm names across 27 families** — AES in GCM, CCM, ECB, CBC, CTR, OFB, CFB128,
+- **51 algorithm names across 27 families** — AES in GCM, CCM, ECB, CBC, CTR, OFB, CFB128,
+  CFB8, CFB1, CBC-CS1/CS2/CS3,
   GMAC, KW, KWP and XTS; CMAC-AES; all three SP 800-90A DRBGs; KDF SP 800-108; KDA SP 800-56C;
   SHA-1, SHA-2, SHA-3 and the SHAKE XOFs;
   HMAC over each; RSA; ECDSA; KAS-ECC-SSC; ML-KEM and ML-DSA
-- a replaceable provider boundary, in-process or an external harness over JSON — **all 46
+- a replaceable provider boundary, in-process or an external harness over JSON — **all 51
   names reach a harness**, so nothing silently tests this project's OpenSSL binding when you
   asked for your own implementation
 - **live ACVTS submission from your implementation**: `acvts_client.py submit
   --provider-command ...` answers NIST-generated vectors from your code and returns NIST's
-  verdict — all 46 names, ML-KEM and ML-DSA included
+  verdict — all 51 names, ML-KEM and ML-DSA included
 - run-over-run regression diffing, including coverage that silently disappeared
 - typed parsing that preserves `vsId`, `tgId`, and `tcId`
-- deterministic tests on Linux, verified against pinned NIST vectors, and for **all 46 names
+- deterministic tests on Linux, verified against pinned NIST vectors, and for **all 51 names
   against vectors generated live by NIST's ACVTS server** — see [Coverage](#coverage)
 
 Deliberately out of scope: a general-purpose ACVP protocol client (`libacvp` and
@@ -139,6 +140,9 @@ Three questions a vendor actually needs answered, in one table:
 | `ACVP-AES-KW`, `ACVP-AES-KWP` | AFT | ✅ | ✅ | `passed` — 765342 |
 | `ACVP-AES-GMAC` | AFT | ✅ | ✅ | `passed` — 765518 |
 | `ACVP-AES-XTS` | AFT (hex and number tweaks) | ✅ | ✅ | `passed` — 765786 |
+| `ACVP-AES-CFB8` | AFT, MCT | ✅ | ✅ | `passed` — 766208 |
+| `ACVP-AES-CFB1` | AFT, MCT (payload in bits) | ✅ | ✅ | `passed` — 766208 |
+| `ACVP-AES-CBC-CS1`, `-CS2`, `-CS3` | AFT | ✅ | ✅ | `passed` — 766208 |
 | `CMAC-AES` | AFT (gen and ver) | ✅ | ✅ | `passed` — 765342 |
 | `SHA-1` | AFT, MCT | ✅ | ✅ | `passed` — 765345 |
 | `SHA2-224` | AFT, MCT | ✅ | ✅ | `passed` — 765508 |
@@ -165,8 +169,8 @@ Three questions a vendor actually needs answered, in one table:
 
 ¹ Answered by the educational reference harness, not a shippable implementation — see the banner.
 
-**46 algorithm names across 27 families. All 46 reach a harness, all 46 can be submitted to a
-live session, and all 46 have been.**
+**51 algorithm names across 27 families. All 51 reach a harness, all 51 can be submitted to a
+live session, and all 51 have been.**
 
 The harness path is checked against the built-in one by answering each pinned NIST prompt both
 ways and comparing: **24,048 cases across ten families, byte-identical wherever the answer is
@@ -397,7 +401,7 @@ This second fixture's tag is deliberately corrupted (see `fixtures/README.md`); 
 ## Verified against NIST's own server
 
 Static vector files tell you whether a runner agrees with a snapshot. They cannot tell you whether
-it agrees with the system that issues the vectors. So all 46 supported algorithm names have been
+it agrees with the system that issues the vectors. So all 51 supported algorithm names have been
 through a live test session on NIST's ACVTS Demo server:
 register capabilities, fetch vectors NIST generated for this client, compute answers, submit them,
 and read back the verdict.
@@ -427,7 +431,9 @@ production ACVTS, which is available to accredited laboratories rather than to t
 | 765788 | ACVP-AES-CCM | 1 | 4,830 | `passed` |
 | 765794 | SHAKE-128, SHAKE-256 | 2 | 508 | `passed` |
 | 765811 | KDA (HKDF) | 1 | 300 | `passed` |
-| | **Completed** | **51** | **38,812** | **all `passed`** |
+| 766207 | AES-CFB8, AES-CFB1, AES-CBC-CS1/2/3 | 5 | — | **CFB1 failed**, see below |
+| 766208 | AES-CFB8, AES-CFB1, AES-CBC-CS1/2/3 | 5 | 17,656 | `passed` |
+| | **Completed** | **56** | **56,468** | **all `passed`** |
 
 ² Answered through `examples/pqc_reference_harness.py`. `cryptography` implements neither
 ML-KEM nor ML-DSA, so there is nothing built in to answer with; the harness is backed by
@@ -471,6 +477,15 @@ Each of these passed the offline suite and would have shipped:
   group looked perfectly supported.
 - **ECDSA and RSA sigGen generated a fresh key per case.** ACVP reports the public key once per
   *group*, so a key per case cannot be expressed in the response document at all.
+- **The response builder dropped CFB1's bit count.** CFB1 is the only mode whose payload is
+  measured in bits rather than bytes, and the hex encoding pads the rest of the byte. The
+  offline runner passes the declared `payloadLen`, so every case agreed with NIST's own sample
+  file and passed. The submission path builds its document through a different function, that
+  function never passed the bit count, and so it answered over the padding as well. Session
+  766207 returned `fail` for CFB1 while the offline run was green on all 2,144 cases;
+  766208 is the same five names after the fix. It is the clearest example in the project of a
+  defect that only the live server can find: the two paths were checked against the same file
+  and only one of them was checked by NIST.
 
 ### Reproducing it
 
