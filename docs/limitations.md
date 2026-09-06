@@ -28,10 +28,13 @@ harness.
 
 ## Coverage boundaries
 
-- 40 algorithm names are implemented; the README lists what is [not covered](../README.md#not-covered).
+- 52 algorithm names are implemented; the README lists what is [not covered](../README.md#not-covered).
   An unrecognised algorithm exits non-zero rather than reporting a pass.
-- 22 of those 40 names have been judged by NIST's live server. The rest are verified against
-  pinned NIST vectors only.
+- All 52 have been judged by NIST's live ACVTS Demo server — 57 vector sets, 56,578 cases,
+  every verdict `passed`. That is the server's verdict on answers this runner produced, not
+  this project's own assessment, and it is still **test evidence, not validation**: only an
+  accredited CST or 17ACVT laboratory performs CAVP or FIPS 140-3 validation, and Demo is not
+  the production ACVTS.
 - Within supported families, some parameters are declined rather than approximated, and are
   reported UNSUPPORTED: AES-GCM `ivGen: internal`, AES-KW/KWP `kwCipher: inverse`, SHA large
   data tests (LDT), RSA SHAKE mask functions, ctrDRBG TDES, KDF `CMAC-TDES`, and ECDSA

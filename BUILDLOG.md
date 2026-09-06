@@ -390,3 +390,19 @@
 - Commit/link/path: `src/acvp_assay/providers/aes_block.py`, `src/acvp_assay/providers/aes_cs.py`, `src/acvp_assay/algorithms/aes_cs.py`, `src/acvp_assay/responder.py`, `examples/reference_harness.py`, `acvts-capabilities/aes-cfb-segments-cs.json`.
 - Blocker, if any: none.
 - Next unchecked ID: M22 - PBKDF, 42% of modules and second on the unlock table.
+
+## 2026-09-06 - PBKDF, and the family whose password is not hex
+
+- Project and task ID: ACVP Assay - M22, PBKDF (SP 800-132)
+- Done condition: PBKDF implemented, reaching a harness, with a verdict from NIST.
+- Why this next: measurement, not judgement. `docs/algorithm-frequency.md` puts PBKDF on **42%** of the 690 active FIPS 140-3 modules and **second on the unlock table** - adding it alone completes 26 modules that are otherwise one name away. It is also one name on a provider that already existed, which is the best rate on the list after M21.
+- Evidence produced: session **766210** - one vector set, **110 cases, `passed`**. Running total: **57 vector sets, 56,578 cases**, all `passed`, **52 of 52 algorithm names**.
+- Order kept, and it is now the habit rather than the exception: registered, fetched, and reproduced all 110 of NIST's answers with a throwaway script *before* any module code existed. The implementation was then written against a settled question.
+- The one real trap, and it is a quiet one: **ACVP sends `password` as text**, while every other byte string in a vector set arrives hex-encoded. Reading it as hex fails loudly on any password containing a letter past `f` - but silently *succeeds* on one that happens to be hex-shaped, deriving perfectly correctly from the wrong bytes. That is the failure mode worth fearing, so the decode happens once in the parser and the harness wire carries hex like everything else on it.
+- `keyLen` is in bits and `hashlib` wants bytes. Stated here because it is the kind of thing that is obvious once wrong and invisible until then.
+- **The M21 lesson was applied rather than remembered:** the response document was built and compared against NIST's expected results *before* submitting, not after. In M21 that check did not exist and the live server found a CFB1 defect the offline suite could not. Here it ran clean, 110/110, and the submission passed first time.
+- Tests run and result: `scripts/dev.py verify` - full gate; both new modules at 100%.
+- Commit/link/path: `src/acvp_assay/providers/pbkdf.py`, `src/acvp_assay/algorithms/pbkdf.py`, `src/acvp_assay/responder.py`, `examples/reference_harness.py`, `acvts-capabilities/pbkdf.json`.
+- Also fixed, and overdue: the README's "Not covered" list still named AES-CCM, AES-XTS, SHAKE, the KDA and KAS families, ML-KEM and ML-DSA as unimplemented. All of those shipped releases ago. A prospective user reading that list would have concluded the tool did roughly half of what it does.
+- Blocker, if any: none.
+- Next unchecked ID: M23 - safePrimes and KAS-FFC-SSC, 47% and 46%, one cluster.

@@ -6,14 +6,14 @@
 
 > ## ✅ Judged by NIST's own server
 >
-> **All 51 supported algorithm names** have been run against **vectors NIST generated live** and
-> submitted back for NIST to judge. On `demo.acvts.nist.gov`, **56 vector sets, covering 56,468
+> **All 52 supported algorithm names** have been run against **vectors NIST generated live** and
+> submitted back for NIST to judge. On `demo.acvts.nist.gov`, **57 vector sets, covering 56,578
 > test cases, each came back `"passed"`**, and that verdict is the server's, not this project's.
 > [Exactly which, per algorithm](#coverage).
 >
-> Read those two numbers precisely: ACVP returns one verdict **per vector set**, so 56 is the
-> count of verdicts NIST issued and 56,468 is the number of cases inside them. The server never
-> issued 56,468 separate verdicts, and this project does not claim it did.
+> Read those two numbers precisely: ACVP returns one verdict **per vector set**, so 57 is the
+> count of verdicts NIST issued and 56,578 is the number of cases inside them. The server never
+> issued 56,578 separate verdicts, and this project does not claim it did.
 >
 > **What this does and does not say about ML-KEM and ML-DSA.** Those two sessions were answered
 > by `examples/pqc_reference_harness.py`, which is backed by `kyber-py` and `dilithium-py` —
@@ -56,20 +56,20 @@ matrix, and twelve review comments submitted to the OASIS KMIP Profiles v3.0 pub
 
 Implemented today:
 
-- **51 algorithm names across 27 families** — AES in GCM, CCM, ECB, CBC, CTR, OFB, CFB128,
+- **52 algorithm names across 28 families** — AES in GCM, CCM, ECB, CBC, CTR, OFB, CFB128,
   CFB8, CFB1, CBC-CS1/CS2/CS3,
   GMAC, KW, KWP and XTS; CMAC-AES; all three SP 800-90A DRBGs; KDF SP 800-108; KDA SP 800-56C;
-  SHA-1, SHA-2, SHA-3 and the SHAKE XOFs;
+  SHA-1, SHA-2, SHA-3 and the SHAKE XOFs; PBKDF;
   HMAC over each; RSA; ECDSA; KAS-ECC-SSC; ML-KEM and ML-DSA
-- a replaceable provider boundary, in-process or an external harness over JSON — **all 51
+- a replaceable provider boundary, in-process or an external harness over JSON — **all 52
   names reach a harness**, so nothing silently tests this project's OpenSSL binding when you
   asked for your own implementation
 - **live ACVTS submission from your implementation**: `acvts_client.py submit
   --provider-command ...` answers NIST-generated vectors from your code and returns NIST's
-  verdict — all 51 names, ML-KEM and ML-DSA included
+  verdict — all 52 names, ML-KEM and ML-DSA included
 - run-over-run regression diffing, including coverage that silently disappeared
 - typed parsing that preserves `vsId`, `tgId`, and `tcId`
-- deterministic tests on Linux, verified against pinned NIST vectors, and for **all 51 names
+- deterministic tests on Linux, verified against pinned NIST vectors, and for **all 52 names
   against vectors generated live by NIST's ACVTS server** — see [Coverage](#coverage)
 
 Deliberately out of scope: a general-purpose ACVP protocol client (`libacvp` and
@@ -143,6 +143,7 @@ Three questions a vendor actually needs answered, in one table:
 | `ACVP-AES-CFB8` | AFT, MCT | ✅ | ✅ | `passed` — 766208 |
 | `ACVP-AES-CFB1` | AFT, MCT (payload in bits) | ✅ | ✅ | `passed` — 766208 |
 | `ACVP-AES-CBC-CS1`, `-CS2`, `-CS3` | AFT | ✅ | ✅ | `passed` — 766208 |
+| `PBKDF` | AFT (all eleven approved HMACs) | ✅ | ✅ | `passed` — 766210 |
 | `CMAC-AES` | AFT (gen and ver) | ✅ | ✅ | `passed` — 765342 |
 | `SHA-1` | AFT, MCT | ✅ | ✅ | `passed` — 765345 |
 | `SHA2-224` | AFT, MCT | ✅ | ✅ | `passed` — 765508 |
@@ -169,8 +170,8 @@ Three questions a vendor actually needs answered, in one table:
 
 ¹ Answered by the educational reference harness, not a shippable implementation — see the banner.
 
-**51 algorithm names across 27 families. All 51 reach a harness, all 51 can be submitted to a
-live session, and all 51 have been.**
+**52 algorithm names across 28 families. All 52 reach a harness, all 52 can be submitted to a
+live session, and all 52 have been.**
 
 The harness path is checked against the built-in one by answering each pinned NIST prompt both
 ways and comparing: **24,048 cases across ten families, byte-identical wherever the answer is
@@ -218,10 +219,19 @@ Named plainly so you can tell before you install whether this fits. None of thes
 implemented, and none are silently mis-reported — an unrecognised algorithm exits with an
 error rather than a pass:
 
-AES-CCM, AES-XTS, AES-XPN and the FPE modes; every TDES family; SHAKE, cSHAKE, KMAC,
-ParallelHash and TupleHash; the KAS/KTS and KDA families; the protocol KDFs (TLS, SSH, IKE,
-SRTP, ANSI X9.42/X9.63) and PBKDF; DSA, EdDSA, safe primes, and key generation for RSA or
-ECDSA; LMS/HSS and SLH-DSA; ML-KEM and ML-DSA key generation and signature generation.
+`AES-XPN`, `AES-GCM-SIV` and the format-preserving modes (`FF1`, `FF3-1`); every TDES
+family; `cSHAKE`, `KMAC`, `ParallelHash` and `TupleHash`; the key-agreement names other
+than `KAS-ECC-SSC` — `KAS-ECC`, `KAS-FFC`, `KAS-FFC-SSC`, `KAS-IFC`, `KAS-IFC-SSC`,
+`KAS-KC` and `KTS-IFC`; the protocol KDFs (`kdf-components` — TLS, SSH, IKE, SRTP,
+ANS X9.42/X9.63 — and `TLS-v1.2`, `TLS-v1.3`); `DSA`, `EDDSA`, `DetECDSA` and
+`safePrimes`; `LMS` and `SLH-DSA`; `ConditioningComponent`; `Ascon`; `XECDH`; key
+generation for RSA or ECDSA; and for the PQC names, everything but ML-KEM `encapDecap`
+and ML-DSA `sigVer`.
+
+How this list is chosen is no longer a matter of taste: `docs/algorithm-frequency.md`
+counts every one of these across active FIPS 140-3 certificates, and
+`docs/backlog.md` works down that ranking. Four of the names above appear on **no**
+active certificate at all.
 
 `acvp-assay run` on any of these reports the algorithm as unsupported and exits non-zero.
 
@@ -401,7 +411,7 @@ This second fixture's tag is deliberately corrupted (see `fixtures/README.md`); 
 ## Verified against NIST's own server
 
 Static vector files tell you whether a runner agrees with a snapshot. They cannot tell you whether
-it agrees with the system that issues the vectors. So all 51 supported algorithm names have been
+it agrees with the system that issues the vectors. So all 52 supported algorithm names have been
 through a live test session on NIST's ACVTS Demo server:
 register capabilities, fetch vectors NIST generated for this client, compute answers, submit them,
 and read back the verdict.
@@ -433,7 +443,8 @@ production ACVTS, which is available to accredited laboratories rather than to t
 | 765811 | KDA (HKDF) | 1 | 300 | `passed` |
 | 766207 | AES-CFB8, AES-CFB1, AES-CBC-CS1/2/3 | 5 | — | **CFB1 failed**, see below |
 | 766208 | AES-CFB8, AES-CFB1, AES-CBC-CS1/2/3 | 5 | 17,656 | `passed` |
-| | **Completed** | **56** | **56,468** | **all `passed`** |
+| 766210 | PBKDF | 1 | 110 | `passed` |
+| | **Completed** | **57** | **56,578** | **all `passed`** |
 
 ² Answered through `examples/pqc_reference_harness.py`. `cryptography` implements neither
 ML-KEM nor ML-DSA, so there is nothing built in to answer with; the harness is backed by

@@ -46,6 +46,7 @@ from acvp_assay.algorithms import (
     kas_ecc,
     kda,
     kdf,
+    pbkdf,
     pqc,
     rsa,
     sha2,
@@ -104,6 +105,7 @@ from acvp_assay.providers.kdf import (
     KdfRequest,
     SubprocessKdfProvider,
 )
+from acvp_assay.providers.pbkdf import HashlibPbkdf, PbkdfProvider, SubprocessPbkdf
 from acvp_assay.providers.pqc import (
     ML_DSA_PARAMETER_SETS,
     ML_KEM_PARAMETER_SETS,
@@ -973,6 +975,44 @@ def _aes_ccm_groups(
     return groups
 
 
+# --------------------------------------------------------------------------- PBKDF
+
+
+def _pbkdf_groups(
+    document: dict[str, object], harness: Harness | None = None
+) -> list[dict[str, object]]:
+    """One derived key per case."""
+    vector_set = pbkdf.parse_vector_set(document)
+    provider: PbkdfProvider = (
+        HashlibPbkdf()
+        if harness is None
+        else harness.open(
+            SubprocessPbkdf.from_command_string(
+                harness.command, timeout_seconds=harness.timeout_seconds
+            )
+        )
+    )
+    groups: list[dict[str, object]] = []
+    for group in vector_set.test_groups:
+        cases: list[dict[str, object]] = [
+            {
+                "tcId": case.tc_id,
+                "derivedKey": _hex(
+                    provider.derive(
+                        hmac_alg=group.hmac_alg,
+                        password=case.password,
+                        salt=case.salt,
+                        iterations=case.iterations,
+                        key_bits=case.key_bits,
+                    )
+                ),
+            }
+            for case in group.tests
+        ]
+        groups.append({"tgId": group.tg_id, "tests": cases})
+    return groups
+
+
 # --------------------------------------------------------------------------- AES-CBC-CS
 
 
@@ -1295,6 +1335,7 @@ def _builder_for(algorithm: str) -> _Builder | None:
         aes_ccm.ALGORITHM: _aes_ccm_groups,
         aes_xts.ALGORITHM: _aes_xts_groups,
         **dict.fromkeys(aes_cs.SUPPORTED, _aes_cs_groups),
+        pbkdf.ALGORITHM: _pbkdf_groups,
         kas_ecc.ALGORITHM: _kas_ecc_groups,
         "ML-KEM": _ml_kem_groups,
         "ML-DSA": _ml_dsa_groups,
@@ -1355,6 +1396,7 @@ def supported_response_algorithms() -> tuple[str, ...]:
         kda.ALGORITHM,
         aes_xts.ALGORITHM,
         *aes_cs.SUPPORTED,
+        pbkdf.ALGORITHM,
         "ACVP-AES-GCM",
         aes_modes.ECB,
         aes_modes.CMAC,

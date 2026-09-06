@@ -1,10 +1,10 @@
 # Decision 0001: Freeze the v0.1.0 MVP
 
-- Status: **Superseded** by the work recorded in `../backlog.md` (M01-M12), as of v0.11.0
+- Status: **Superseded** by the work recorded in `../backlog.md` (M01-M22), as of v0.19.0
 - Date: 2026-09-02
 
 > This record is kept as written. The scope it froze was deliberately narrow and
-> has since been widened on every axis it named: 40 algorithm names rather than
+> has since been widened on every axis it named: 52 algorithm names rather than
 > AES-GCM alone, an external-harness provider beside the built-in one, and live
 > ACVTS sessions rather than offline files only. What survives is the *shape* of
 > the decision — a replaceable provider boundary, and unsupported variants

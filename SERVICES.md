@@ -66,7 +66,7 @@ verified through SoftHSM against 3,461 pinned NIST cases.
 
 Before you engage a laboratory, know what will fail.
 
-- Scoping call to establish which of the [46 supported algorithm
+- Scoping call to establish which of the [52 supported algorithm
   names](README.md#coverage) apply.
 - Your implementation exercised against NIST-generated vectors through the
   harness boundary, case by case.

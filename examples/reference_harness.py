@@ -583,6 +583,44 @@ def _cs_swaps(algorithm: str, partial: bool) -> bool:
     return partial if algorithm == "ACVP-AES-CBC-CS2" else False
 
 
+PBKDF_HMACS = {
+    "SHA-1": "sha1",
+    "SHA2-224": "sha224",
+    "SHA2-256": "sha256",
+    "SHA2-384": "sha384",
+    "SHA2-512": "sha512",
+    "SHA2-512/224": "sha512_224",
+    "SHA2-512/256": "sha512_256",
+    "SHA3-224": "sha3_224",
+    "SHA3-256": "sha3_256",
+    "SHA3-384": "sha3_384",
+    "SHA3-512": "sha3_512",
+}
+
+
+def pbkdf(request: dict[str, Any]) -> dict[str, str]:
+    """Derive a key from a password (SP 800-132).
+
+    `password` arrives here as hex even though ACVP sends it as text: the runner
+    decodes it once so this wire stays hex throughout and has no character
+    encoding to disagree about. `keyLen` is in bits.
+    """
+    name = PBKDF_HMACS.get(request["hmacAlg"])
+    if name is None:
+        return {"error": "unsupported"}
+    key_bits = int(request["keyLen"])
+    if key_bits % 8:
+        return {"error": "unsupported"}
+    derived = hashlib.pbkdf2_hmac(
+        name,
+        bytes.fromhex(request["password"]),
+        bytes.fromhex(request["salt"]),
+        int(request["iterationCount"]),
+        dklen=key_bits // 8,
+    )
+    return {"derivedKey": derived.hex().upper()}
+
+
 def cbc_cs(request: dict[str, Any]) -> dict[str, str]:
     """CBC with ciphertext stealing, in any of the three orderings."""
     algorithm = request["algorithm"]
@@ -1125,6 +1163,7 @@ HANDLERS = {
     "block-transform": block_transform,
     "block-mct": block_mct,
     "cbc-cs": cbc_cs,
+    "pbkdf": pbkdf,
     "cmac": cmac,
     "gmac": gmac,
     "key-wrap": key_wrap,

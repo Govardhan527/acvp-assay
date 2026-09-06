@@ -30,6 +30,7 @@ from acvp_assay.algorithms import (
     kas_ecc,
     kda,
     kdf,
+    pbkdf,
     pqc,
     rsa,
     sha2,
@@ -102,6 +103,7 @@ def supported_algorithms() -> list[str]:
         *shake.SUPPORTED,
         aes_xts.ALGORITHM,
         *aes_cs.SUPPORTED,
+        pbkdf.ALGORITHM,
         kas_ecc.ALGORITHM,
         kda.ALGORITHM,
         kdf.ALGORITHM,
@@ -336,6 +338,19 @@ def _run_kas_ecc(
     return kas_ecc.run_vector_set(vector_set, expected, provider), metadata
 
 
+def _run_pbkdf(
+    vector_file: Path,
+    expected_file: Path,
+    provider_command: str | None,
+    provider_timeout: float,
+) -> tuple[list[TestCaseResult], ProviderMetadata]:
+    provider = pbkdf.provider_for(provider_command, provider_timeout)
+    metadata = provider.metadata()
+    vector_set = pbkdf.load_vector_set(vector_file)
+    expected = pbkdf.load_expected_results(expected_file)
+    return pbkdf.run_vector_set(vector_set, expected, provider), metadata
+
+
 def _run_aes_cs(
     vector_file: Path,
     expected_file: Path,
@@ -458,6 +473,10 @@ def run_vector_file(
         )
     elif algorithm == aes_ccm.ALGORITHM:
         runners[algorithm] = lambda: _run_aes_ccm(
+            vector_file, expected_file, provider_command, provider_timeout
+        )
+    elif algorithm == pbkdf.ALGORITHM:
+        runners[algorithm] = lambda: _run_pbkdf(
             vector_file, expected_file, provider_command, provider_timeout
         )
     elif algorithm in aes_cs.SUPPORTED:

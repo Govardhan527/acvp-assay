@@ -117,6 +117,7 @@ declining is a first-class answer, see below.
 | `block-transform` | `algorithm`, `direction`, `key`, `iv`, `data`, `payloadLen` ⁺ | `out` |
 | `block-mct` | `algorithm`, `direction`, `key`, `iv`, `data`, `payloadLen` ⁺ | `resultsArray` — 100 × `{key, iv, in, out}` |
 | `cbc-cs` | `algorithm`, `direction`, `key`, `iv`, `data` | `out` |
+| `pbkdf` | `hmacAlg`, `password`, `salt`, `iterationCount`, `keyLen` | `derivedKey` |
 | `cmac` | `key`, `message`, `macLen` | `mac` |
 | `gmac` | `key`, `iv`, `aad`, `tagLen` | `tag` |
 | `ccm-encrypt` | `key`, `iv`, `pt`, `aad`, `tagLen` | `ct` — with the tag appended |
@@ -227,6 +228,15 @@ with the last *keyLen* bits of output — which is more than one block once the
 key is 192 or 256 bits — and the next IV is the last block's worth. A harness
 that reuses its CFB128 chain here will return 100 plausible iterations that
 disagree with NIST from the first one.
+
+`pbkdf` derives a key from a password (SP 800-132). Two things about it are
+worth stating, because ACVP decides both and neither is guessable: **`keyLen` is
+in bits**, and **the password reaches this wire as hex** even though ACVP sends
+it to the runner as text. Everything else on this protocol is hex, and hex has
+no character encoding for the two sides to disagree about — so the runner
+decodes once and a harness never has to know ACVP's convention. The iteration
+count is deliberately expensive; a large registration is slow to answer, not
+broken.
 
 `cbc-cs` covers `ACVP-AES-CBC-CS1`, `-CS2` and `-CS3`. The cryptography is
 identical across the three; only the order of the last two ciphertext blocks

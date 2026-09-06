@@ -163,9 +163,23 @@ that document ranks.
       the offline runner — a different code path — passed all 2,144 cases against
       NIST's own sample file. Session 766207 returned `fail`; the fix is pinned by
       `tests/unit/test_responder_payload_bits.py`.
-- [ ] M22: `PBKDF` — 42% of modules, and second on the unlock table: adding it
-      alone completes 26 modules that are otherwise one name away. One name,
-      built on the HMAC provider that already exists.
+- [x] M22: `PBKDF` (SP 800-132) — 42% of modules and second on the unlock table.
+      Session 766210 returned `passed` on all 110 cases, taking the project to 52
+      algorithm names. One vector set, eleven groups, one per approved HMAC.
+      The derivation is `hashlib.pbkdf2_hmac`, so almost none of the work was
+      arithmetic. Two things ACVP decides and neither is guessable:
+      - **The password arrives as text, not hex.** Every other byte string in a
+        vector set is hex-encoded; this one is the characters themselves. A hex
+        reading fails outright on any password containing a letter past `f` and,
+        worse, silently succeeds on one that happens to be hex-shaped — deriving
+        correctly from the wrong bytes. It is decoded once at the parser so
+        nothing downstream has to remember which convention applies, and the
+        harness wire carries hex like everything else.
+      - **`keyLen` counts bits**, as ACVP lengths do, while `hashlib` wants bytes.
+      Verified before writing module code, as M21 established: all 110 of NIST's
+      answers were reproduced from the fetched vectors first. The response
+      document was then checked against those same answers *before* submission —
+      the step that would have caught the CFB1 defect in M21.
 - [ ] M23: `safePrimes` (47%) and `KAS-FFC-SSC` (46%). The reasoned ranking
       dismissed safePrimes as niche, which was its largest single error — 278 of
       the 322 modules validating it also validate KAS-FFC-SSC, so these are one
