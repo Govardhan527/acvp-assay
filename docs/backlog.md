@@ -129,34 +129,62 @@ Aimed at demand rather than portfolio scope; supersedes the v0.1.0 non-goals whe
 
 ## Open
 
-Measured against the live Demo registry as pulled on 2026-09-03 — 178
-algorithm/revision entries, **97 distinct algorithm names**, of which acvp-assay now
-covers **46**. Of the 51 uncovered, 14 are three-key TDES, disallowed for new
-validations since 2023 and not worth building. Another seventeen are niche —
-FF1/FF3-1, CBC-CS1/2/3, CFB1/CFB8, XPN, GCM-SIV, Ascon, ParallelHash-128/256,
-TupleHash-128/256, DSA, XECDH, safePrimes — which leaves about twenty that a real
-certificate is likely to carry.
+Ranked by measurement, not judgement. `docs/algorithm-frequency.md` counts every
+name across the **690 active FIPS 140-3 certificates** that list their approved
+algorithms; the shares below are from that table, and `scripts/cavp_frequency.py`
+reproduces it. Where two names are bracketed together it is because the
+certificates bracket them — the co-occurrence is in the same document.
 
-The ordering below is reasoned from what modules typically validate, not measured.
-M25 is what would replace that judgement with evidence, and it may well reorder the
-list.
+The median module is **84% testable today** and 112 of the 690 are fully
+testable. 118 more are exactly one name away, which is what the second table in
+that document ranks.
 
-- [ ] M21: cSHAKE-128/256 and KMAC-128/256. They follow directly from the XOF boundary
-      that SHAKE established in `providers/digest.py`, which makes them the cheapest
-      four names left. KMAC is also a MAC, so it reuses the gen/ver inversion already
-      proven by CMAC and GMAC.
-- [ ] M22: `kdf-components`, TLS-v1.2 and TLS-v1.3. Three registry names of one shape,
-      and every module that terminates TLS validates them.
-- [ ] M23: KAS-FFC-SSC and KAS-IFC-SSC. Siblings of the ECC variant already built, so
-      the offline/live split M15 settled — a VAL case fully checkable here, an AFT case
-      answerable only by the server that holds the peer private key — applies unchanged.
-- [ ] M24: KTS-IFC, PBKDF, EDDSA, then LMS, SLH-DSA, ConditioningComponent, and the
-      non-SSC KAS variants. Each is a real build rather than a reuse; ordered by how
-      often a certificate carries it.
-- [ ] M25: replace the reasoned ranking with a measured one. Scrape NIST's CAVP
-      validated-modules database and count algorithm frequency across issued
-      certificates, the way M07 was chosen by reading certificates rather than by
-      guessing. Do this before M24 rather than after: it is the item most likely to
-      change what the others should be.
+- [ ] M21: the AES modes the measurement rescued — `ACVP-AES-CFB8` (36% of
+      modules), `ACVP-AES-CBC-CS3` (27%), `CBC-CS1` (24%), `CBC-CS2` (23%) and
+      `ACVP-AES-CFB1` (21%). All five were written off as niche by the reasoned
+      ranking and all five reuse the mode machinery `aes_modes.py` already
+      carries, which makes this the best rate of coverage per day of work on the
+      list. CFB1 is a strict subset of CFB8: every one of the 148 modules
+      validating it validates CFB8 too, so the pair is one piece of work.
+      Ciphertext stealing is the only new idea among them.
+- [ ] M22: `PBKDF` — 42% of modules, and second on the unlock table: adding it
+      alone completes 26 modules that are otherwise one name away. One name,
+      built on the HMAC provider that already exists.
+- [ ] M23: `safePrimes` (47%) and `KAS-FFC-SSC` (46%). The reasoned ranking
+      dismissed safePrimes as niche, which was its largest single error — 278 of
+      the 322 modules validating it also validate KAS-FFC-SSC, so these are one
+      cluster and building either alone leaves most of those modules still
+      untestable. KAS-FFC-SSC is a sibling of the ECC variant built in M15, so
+      the offline/live split settled there applies unchanged.
+- [ ] M24: `kdf-components` (56%), `TLS-v1.2` (41%) and `TLS-v1.3` (28%). The
+      most common missing name and the top of the unlock table, ranked below the
+      three items above only because it is the most work: kdf-components is one
+      registry name covering nine component KDFs — SSH, TLS, IKEv1, IKEv2,
+      ANS 9.42, ANS 9.63, SNMP, SRTP and TPM. 256 of the 281 modules validating
+      TLS-v1.2 also validate kdf-components, so they ship together.
+- [x] M25: replace the reasoned ranking with a measured one. Done 2026-09-06:
+      `scripts/cavp_frequency.py` fetches all 1,182 active CMVP certificates,
+      maps each CAVP display name onto its ACVP registry name and counts them
+      across modules, by frequency and by what each addition completes. Written
+      up in `docs/algorithm-frequency.md`; the display-name map is the only
+      judgement in it and is tested in `tests/unit/test_cavp_frequency.py`.
+      It reordered everything above. `cSHAKE-128/256` had been ranked first and
+      measures **7%** — it was chosen for being cheap to build, which is a claim
+      about cost wearing the clothes of a claim about demand.
+- [ ] M26: the tail, in measured order — `KTS-IFC` (31%) with `KAS-IFC-SSC`
+      (17%), which co-occur on 114 modules; `KMAC-128/256` (22%); `KAS-ECC`
+      non-SSC (22%, and fourth on the unlock table); `EDDSA` (14%);
+      `ConditioningComponent` (4%, eighth on the unlock table); then
+      `cSHAKE-128/256` (7%), `ParallelHash` and `TupleHash` (6%),
+      `ACVP-AES-FF1` (6%), `LMS` and `DetECDSA` (2%), `ACVP-AES-XPN` (2%),
+      `KAS-KC` (0.4%) and `SLH-DSA` (0.3%).
+      `DSA` measures 28% and is deliberately not ranked with the rest: SP 800-131A
+      disallowed DSA signature generation after 2023, so what is left on
+      certificates is legacy verification and the share should decay.
+
+Not worth building, now measured rather than assumed: `ACVP-AES-GCM-SIV`,
+`Ascon`, `XECDH` and `ACVP-AES-FF3-1` appear on **no** active FIPS 140-3
+certificate, and the fourteen three-key TDES names are disallowed for new
+validations since 2023.
 
 Still out of scope: a full ACVP protocol client, algorithm count as a goal, an HTML dashboard, and any hosted service.

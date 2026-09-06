@@ -573,6 +573,8 @@ python3.12 scripts/dev.py demo
 - `scripts/dev.py`: the setup, test and verify gate
 - `scripts/acvts_client.py`: live ACVTS client — register, fetch, submit, results
 - `scripts/fetch_vectors.py`: downloads and hash-verifies the pinned upstream vectors
+- `scripts/cavp_frequency.py`: counts ACVP algorithm names across every active FIPS 140-3
+  certificate, which is how the build order is chosen
 - `acvts-capabilities/`: capability registrations used for the live sessions
 - `examples/`: worked reference harnesses that import nothing from the package —
   Python, and a PKCS#11 one in C under `examples/pkcs11/`
@@ -585,6 +587,8 @@ python3.12 scripts/dev.py demo
 - `docs/harness-protocol.md`: the full harness specification for vendors
 - `docs/limitations.md`: security and assurance boundaries
 - `docs/vector-sources.md`: pinned upstream source, hashes, licensing, and redistribution policy
+- `docs/algorithm-frequency.md`: **what FIPS 140-3 certificates actually contain** — every
+  algorithm name counted across 690 active certificates, and what that changed
 - `docs/decisions/`: committed design decisions
 - `docs/backlog.md`: what is built and what is next
 - `SERVICES.md`: paid engagements — readiness assessment, harness build, regression retainer

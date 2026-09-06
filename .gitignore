@@ -37,3 +37,6 @@ docs/acvts-demo-access-request.md
 
 # Built C harness (source is committed; the binary is not)
 examples/pkcs11/acvp_harness
+
+# Research cache for scripts/cavp_frequency.py — 1,182 fetched pages, not redistributed
+.cavp-cache/
