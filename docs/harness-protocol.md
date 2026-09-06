@@ -118,6 +118,10 @@ declining is a first-class answer, see below.
 | `block-mct` | `algorithm`, `direction`, `key`, `iv`, `data`, `payloadLen` ⁺ | `resultsArray` — 100 × `{key, iv, in, out}` |
 | `cbc-cs` | `algorithm`, `direction`, `key`, `iv`, `data` | `out` |
 | `pbkdf` | `hmacAlg`, `password`, `salt`, `iterationCount`, `keyLen` | `derivedKey` |
+| `safe-primes-keygen` | `safePrimeGroup` | `x`, `y` |
+| `safe-primes-keyver` | `safePrimeGroup`, `x`, `y` | `testPassed` |
+| `kas-ffc-keygen` | `domainParameterGenerationMode` | `privateKey`, `publicKey` |
+| `kas-ffc-ssc` | `domainParameterGenerationMode`, `privateKey`, `peerPublic` | `z` |
 | `cmac` | `key`, `message`, `macLen` | `mac` |
 | `gmac` | `key`, `iv`, `aad`, `tagLen` | `tag` |
 | `ccm-encrypt` | `key`, `iv`, `pt`, `aad`, `tagLen` | `ct` — with the tag appended |
@@ -228,6 +232,23 @@ with the last *keyLen* bits of output — which is more than one block once the
 key is 192 or 256 bits — and the next IV is the last block's worth. A harness
 that reuses its CFB128 chain here will return 100 plausible iterations that
 disagree with NIST from the first one.
+
+The four safe-prime operations share one table of domain parameters, because ACVP
+names the group the same way in both families: `MODP-2048`, `ffdhe3072` and the
+rest. The vector set never sends `p` or `g`, so a harness carries them — RFC 3526
+for MODP and RFC 7919 for FFDHE, generator 2 throughout.
+
+**The private key must be in [1, q−1], where q = (p−1)/2.** This is the one rule
+worth stating loudly, because nothing you can check locally will enforce it.
+Generator 2 has order q, so `g^x == g^(x mod q)`: an out-of-range x yields a
+public key that is entirely valid and verifies against your own verifier. A
+harness that draws from [1, p−2] passes every self-test and fails the live
+server. This project made exactly that mistake; session 766220's keyGen set was
+rejected while every offline case was green.
+
+`z` from `kas-ffc-ssc` is left-padded to the modulus length. ACVP compares
+bytes, so a secret that dropped its leading zeros is a wrong answer even though
+the integer is right.
 
 `pbkdf` derives a key from a password (SP 800-132). Two things about it are
 worth stating, because ACVP decides both and neither is guessable: **`keyLen` is

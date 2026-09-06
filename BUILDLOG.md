@@ -406,3 +406,20 @@
 - Also fixed, and overdue: the README's "Not covered" list still named AES-CCM, AES-XTS, SHAKE, the KDA and KAS families, ML-KEM and ML-DSA as unimplemented. All of those shipped releases ago. A prospective user reading that list would have concluded the tool did roughly half of what it does.
 - Blocker, if any: none.
 - Next unchecked ID: M23 - safePrimes and KAS-FFC-SSC, 47% and 46%, one cluster.
+
+## 2026-09-06 - safePrimes and KAS-FFC-SSC, and a defect no local check could see
+
+- Project and task ID: ACVP Assay - M23, the FFC key-agreement cluster
+- Done condition: both names implemented, reaching a harness, with a verdict from NIST.
+- Why together: the measurement said so. `docs/algorithm-frequency.md` puts safePrimes on 47% of the 690 active FIPS 140-3 modules and KAS-FFC-SSC on 46%, and **278 of safePrimes' 322 modules validate both** - building either alone leaves most of them still untestable. The code turned out to bracket them too: ACVP names the group with the same strings in both families, so one table of domain parameters serves both.
+- Evidence produced: session **766221** - three vector sets, **98 cases, `passed`**. Running total: **60 vector sets, 56,676 cases**, all `passed`, **54 of 54 algorithm names**.
+- The domain parameters were computed, not transcribed. RFC 3526 gives MODP as `p = 2^n - 2^(n-64) - 1 + 2^64 * (floor(2^(n-130) * pi) + offset)` and RFC 7919 gives FFDHE the same shape over *e*. Deriving them from the formula and then checking against the server's own keyVer answers - all 60 verdicts across six groups, 42 true and 18 false - is a better guarantee than retyping 4096-bit constants, because a wrong prime fails *every* case in its group rather than some of them.
+- **The defect, and it is the subtlest this project has produced.** keyGen drew its private key from [1, p-2]. It must come from [1, q-1] where q = (p-1)/2. Generator 2 has order q, so `g^x == g^(x mod q)`: an out-of-range x produces a **perfectly valid public key**. The obvious test - generate a pair, verify the pair - passed every single time. `key_ver` was correct. `key_gen` was incorrect. They agreed with each other, which is exactly why nothing local complained.
+- Nor could any vector have caught it: **all 60 of NIST's keyVer cases use a private key already inside the range**, so that mode never exercises the constraint at all. Checked, rather than assumed - the count is in the session data.
+- It is also precisely the case the runner *declines by design*. keyGen produces a fresh key, so the offline run reported all 18 cases UNSUPPORTED with the reason "submit to ACVTS, which recomputes it". Session **766220** did, and ACVTS said no. Where the CFB1 defect in M21 was two code paths with one unchecked, this was a single path, wholly self-consistent, and still wrong.
+- What changed as a result, beyond the three-line fix: `tests/unit/test_generated_key_ranges.py` asserts the **domain constraint** rather than the round trip; keeps the round trip but labels it the weaker claim; and pins the blind spot itself - a public key derived from an out-of-range private key still verifies - so that nobody later "simplifies" the range test back into the test that missed it. Restoring the original defect fails 6 of its 36 tests; that was verified rather than assumed.
+- The rule this generalises to, and it is checkable: the exposure is exactly those generators whose modular arithmetic this project does **by hand**. Where `cryptography` generates the key - ECDSA, RSA, KAS-ECC-SSC - the library enforces its own ranges.
+- Tests run and result: `scripts/dev.py verify` - full gate.
+- Commit/link/path: `src/acvp_assay/providers/safe_primes.py`, `src/acvp_assay/providers/kas_ffc.py`, `src/acvp_assay/algorithms/safe_primes.py`, `src/acvp_assay/algorithms/kas_ffc.py`, `src/acvp_assay/responder.py`, `examples/reference_harness.py`, `acvts-capabilities/safeprimes-kas-ffc.json`.
+- Blocker, if any: none.
+- Next unchecked ID: M24 - kdf-components (56%), TLS-v1.2 (41%), TLS-v1.3 (28%).

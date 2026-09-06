@@ -1,0 +1,24 @@
+[
+  {
+    "algorithm": "safePrimes",
+    "mode": "keyGen",
+    "revision": "1.0",
+    "safePrimeGroups": ["modp-2048", "modp-3072", "modp-4096", "ffdhe2048", "ffdhe3072", "ffdhe4096"]
+  },
+  {
+    "algorithm": "safePrimes",
+    "mode": "keyVer",
+    "revision": "1.0",
+    "safePrimeGroups": ["modp-2048", "modp-3072", "modp-4096", "ffdhe2048", "ffdhe3072", "ffdhe4096"]
+  },
+  {
+    "algorithm": "KAS-FFC-SSC",
+    "revision": "Sp800-56Ar3",
+    "scheme": {
+      "dhEphem": {
+        "kasRole": ["initiator", "responder"]
+      }
+    },
+    "domainParameterGenerationMethods": ["MODP-2048", "MODP-3072", "FFDHE2048", "FFDHE3072"]
+  }
+]

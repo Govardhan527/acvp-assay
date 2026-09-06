@@ -180,12 +180,29 @@ that document ranks.
       answers were reproduced from the fetched vectors first. The response
       document was then checked against those same answers *before* submission —
       the step that would have caught the CFB1 defect in M21.
-- [ ] M23: `safePrimes` (47%) and `KAS-FFC-SSC` (46%). The reasoned ranking
-      dismissed safePrimes as niche, which was its largest single error — 278 of
-      the 322 modules validating it also validate KAS-FFC-SSC, so these are one
-      cluster and building either alone leaves most of those modules still
-      untestable. KAS-FFC-SSC is a sibling of the ECC variant built in M15, so
-      the offline/live split settled there applies unchanged.
+- [x] M23: `safePrimes` (47%) and `KAS-FFC-SSC` (46%). Built together because the
+      certificates bracket them — 278 of safePrimes' 322 modules also validate
+      KAS-FFC-SSC — and the code bracketed them too: ACVP names the group with the
+      same strings in both families, so one table of RFC 3526 / RFC 7919 domain
+      parameters serves both. Session 766221 returned `passed` on all three vector
+      sets, 98 cases, taking the project to 54 algorithm names.
+      The primes were computed from the formulas in their RFCs rather than
+      transcribed, then checked against the server's own keyVer answers — all 60
+      verdicts across all six groups, 42 true and 18 false. A wrong prime fails
+      every case in its group rather than some, which is the useful shape of that
+      check.
+      **And the subtlest defect the project has found.** keyGen drew its private
+      key from [1, p−2] instead of [1, q−1], q = (p−1)/2. Generator 2 has order q,
+      so `g^x == g^(x mod q)`: an out-of-range x produces a *perfectly valid*
+      public key. Generating a pair and verifying it passed every time — key_ver
+      was right, key_gen was wrong, and they agreed with each other. No vector
+      could catch it either: all 60 keyVer cases use a key already in range, so
+      that mode never exercises the constraint. Session 766220 failed; 766221 is
+      the same registration after the fix. `tests/unit/test_generated_key_ranges.py`
+      now asserts the domain constraint itself, keeps the round trip while
+      labelling it the weaker claim, and pins the blind spot — that a key derived
+      from an out-of-range private key still verifies — so nobody simplifies the
+      range test back into a round trip.
 - [ ] M24: `kdf-components` (56%), `TLS-v1.2` (41%) and `TLS-v1.3` (28%). The
       most common missing name and the top of the unlock table, ranked below the
       three items above only because it is the most work: kdf-components is one

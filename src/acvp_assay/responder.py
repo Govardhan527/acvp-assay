@@ -44,11 +44,13 @@ from acvp_assay.algorithms import (
     ecdsa,
     hmac_mac,
     kas_ecc,
+    kas_ffc,
     kda,
     kdf,
     pbkdf,
     pqc,
     rsa,
+    safe_primes,
     sha2,
     shake,
 )
@@ -95,6 +97,7 @@ from acvp_assay.providers.kas_ecc import (
     KasEccProvider,
     SubprocessKasEcc,
 )
+from acvp_assay.providers.kas_ffc import KasFfcProvider, PythonKasFfc, SubprocessKasFfc
 from acvp_assay.providers.kda import CryptographyKda, KdaProvider, SubprocessKda
 from acvp_assay.providers.kdf import (
     CMAC_MODES,
@@ -116,6 +119,11 @@ from acvp_assay.providers.rsa import (
     CryptographyRsaProvider,
     RsaProvider,
     SubprocessRsaProvider,
+)
+from acvp_assay.providers.safe_primes import (
+    PythonSafePrimes,
+    SafePrimesProvider,
+    SubprocessSafePrimes,
 )
 from acvp_assay.providers.subprocess_harness import (
     DEFAULT_TIMEOUT_SECONDS,
@@ -975,6 +983,109 @@ def _aes_ccm_groups(
     return groups
 
 
+# --------------------------------------------------------------------------- safePrimes / FFC
+
+
+def _safe_primes_groups(
+    document: dict[str, object], harness: Harness | None = None
+) -> list[dict[str, object]]:
+    """A generated pair per keyGen case, a verdict per keyVer case.
+
+    keyGen is the half the offline runner has to decline: the key is fresh every
+    run, so nothing recorded can be compared with it. The server recomputes
+    ``g^x mod p`` from what is reported here, which is why submitting is the
+    only way this half is ever checked.
+    """
+    vector_set = safe_primes.parse_vector_set(document)
+    provider: SafePrimesProvider = (
+        PythonSafePrimes()
+        if harness is None
+        else harness.open(
+            SubprocessSafePrimes.from_command_string(
+                harness.command, timeout_seconds=harness.timeout_seconds
+            )
+        )
+    )
+    groups: list[dict[str, object]] = []
+    for group in vector_set.test_groups:
+        cases: list[dict[str, object]] = []
+        for case in group.tests:
+            if vector_set.mode == safe_primes.KEY_GEN:
+                x, y = provider.key_gen(group=group.safe_prime_group)
+                cases.append({"tcId": case.tc_id, "x": _hex(x), "y": _hex(y)})
+                continue
+            if case.x is None or case.y is None:
+                raise ResponseError(
+                    f"tgId {group.tg_id} tcId {case.tc_id} is a keyVer case with no x or y"
+                )
+            cases.append(
+                {
+                    "tcId": case.tc_id,
+                    "testPassed": provider.key_ver(
+                        group=group.safe_prime_group, x=case.x, y=case.y
+                    ),
+                }
+            )
+        groups.append({"tgId": group.tg_id, "tests": cases})
+    return groups
+
+
+def _kas_ffc_groups(
+    document: dict[str, object], harness: Harness | None = None
+) -> list[dict[str, object]]:
+    """Z per AFT case with the public key used to reach it, a verdict per VAL."""
+    vector_set = kas_ffc.parse_vector_set(document)
+    provider: KasFfcProvider = (
+        PythonKasFfc()
+        if harness is None
+        else harness.open(
+            SubprocessKasFfc.from_command_string(
+                harness.command, timeout_seconds=harness.timeout_seconds
+            )
+        )
+    )
+    groups: list[dict[str, object]] = []
+    for group in vector_set.groups:
+        if group.scheme != kas_ffc.DH_EPHEM:
+            raise ResponseError(
+                f"tgId {group.tg_id} uses scheme {group.scheme!r}, which this runner does not "
+                "answer; register only 'dhEphem' for a submission"
+            )
+        cases: list[dict[str, object]] = []
+        for case in group.tests:
+            if case.peer_public is None:
+                raise ResponseError(f"tgId {group.tg_id} tcId {case.tc_id} has no peer public key")
+            if group.test_type == kas_ffc.VAL:
+                if case.private_key is None or case.claimed_z is None:
+                    raise ResponseError(
+                        f"tgId {group.tg_id} tcId {case.tc_id} is a VAL case with no private "
+                        "key or z"
+                    )
+                computed = provider.shared_secret(
+                    group=group.group,
+                    private_key=case.private_key,
+                    peer_public=case.peer_public,
+                )
+                cases.append({"tcId": case.tc_id, "testPassed": computed == case.claimed_z})
+                continue
+            private_key, public_key = provider.generate(group=group.group)
+            cases.append(
+                {
+                    "tcId": case.tc_id,
+                    "ephemeralPublicIut": _hex(public_key),
+                    "z": _hex(
+                        provider.shared_secret(
+                            group=group.group,
+                            private_key=private_key,
+                            peer_public=case.peer_public,
+                        )
+                    ),
+                }
+            )
+        groups.append({"tgId": group.tg_id, "tests": cases})
+    return groups
+
+
 # --------------------------------------------------------------------------- PBKDF
 
 
@@ -1336,6 +1447,8 @@ def _builder_for(algorithm: str) -> _Builder | None:
         aes_xts.ALGORITHM: _aes_xts_groups,
         **dict.fromkeys(aes_cs.SUPPORTED, _aes_cs_groups),
         pbkdf.ALGORITHM: _pbkdf_groups,
+        safe_primes.ALGORITHM: _safe_primes_groups,
+        kas_ffc.ALGORITHM: _kas_ffc_groups,
         kas_ecc.ALGORITHM: _kas_ecc_groups,
         "ML-KEM": _ml_kem_groups,
         "ML-DSA": _ml_dsa_groups,
@@ -1397,6 +1510,8 @@ def supported_response_algorithms() -> tuple[str, ...]:
         aes_xts.ALGORITHM,
         *aes_cs.SUPPORTED,
         pbkdf.ALGORITHM,
+        safe_primes.ALGORITHM,
+        kas_ffc.ALGORITHM,
         "ACVP-AES-GCM",
         aes_modes.ECB,
         aes_modes.CMAC,

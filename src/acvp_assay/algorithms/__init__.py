@@ -28,11 +28,13 @@ from acvp_assay.algorithms import (
     ecdsa,
     hmac_mac,
     kas_ecc,
+    kas_ffc,
     kda,
     kdf,
     pbkdf,
     pqc,
     rsa,
+    safe_primes,
     sha2,
     shake,
 )
@@ -104,6 +106,8 @@ def supported_algorithms() -> list[str]:
         aes_xts.ALGORITHM,
         *aes_cs.SUPPORTED,
         pbkdf.ALGORITHM,
+        safe_primes.ALGORITHM,
+        kas_ffc.ALGORITHM,
         kas_ecc.ALGORITHM,
         kda.ALGORITHM,
         kdf.ALGORITHM,
@@ -338,6 +342,32 @@ def _run_kas_ecc(
     return kas_ecc.run_vector_set(vector_set, expected, provider), metadata
 
 
+def _run_safe_primes(
+    vector_file: Path,
+    expected_file: Path,
+    provider_command: str | None,
+    provider_timeout: float,
+) -> tuple[list[TestCaseResult], ProviderMetadata]:
+    provider = safe_primes.provider_for(provider_command, provider_timeout)
+    metadata = safe_primes.metadata_for(provider)
+    vector_set = safe_primes.load_vector_set(vector_file)
+    expected = safe_primes.load_expected_results(expected_file)
+    return safe_primes.run_vector_set(vector_set, expected, provider), metadata
+
+
+def _run_kas_ffc(
+    vector_file: Path,
+    expected_file: Path,
+    provider_command: str | None,
+    provider_timeout: float,
+) -> tuple[list[TestCaseResult], ProviderMetadata]:
+    provider = kas_ffc.provider_for(provider_command, provider_timeout)
+    metadata = kas_ffc.metadata_for(provider)
+    vector_set = kas_ffc.load_vector_set(vector_file)
+    expected = kas_ffc.load_expected_results(expected_file)
+    return kas_ffc.run_vector_set(vector_set, expected, provider), metadata
+
+
 def _run_pbkdf(
     vector_file: Path,
     expected_file: Path,
@@ -473,6 +503,14 @@ def run_vector_file(
         )
     elif algorithm == aes_ccm.ALGORITHM:
         runners[algorithm] = lambda: _run_aes_ccm(
+            vector_file, expected_file, provider_command, provider_timeout
+        )
+    elif algorithm == safe_primes.ALGORITHM:
+        runners[algorithm] = lambda: _run_safe_primes(
+            vector_file, expected_file, provider_command, provider_timeout
+        )
+    elif algorithm == kas_ffc.ALGORITHM:
+        runners[algorithm] = lambda: _run_kas_ffc(
             vector_file, expected_file, provider_command, provider_timeout
         )
     elif algorithm == pbkdf.ALGORITHM:
