@@ -5,6 +5,58 @@ All notable changes to this project are recorded here. The format follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Before 1.0.0 the
 provider protocols may change between minor versions.
 
+## [0.19.0] - 2026-09-06
+
+### Added
+
+- **Five AES modes, chosen by measurement rather than judgement** —
+  `ACVP-AES-CFB8`, `ACVP-AES-CFB1`, `ACVP-AES-CBC-CS1`, `-CS2` and `-CS3`.
+  These are the top of what was missing once every algorithm on the 690 active
+  FIPS 140-3 certificates was counted: CFB8 on 36% of modules, CBC-CS3 on 27%,
+  CS1 on 24%, CS2 on 23%, CFB1 on 21%.
+- Session 766208 returned `passed` on all five vector sets. Running total:
+  **56 vector sets, 56,468 cases, 51 of 51 algorithm names**.
+- **`docs/algorithm-frequency.md`** and `scripts/cavp_frequency.py` — every ACVP
+  algorithm name counted across active FIPS 140-3 certificates, by frequency and
+  by what each addition completes. The median active module is 84% testable by
+  this tool; 112 of 690 are fully testable and 118 more are one name away.
+- **`SERVICES.md`** — paid engagements, for teams who would rather have the work
+  done than the tool handed over. The tool stays MIT-licensed and ungated.
+- Harness operation `cbc-cs`, an optional `payloadLen` on `block-transform` and
+  `block-mct` for CFB1 only, and `acvts-capabilities/aes-cfb-segments-cs.json`.
+
+### Fixed
+
+- **The response builder dropped CFB1's `payloadLen`**, so a submission answered
+  over the zero padding the hex encoding adds as well as the payload. The
+  offline runner passes the bit count, so every case agreed with NIST's own
+  sample file and passed; the submission path is a different function that did
+  not. Session 766207 returned `fail` for CFB1 while the offline run was green.
+  Only the live server could have found this.
+
+### Notes
+
+- **CFB8 and CFB1 need their own Monte Carlo chain.** It is a different
+  algorithm from the whole-block one, not a parameterisation of it: a segment
+  mode feeds back one segment per step, so a block's worth of feedback takes 16
+  steps or 128 rather than one. Reusing the CFB128 chain returns 100 plausible
+  outer iterations that disagree with NIST from the first.
+- The key shuffle takes the last **keyLen bits** of output, not the last block.
+  Identical at 128 bits, wrong at 192 and 256.
+- **CS1, CS2 and CS3 are one algorithm and three orderings.** CS3 always
+  reverses the last two ciphertext blocks, CS2 only when the final block is
+  partial, CS1 never. A payload of exactly one block is plain CBC.
+- `payloadLen` travels for CFB1 alone. Sending it for every mode would change
+  the input of every harness already written against the byte-oriented
+  contract, for a field that says nothing new there.
+- The previous, reasoned build order was wrong in four places, which
+  `docs/algorithm-frequency.md` records: `cSHAKE` had been ranked first and
+  measures 7%, while `safePrimes` had been dismissed as niche and measures 47%.
+
+This produces test evidence, not a certificate. It confers no validation status:
+only an accredited CST or 17ACVT laboratory performs CAVP or FIPS 140-3
+validation, and Demo is not the production ACVTS.
+
 ## [0.18.0] - 2026-09-04
 
 ### Added
