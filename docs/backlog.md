@@ -203,12 +203,30 @@ that document ranks.
       labelling it the weaker claim, and pins the blind spot — that a key derived
       from an out-of-range private key still verifies — so nobody simplifies the
       range test back into a round trip.
-- [ ] M24: `kdf-components` (56%), `TLS-v1.2` (41%) and `TLS-v1.3` (28%). The
-      most common missing name and the top of the unlock table, ranked below the
-      three items above only because it is the most work: kdf-components is one
-      registry name covering nine component KDFs — SSH, TLS, IKEv1, IKEv2,
-      ANS 9.42, ANS 9.63, SNMP, SRTP and TPM. 256 of the 281 modules validating
-      TLS-v1.2 also validate kdf-components, so they ship together.
+- [x] M24: `kdf-components` (56%), `TLS-v1.2` (41%) and `TLS-v1.3` (28%) — the most
+      common missing name on the list and the two protocol KDFs that travel with it.
+      Session 766249 returned `passed` on all three vector sets, 410 cases, first
+      submission, taking the project to 57 algorithm names.
+      Which of the nine `kdf-components` modes to build was itself measured rather
+      than guessed: `ssh` is on 46% of active FIPS 140-3 modules, ahead of `ans9.63`
+      (24%), `tls` (20%), `ikev2` (18%), `ans9.42` (17%), `snmp` (17%), `srtp` (8%),
+      `ikev1` (5%) and `tpm` (0.1%). The other eight are declined **by name**, so a
+      report says which mode is missing rather than marking the algorithm
+      unsupported.
+      Three details, each settled from the server's answers before any code:
+      - **SSH's shared secret arrives already mpint-encoded.** It is hashed as
+        received; adding or stripping the four-byte length prefix changes every
+        derived byte, and adding one is the natural reading of the RFC.
+      - **TLS 1.2 here is RFC 7627**, so the master secret comes from the session
+        hash rather than the randoms, and the key block seed is server random
+        *then* client random.
+      - **TLS 1.3's missing input is zeros, not absent.** PSK-only cases carry no
+        `dhe` and DHE-only cases no `psk`; each is replaced by zeros the length of
+        the hash, and all eight secrets are produced either way.
+      The responder calls `kdf_tls.derive`, the same function the offline runner
+      uses, rather than repeating the derivation. That makes the M21 CFB1 defect —
+      two implementations of one thing, one of them missing a field — impossible
+      here rather than merely tested against.
 - [x] M25: replace the reasoned ranking with a measured one. Done 2026-09-06:
       `scripts/cavp_frequency.py` fetches all 1,182 active CMVP certificates,
       maps each CAVP display name onto its ACVP registry name and counts them

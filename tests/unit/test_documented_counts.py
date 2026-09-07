@@ -57,19 +57,34 @@ def test_every_all_n_claim_is_the_real_one(path: Path) -> None:
     assert not wrong, f"{path.name} says 'all {wrong}' where the count is {COUNT}"
 
 
-def test_the_not_covered_list_names_nothing_that_is_implemented() -> None:
-    """The list that told readers AES-CCM and ML-KEM were missing, for months.
+#: Implemented names the "Not covered" section may still mention, because each
+#: is named to scope a *partial* gap rather than to claim the whole algorithm is
+#: missing. Every entry needs a reason; the list must not become a way to silence
+#: the check.
+PARTIAL_COVERAGE = {
+    # "the key-agreement names beyond the two SSC variants built here"
+    "KAS-ECC-SSC",
+    # "the eight kdf-components modes other than ssh" -- one registry name,
+    # nine modes, one of them built.
+    "kdf-components",
+}
 
-    One name is allowed to appear: the section names `KAS-ECC-SSC` to say that
-    the *other* key-agreement variants are the uncovered ones.
-    """
+
+def test_the_not_covered_list_names_nothing_that_is_implemented() -> None:
+    """The list that told readers AES-CCM and ML-KEM were missing, for months."""
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     section = readme.split("### Not covered")[1].split("## How vendors use this")[0]
     named = set(re.findall(r"`([A-Za-z0-9\-/.]+)`", section))
     implemented = named & set(supported_algorithms())
-    assert implemented <= {"KAS-ECC-SSC"}, (
-        f"README lists these as not covered, but they are implemented: {sorted(implemented)}"
+    assert implemented <= PARTIAL_COVERAGE, (
+        f"README lists these as not covered, but they are implemented: "
+        f"{sorted(implemented - PARTIAL_COVERAGE)}"
     )
+
+
+def test_every_partial_coverage_exemption_is_still_implemented() -> None:
+    """An exemption for a name nobody implements is dead weight that hides drift."""
+    assert set(supported_algorithms()) >= PARTIAL_COVERAGE
 
 
 def test_the_guard_would_notice() -> None:

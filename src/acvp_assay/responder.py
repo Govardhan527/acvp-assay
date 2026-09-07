@@ -47,6 +47,7 @@ from acvp_assay.algorithms import (
     kas_ffc,
     kda,
     kdf,
+    kdf_tls,
     pbkdf,
     pqc,
     rsa,
@@ -107,6 +108,11 @@ from acvp_assay.providers.kdf import (
     KdfProvider,
     KdfRequest,
     SubprocessKdfProvider,
+)
+from acvp_assay.providers.kdf_tls import (
+    HashlibProtocolKdf,
+    ProtocolKdfProvider,
+    SubprocessProtocolKdf,
 )
 from acvp_assay.providers.pbkdf import HashlibPbkdf, PbkdfProvider, SubprocessPbkdf
 from acvp_assay.providers.pqc import (
@@ -983,6 +989,47 @@ def _aes_ccm_groups(
     return groups
 
 
+# --------------------------------------------------------------------------- protocol KDFs
+
+
+def _kdf_tls_groups(
+    document: dict[str, object], harness: Harness | None = None
+) -> list[dict[str, object]]:
+    """SSH, TLS 1.2 and TLS 1.3, answered through the runner's own derivation.
+
+    This calls `kdf_tls.derive`, the same function `run_vector_set` uses, rather
+    than repeating the derivation. The two paths therefore cannot disagree --
+    which is exactly how the CFB1 defect happened: the offline runner passed a
+    field the submission path did not, both were checked against the same file,
+    and only the live server noticed.
+    """
+    vector_set = kdf_tls.parse_vector_set(document)
+    if vector_set.algorithm == kdf_tls.KDF_COMPONENTS and vector_set.mode != kdf_tls.SSH_MODE:
+        raise ResponseError(
+            f"kdf-components mode {vector_set.mode!r} is not implemented, so a submission "
+            f"cannot be completed; register only {kdf_tls.SSH_MODE!r}"
+        )
+    provider: ProtocolKdfProvider = (
+        HashlibProtocolKdf()
+        if harness is None
+        else harness.open(
+            SubprocessProtocolKdf.from_command_string(
+                harness.command, timeout_seconds=harness.timeout_seconds
+            )
+        )
+    )
+    groups: list[dict[str, object]] = []
+    for group in vector_set.test_groups:
+        cases: list[dict[str, object]] = []
+        for case in group.tests:
+            produced = kdf_tls.derive(vector_set, group, case, provider)
+            entry: dict[str, object] = {"tcId": case.tc_id}
+            entry.update({name: _hex(value) for name, value in produced.items()})
+            cases.append(entry)
+        groups.append({"tgId": group.tg_id, "tests": cases})
+    return groups
+
+
 # --------------------------------------------------------------------------- safePrimes / FFC
 
 
@@ -1449,6 +1496,7 @@ def _builder_for(algorithm: str) -> _Builder | None:
         pbkdf.ALGORITHM: _pbkdf_groups,
         safe_primes.ALGORITHM: _safe_primes_groups,
         kas_ffc.ALGORITHM: _kas_ffc_groups,
+        **dict.fromkeys(kdf_tls.SUPPORTED, _kdf_tls_groups),
         kas_ecc.ALGORITHM: _kas_ecc_groups,
         "ML-KEM": _ml_kem_groups,
         "ML-DSA": _ml_dsa_groups,
@@ -1512,6 +1560,7 @@ def supported_response_algorithms() -> tuple[str, ...]:
         pbkdf.ALGORITHM,
         safe_primes.ALGORITHM,
         kas_ffc.ALGORITHM,
+        *kdf_tls.SUPPORTED,
         "ACVP-AES-GCM",
         aes_modes.ECB,
         aes_modes.CMAC,

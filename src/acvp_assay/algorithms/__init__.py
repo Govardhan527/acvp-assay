@@ -31,6 +31,7 @@ from acvp_assay.algorithms import (
     kas_ffc,
     kda,
     kdf,
+    kdf_tls,
     pbkdf,
     pqc,
     rsa,
@@ -108,6 +109,7 @@ def supported_algorithms() -> list[str]:
         pbkdf.ALGORITHM,
         safe_primes.ALGORITHM,
         kas_ffc.ALGORITHM,
+        *kdf_tls.SUPPORTED,
         kas_ecc.ALGORITHM,
         kda.ALGORITHM,
         kdf.ALGORITHM,
@@ -342,6 +344,19 @@ def _run_kas_ecc(
     return kas_ecc.run_vector_set(vector_set, expected, provider), metadata
 
 
+def _run_kdf_tls(
+    vector_file: Path,
+    expected_file: Path,
+    provider_command: str | None,
+    provider_timeout: float,
+) -> tuple[list[TestCaseResult], ProviderMetadata]:
+    provider = kdf_tls.provider_for(provider_command, provider_timeout)
+    metadata = kdf_tls.metadata_for(provider)
+    vector_set = kdf_tls.load_vector_set(vector_file)
+    expected = kdf_tls.load_expected_results(expected_file)
+    return kdf_tls.run_vector_set(vector_set, expected, provider), metadata
+
+
 def _run_safe_primes(
     vector_file: Path,
     expected_file: Path,
@@ -503,6 +518,10 @@ def run_vector_file(
         )
     elif algorithm == aes_ccm.ALGORITHM:
         runners[algorithm] = lambda: _run_aes_ccm(
+            vector_file, expected_file, provider_command, provider_timeout
+        )
+    elif algorithm in kdf_tls.SUPPORTED:
+        runners[algorithm] = lambda: _run_kdf_tls(
             vector_file, expected_file, provider_command, provider_timeout
         )
     elif algorithm == safe_primes.ALGORITHM:

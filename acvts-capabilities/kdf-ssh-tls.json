@@ -1,0 +1,22 @@
+[
+  {
+    "algorithm": "kdf-components",
+    "mode": "ssh",
+    "revision": "1.0",
+    "cipher": ["AES-128", "AES-192", "AES-256"],
+    "hashAlg": ["SHA-1", "SHA2-224", "SHA2-256", "SHA2-384", "SHA2-512"]
+  },
+  {
+    "algorithm": "TLS-v1.2",
+    "mode": "KDF",
+    "revision": "RFC7627",
+    "hashAlg": ["SHA2-256", "SHA2-384", "SHA2-512"]
+  },
+  {
+    "algorithm": "TLS-v1.3",
+    "mode": "KDF",
+    "revision": "RFC8446",
+    "hmacAlg": ["SHA2-256", "SHA2-384"],
+    "runningMode": ["DHE", "PSK", "PSK-DHE"]
+  }
+]

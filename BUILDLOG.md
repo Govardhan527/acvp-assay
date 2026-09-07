@@ -423,3 +423,22 @@
 - Commit/link/path: `src/acvp_assay/providers/safe_primes.py`, `src/acvp_assay/providers/kas_ffc.py`, `src/acvp_assay/algorithms/safe_primes.py`, `src/acvp_assay/algorithms/kas_ffc.py`, `src/acvp_assay/responder.py`, `examples/reference_harness.py`, `acvts-capabilities/safeprimes-kas-ffc.json`.
 - Blocker, if any: none.
 - Next unchecked ID: M24 - kdf-components (56%), TLS-v1.2 (41%), TLS-v1.3 (28%).
+
+## 2026-09-07 - The protocol KDFs, and a defect made structurally impossible
+
+- Project and task ID: ACVP Assay - M24, kdf-components (ssh), TLS-v1.2, TLS-v1.3
+- Done condition: three registry names implemented, reaching a harness, with a verdict from NIST.
+- Why these: `kdf-components` is the most common name this project was missing - 56% of the 690 active FIPS 140-3 modules - and TLS-v1.2 (41%) and TLS-v1.3 (28%) travel with it, 256 of the 281 TLS-v1.2 modules also carrying kdf-components.
+- **Which of the nine kdf-components modes to build was also measured.** Re-counting the cached certificates by mode gave `ssh` 46%, `ans9.63` 24%, `tls` 20%, `ikev2` 18%, `ans9.42` 17%, `snmp` 17%, `srtp` 8%, `ikev1` 5%, `tpm` 0.1%. Building `ssh` covers the registry name for nearly half of all modules; the other eight are declined **by name** so a report says which mode is missing rather than reporting the algorithm as unsupported.
+- Evidence produced: session **766249** - three vector sets, **410 cases, `passed`, on the first submission**. Running total: **63 vector sets, 57,086 cases**, all `passed`, **57 of 57 algorithm names**.
+- Three details settled from the server's own answers before any module code existed, each of which changes every output byte if taken the other way:
+  - **SSH's `k` arrives already mpint-encoded**, four-byte length prefix included, and is hashed exactly as received. RFC 4253 describes K as an mpint, so *adding* the prefix is the natural reading and is wrong here.
+  - **TLS 1.2 is RFC 7627**: the master secret derives from the session hash, not the randoms. The key block seed is server random *then* client random - the reverse of the order it is usually written in.
+  - **TLS 1.3's missing input is zeros, not absent**: a PSK-only case has no `dhe` and a DHE-only case no `psk`, each replaced by zeros as long as the hash, and all eight secrets are produced in every running mode.
+- **The M21 defect class was closed structurally rather than tested against.** The response builder calls `kdf_tls.derive`, the same function `run_vector_set` uses, instead of repeating the derivation. CFB1 failed because the two paths were separate implementations of one thing and only one carried `payloadLen`; sharing the function means they cannot disagree at all.
+- The M21 *practice* also held: the response document was diffed against NIST's expected results before submitting - 2,320 individual output values, none mismatched - and the session passed first time. M21 and M23 both needed a second session.
+- The M22 documentation guard fired again, on `kdf-components` appearing in the README's "Not covered" list. That mention is legitimate - it scopes a partial gap, as `KAS-ECC-SSC` does - so the exemption was made explicit with a reason attached, plus a test that every exemption still names an implemented algorithm, so the allow-list cannot quietly become a way to silence the check.
+- Tests run and result: `scripts/dev.py verify` - full gate; both new modules at 100%.
+- Commit/link/path: `src/acvp_assay/providers/kdf_tls.py`, `src/acvp_assay/algorithms/kdf_tls.py`, `src/acvp_assay/responder.py`, `examples/reference_harness.py`, `acvts-capabilities/kdf-ssh-tls.json`.
+- Blocker, if any: none.
+- Next unchecked ID: M26 - the measured tail, starting with KTS-IFC (31%) and KAS-IFC-SSC (17%).

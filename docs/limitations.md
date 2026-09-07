@@ -28,9 +28,11 @@ harness.
 
 ## Coverage boundaries
 
-- 54 algorithm names are implemented; the README lists what is [not covered](../README.md#not-covered).
+- 57 algorithm names are implemented; the README lists what is [not covered](../README.md#not-covered).
   An unrecognised algorithm exits non-zero rather than reporting a pass.
-- All 54 have been judged by NIST's live ACVTS Demo server — 60 vector sets, 56,676 cases,
+- `kdf-components` is one registry name covering nine component KDFs, and only `ssh` is built.
+  The other eight are declined by name, so a report says which mode is missing.
+- All 57 have been judged by NIST's live ACVTS Demo server — 63 vector sets, 57,086 cases,
   every verdict `passed`. That is the server's verdict on answers this runner produced, not
   this project's own assessment, and it is still **test evidence, not validation**: only an
   accredited CST or 17ACVT laboratory performs CAVP or FIPS 140-3 validation, and Demo is not

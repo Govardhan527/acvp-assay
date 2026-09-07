@@ -759,6 +759,131 @@ def kas_ffc_ssc(request: dict[str, Any]) -> dict[str, str]:
     return {"z": z.to_bytes(_sp_size(prime), "big").hex().upper()}
 
 
+SSH_KEY_LEN = {"AES-128": 16, "AES-192": 24, "AES-256": 32}
+PROTOCOL_HASHES = {
+    "SHA-1": "sha1",
+    "SHA2-224": "sha224",
+    "SHA2-256": "sha256",
+    "SHA2-384": "sha384",
+    "SHA2-512": "sha512",
+}
+
+
+def kdf_ssh(request: dict[str, Any]) -> dict[str, str]:
+    """RFC 4253 7.2. `k` arrives already mpint-encoded and is hashed as given."""
+    name = PROTOCOL_HASHES.get(request["hashAlg"])
+    key_len = SSH_KEY_LEN.get(request["cipher"])
+    if name is None or key_len is None:
+        return {"error": "unsupported"}
+    k, h = bytes.fromhex(request["k"]), bytes.fromhex(request["h"])
+    session_id = bytes.fromhex(request["sessionId"])
+    integrity = hashlib.new(name).digest_size
+
+    def one(letter: bytes, want: int) -> str:
+        out = hashlib.new(name, k + h + letter + session_id).digest()
+        while len(out) < want:
+            out += hashlib.new(name, k + h + out).digest()
+        return out[:want].hex().upper()
+
+    return {
+        "initialIvClient": one(b"A", 16),
+        "initialIvServer": one(b"B", 16),
+        "encryptionKeyClient": one(b"C", key_len),
+        "encryptionKeyServer": one(b"D", key_len),
+        "integrityKeyClient": one(b"E", integrity),
+        "integrityKeyServer": one(b"F", integrity),
+    }
+
+
+def _p_hash(name: str, secret: bytes, seed: bytes, length: int) -> bytes:
+    out, a = b"", seed
+    while len(out) < length:
+        a = hmac.new(secret, a, name).digest()
+        out += hmac.new(secret, a + seed, name).digest()
+    return out[:length]
+
+
+def kdf_tls12(request: dict[str, Any]) -> dict[str, str]:
+    """RFC 7627 extended master secret, then the key block.
+
+    The key block seed is server random *then* client random.
+    """
+    name = PROTOCOL_HASHES.get(request["hashAlg"])
+    if name is None:
+        return {"error": "unsupported"}
+    master = _p_hash(
+        name,
+        bytes.fromhex(request["preMasterSecret"]),
+        b"extended master secret" + bytes.fromhex(request["sessionHash"]),
+        48,
+    )
+    block = _p_hash(
+        name,
+        master,
+        b"key expansion"
+        + bytes.fromhex(request["serverRandom"])
+        + bytes.fromhex(request["clientRandom"]),
+        int(request["keyBlockLength"]) // 8,
+    )
+    return {"masterSecret": master.hex().upper(), "keyBlock": block.hex().upper()}
+
+
+def kdf_tls13(request: dict[str, Any]) -> dict[str, str]:
+    """RFC 8446 key schedule. A missing psk or dhe is zeros, not absent."""
+    name = PROTOCOL_HASHES.get(request["hmacAlg"])
+    if name is None:
+        return {"error": "unsupported"}
+    size = hashlib.new(name).digest_size
+    zeros = b"\x00" * size
+
+    def expand_label(secret: bytes, label: bytes, context: bytes, length: int) -> bytes:
+        full = b"tls13 " + label
+        info = (
+            length.to_bytes(2, "big") + bytes([len(full)]) + full + bytes([len(context)]) + context
+        )
+        out, block, counter = b"", b"", 1
+        while len(out) < length:
+            block = hmac.new(secret, block + info + bytes([counter]), name).digest()
+            out += block
+            counter += 1
+        return out[:length]
+
+    def derive_secret(secret: bytes, label: bytes, messages: bytes) -> bytes:
+        return expand_label(secret, label, hashlib.new(name, messages).digest(), size)
+
+    psk = bytes.fromhex(request["psk"]) if "psk" in request else zeros
+    dhe = bytes.fromhex(request["dhe"]) if "dhe" in request else zeros
+    ch = bytes.fromhex(request["helloClientRandom"])
+    sh = bytes.fromhex(request["helloServerRandom"])
+    cf = bytes.fromhex(request["finishedClientRandom"])
+    sf = bytes.fromhex(request["finishedServerRandom"])
+
+    early = hmac.new(zeros, psk, name).digest()
+    handshake = hmac.new(derive_secret(early, b"derived", b""), dhe, name).digest()
+    master = hmac.new(derive_secret(handshake, b"derived", b""), zeros, name).digest()
+    hello, through_server = ch + sh, ch + sh + sf
+    return {
+        "clientEarlyTrafficSecret": derive_secret(early, b"c e traffic", ch).hex().upper(),
+        "earlyExporterMasterSecret": derive_secret(early, b"e exp master", ch).hex().upper(),
+        "clientHandshakeTrafficSecret": derive_secret(handshake, b"c hs traffic", hello)
+        .hex()
+        .upper(),
+        "serverHandshakeTrafficSecret": derive_secret(handshake, b"s hs traffic", hello)
+        .hex()
+        .upper(),
+        "clientApplicationTrafficSecret": derive_secret(master, b"c ap traffic", through_server)
+        .hex()
+        .upper(),
+        "serverApplicationTrafficSecret": derive_secret(master, b"s ap traffic", through_server)
+        .hex()
+        .upper(),
+        "exporterMasterSecret": derive_secret(master, b"exp master", through_server).hex().upper(),
+        "resumptionMasterSecret": derive_secret(master, b"res master", through_server + cf)
+        .hex()
+        .upper(),
+    }
+
+
 def pbkdf(request: dict[str, Any]) -> dict[str, str]:
     """Derive a key from a password (SP 800-132).
 
@@ -1325,6 +1450,9 @@ HANDLERS = {
     "block-mct": block_mct,
     "cbc-cs": cbc_cs,
     "pbkdf": pbkdf,
+    "kdf-ssh": kdf_ssh,
+    "kdf-tls12": kdf_tls12,
+    "kdf-tls13": kdf_tls13,
     "safe-primes-keygen": safe_primes_keygen,
     "safe-primes-keyver": safe_primes_keyver,
     "kas-ffc-keygen": kas_ffc_keygen,

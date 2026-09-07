@@ -122,6 +122,9 @@ declining is a first-class answer, see below.
 | `safe-primes-keyver` | `safePrimeGroup`, `x`, `y` | `testPassed` |
 | `kas-ffc-keygen` | `domainParameterGenerationMode` | `privateKey`, `publicKey` |
 | `kas-ffc-ssc` | `domainParameterGenerationMode`, `privateKey`, `peerPublic` | `z` |
+| `kdf-ssh` | `hashAlg`, `cipher`, `k`, `h`, `sessionId` | six SSH keys |
+| `kdf-tls12` | `hashAlg`, `preMasterSecret`, `sessionHash`, `clientRandom`, `serverRandom`, `keyBlockLength` | `masterSecret`, `keyBlock` |
+| `kdf-tls13` | `hmacAlg`, `psk` ⁺, `dhe` ⁺, four randoms | eight TLS 1.3 secrets |
 | `cmac` | `key`, `message`, `macLen` | `mac` |
 | `gmac` | `key`, `iv`, `aad`, `tagLen` | `tag` |
 | `ccm-encrypt` | `key`, `iv`, `pt`, `aad`, `tagLen` | `ct` — with the tag appended |
@@ -232,6 +235,28 @@ with the last *keyLen* bits of output — which is more than one block once the
 key is 192 or 256 bits — and the next IV is the last block's worth. A harness
 that reuses its CFB128 chain here will return 100 plausible iterations that
 disagree with NIST from the first one.
+
+The three protocol KDFs each have one detail that changes every output byte if
+taken the other way, and each was settled against the live server rather than
+against the RFC prose:
+
+* **`kdf-ssh`** — `k` arrives **already mpint-encoded**, with its four-byte SSH
+  length prefix in place, and is hashed exactly as received. Adding a prefix, or
+  stripping the one that is there, is the natural mistake and produces entirely
+  different keys. The IV is 16 bytes for every AES; the integrity key is the
+  hash's digest size; the encryption key follows the cipher.
+* **`kdf-tls12`** is RFC 7627, so the master secret is derived from the
+  **session hash**, not from the two randoms. The key block still uses the
+  randoms, seeded **server random then client random** — the reverse of the
+  order they are usually written in.
+* **`kdf-tls13`** sends `psk` and `dhe` only when the running mode supplies
+  them, so a harness sees the same shape ACVP used. A missing one is **zeros as
+  long as the hash, not absent**, and all eight secrets are produced in every
+  mode including PSK-only and DHE-only.
+
+`kdf-components` is one registry name covering nine modes. Only `ssh` is
+answered here; a harness free to implement more should still expect only `ssh`
+requests from this runner.
 
 The four safe-prime operations share one table of domain parameters, because ACVP
 names the group the same way in both families: `MODP-2048`, `ffdhe3072` and the
