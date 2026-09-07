@@ -5,6 +5,65 @@ All notable changes to this project are recorded here. The format follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Before 1.0.0 the
 provider protocols may change between minor versions.
 
+## [0.20.0] - 2026-09-07
+
+### Added
+
+- **Six algorithm names, every one chosen by measurement** — `PBKDF`,
+  `safePrimes`, `KAS-FFC-SSC`, `kdf-components` (`ssh` mode), `TLS-v1.2` and
+  `TLS-v1.3`. Taking the project to **57 algorithm names**, all 57 judged by
+  NIST's own ACVTS Demo server: **63 vector sets, 57,086 cases, every verdict
+  `passed`**.
+- Sessions 766210 (PBKDF, 110 cases), 766221 (safePrimes and KAS-FFC-SSC, 98)
+  and 766249 (the three protocol KDFs, 410).
+- Harness operations `pbkdf`, `safe-primes-keygen`, `safe-primes-keyver`,
+  `kas-ffc-keygen`, `kas-ffc-ssc`, `kdf-ssh`, `kdf-tls12` and `kdf-tls13`.
+- **`tests/unit/test_documented_counts.py`** — the documented algorithm count
+  must equal the implemented one, and the README's "Not covered" list must name
+  nothing that is implemented. Added because three separate stale claims had
+  survived months unnoticed.
+- **`tests/unit/test_generated_key_ranges.py`** — generated keys must satisfy
+  the specification's domain constraint, not merely verify against their own
+  verifier.
+
+### Fixed
+
+- **`safePrimes` keyGen generated private keys outside the subgroup range.** The
+  key must come from [1, q−1] where q = (p−1)/2; it came from [1, p−2]. Because
+  the generator 2 has order q, an out-of-range key still produces a *valid*
+  public key — so generating a pair and verifying it passed every time, and only
+  the live server could see the error. Session 766220 returned `fail`; 766221 is
+  the same registration after the fix.
+- **`docs/limitations.md` understated the project by more than half**, claiming
+  40 algorithm names implemented and 22 judged by NIST long after all of them
+  had been. The README's "Not covered" list likewise still named AES-CCM,
+  AES-XTS, SHAKE, KDA, KAS-ECC-SSC, ML-KEM and ML-DSA, all of which had shipped.
+
+### Notes
+
+- **The `ssh` mode of `kdf-components` was chosen by counting**: it is on 46% of
+  active FIPS 140-3 modules, ahead of `ans9.63` (24%), `tls` (20%), `ikev2`
+  (18%), `ans9.42` (17%), `snmp` (17%), `srtp` (8%), `ikev1` (5%) and `tpm`
+  (0.1%). The other eight modes are declined **by name**, so a report says which
+  mode is missing rather than marking the whole algorithm unsupported.
+- **PBKDF's password arrives as text, not hex** — the only such value in a
+  vector set. A hex reading fails loudly on most passwords and, worse, succeeds
+  quietly on one that happens to be hex-shaped.
+- **SSH's shared secret arrives already mpint-encoded** and is hashed as
+  received; **TLS 1.2 here is RFC 7627**, so the master secret comes from the
+  session hash and the key block seed is server random *then* client random; and
+  **TLS 1.3's missing `psk` or `dhe` is zeros, not absent**.
+- The safe-prime domain parameters were **computed from the formulas in RFC 3526
+  and RFC 7919**, not transcribed, then checked against the server's own keyVer
+  answers.
+- The TLS/SSH response builder calls the same derivation the offline runner
+  uses, so the two paths cannot diverge — the defect class that produced the
+  CFB1 bug in 0.19.0 is now structurally impossible for this family.
+
+This produces test evidence, not a certificate. It confers no validation status:
+only an accredited CST or 17ACVT laboratory performs CAVP or FIPS 140-3
+validation, and Demo is not the production ACVTS.
+
 ## [0.19.0] - 2026-09-06
 
 ### Added
