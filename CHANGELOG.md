@@ -5,6 +5,56 @@ All notable changes to this project are recorded here. The format follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Before 1.0.0 the
 provider protocols may change between minor versions.
 
+## [0.21.0] - 2026-09-09
+
+### Added
+
+- **`KAS-IFC-SSC` and `KTS-IFC`** (SP 800-56Br2) — key agreement and key
+  transport over RSA, on 17% and 31% of active FIPS 140-3 modules and carried
+  together by 114 of them. **59 algorithm names**, all 59 judged by NIST's own
+  ACVTS Demo server: **65 vector sets, 57,116 cases, every verdict `passed`**.
+  Session 766758.
+- Harness operations `kas-ifc-recover`, `kas-ifc-originate`, `kts-ifc-decrypt`
+  and `kts-ifc-encrypt`.
+- **`tests/unit/test_readme_arithmetic.py`** — the README's own arithmetic must
+  add up: the badge against the implemented count, the banner's defect count
+  against the list it refers to, the results table's totals against its rows,
+  and the sample `diff` output against what it announces.
+
+### Fixed
+
+- **The IFC harness wire wrote RSA integers with an odd number of hex digits.**
+  `format(65537, "X")` is `"10001"` — five digits — and `bytes.fromhex` refuses
+  odd-length input, so a harness parsing the obvious way would have failed on
+  the commonest public exponent there is.
+- **Six stale numbers in the README**, all the same failure: correct when
+  written, never re-read as the results table grew. The banner counted four
+  defects where the section lists six; a footnote said "excluded from the 43"
+  when the total had reached 63; the CI badge claimed 46/46 against a body
+  claiming 57; a paragraph said two sessions had a stored verdict when fifteen
+  did; the sample `diff` announced ten lost cases and accounted for six; and the
+  drift example showed the "current" run on older software than its baseline.
+
+### Notes
+
+- **KAS-IFC-SSC is mostly checkable offline, unlike its ECC and FFC siblings.**
+  Those have an AFT case generate an ephemeral key, so only the server can check
+  it. Most IFC cases supply the implementation's *own* RSA private key, making
+  recovery deterministic. Only KAS1 as initiator, either KAS2 role, and KTS-IFC
+  as initiator originate fresh material and stay server-only.
+- **KAS2 concatenates by role, not by ownership.** The initiator's contribution
+  comes first, so an initiator emits `own || recovered` and a responder
+  `recovered || own`. Two live sessions passed with the wrong version; a third,
+  registered specifically to vary role and scheme, failed four of five cases in
+  its KAS2 responder group.
+- **A VAL failure never isolates one condition**, measured across five sessions:
+  of nine failing VAL cases, six carrying two independent checks, none broke
+  only one. Both are checked regardless.
+
+This produces test evidence, not a certificate. It confers no validation status:
+only an accredited CST or 17ACVT laboratory performs CAVP or FIPS 140-3
+validation, and Demo is not the production ACVTS.
+
 ## [0.20.0] - 2026-09-07
 
 ### Added
