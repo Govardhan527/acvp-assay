@@ -1,0 +1,15 @@
+[
+  {
+    "algorithm": "KAS-IFC-SSC",
+    "revision": "Sp800-56Br2",
+    "function": ["keyPairGen"],
+    "iutId": "0123456789ABCDEF",
+    "keyGenerationMethods": ["rsakpg1-basic"],
+    "modulo": [2048, 3072, 4096],
+    "fixedPubExp": "010001",
+    "scheme": {
+      "KAS1": { "kasRole": ["initiator", "responder"] },
+      "KAS2": { "kasRole": ["initiator", "responder"] }
+    }
+  }
+]

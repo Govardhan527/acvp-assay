@@ -28,18 +28,21 @@ harness.
 
 ## Coverage boundaries
 
-- 57 algorithm names are implemented; the README lists what is [not covered](../README.md#not-covered).
+- 59 algorithm names are implemented; the README lists what is [not covered](../README.md#not-covered).
   An unrecognised algorithm exits non-zero rather than reporting a pass.
 - `kdf-components` is one registry name covering nine component KDFs, and only `ssh` is built.
   The other eight are declined by name, so a report says which mode is missing.
-- All 57 have been judged by NIST's live ACVTS Demo server — 63 vector sets, 57,086 cases,
+- All 59 have been judged by NIST's live ACVTS Demo server — 65 vector sets, 57,116 cases,
   every verdict `passed`. That is the server's verdict on answers this runner produced, not
   this project's own assessment, and it is still **test evidence, not validation**: only an
   accredited CST or 17ACVT laboratory performs CAVP or FIPS 140-3 validation, and Demo is not
   the production ACVTS.
 - Some cases can only be checked by the server, and are declined here rather than guessed at:
-  `safePrimes` keyGen and the KAS-ECC-SSC / KAS-FFC-SSC AFT cases all have the implementation
-  generate a fresh key, so no recorded value can be compared with the answer. They are reported
+  `safePrimes` keyGen, the KAS-ECC-SSC / KAS-FFC-SSC AFT cases, and the IFC cases where the
+  implementation originates secret material — KAS1 as initiator, either KAS2 role, and KTS-IFC as
+  initiator — all have the implementation produce something fresh, so no recorded value can be
+  compared with the answer. KAS-IFC-SSC differs from its ECC and FFC siblings here: most of its
+  cases supply the IUT's own private key, so they *are* fully checkable offline. They are reported
   UNSUPPORTED offline and answered in full on submission. Treat a run that reports them as
   complete only if you have also submitted: session 766220 failed on exactly this path while
   every offline case was green.

@@ -236,16 +236,35 @@ that document ranks.
       It reordered everything above. `cSHAKE-128/256` had been ranked first and
       measures **7%** — it was chosen for being cheap to build, which is a claim
       about cost wearing the clothes of a claim about demand.
-- [ ] M26: the tail, in measured order — `KTS-IFC` (31%) with `KAS-IFC-SSC`
-      (17%), which co-occur on 114 modules; `KMAC-128/256` (22%); `KAS-ECC`
-      non-SSC (22%, and fourth on the unlock table); `EDDSA` (14%);
-      `ConditioningComponent` (4%, eighth on the unlock table); then
-      `cSHAKE-128/256` (7%), `ParallelHash` and `TupleHash` (6%),
-      `ACVP-AES-FF1` (6%), `LMS` and `DetECDSA` (2%), `ACVP-AES-XPN` (2%),
-      `KAS-KC` (0.4%) and `SLH-DSA` (0.3%).
-      `DSA` measures 28% and is deliberately not ranked with the rest: SP 800-131A
-      disallowed DSA signature generation after 2023, so what is left on
-      certificates is legacy verification and the share should decay.
+- [x] M26 (first pair): `KTS-IFC` (31%) with `KAS-IFC-SSC` (17%), which co-occur on
+      114 modules. Session 766758 returned `passed` on both vector sets, 30 cases,
+      first submission, taking the project to 59 algorithm names.
+      **These behave differently from the ECC and FFC siblings**, and it changes what
+      an offline run means: most IFC cases supply the IUT's *own* RSA private key, so
+      recovery is deterministic and fully checkable here. Only the cases that
+      originate fresh material — KAS1 as initiator, either KAS2 role, KTS-IFC as
+      initiator — are server-only.
+      Two things the vectors settled that one session would have got wrong:
+      - **KAS2 concatenates by role, not by ownership.** The initiator's contribution
+        always comes first, so an initiator emits `own || recovered` and a responder
+        `recovered || own`. Derived from an initiator-only group it reads as "own
+        first" and is silently wrong for every responder case. Five sessions were run
+        precisely to vary role and scheme; session 766252's KAS2 responder group is
+        what caught it, after two earlier sessions had passed clean.
+      - **A VAL failure never isolates one condition.** Across nine failing VAL cases,
+        six of which carry two independent checks, not one failed only one of them —
+        NIST's generator corrupts the underlying Z. Both conditions are checked
+        anyway: it agrees with every vector the server issues and is correct for one
+        it has not yet generated.
+      And a defect the tests caught before NIST could: the harness wire wrote RSA
+      integers with `format(value, "X")`, which yields odd-length hex for 65537 —
+      the commonest public exponent there is — and `bytes.fromhex` refuses it.
+      Still open in M26: `KMAC-128/256` (22%), `KAS-ECC` non-SSC (22%), `EDDSA` (14%),
+      `ConditioningComponent` (4%), then `cSHAKE-128/256` (7%), `ParallelHash` and
+      `TupleHash` (6%), `ACVP-AES-FF1` (6%), `LMS` and `DetECDSA` (2%),
+      `ACVP-AES-XPN` (2%), `KAS-KC` (0.4%) and `SLH-DSA` (0.3%).
+      `DSA` measures 28% and stays unranked: SP 800-131A disallowed signature
+      generation after 2023, so what remains is legacy verification.
 
 Not worth building, now measured rather than assumed: `ACVP-AES-GCM-SIV`,
 `Ascon`, `XECDH` and `ACVP-AES-FF3-1` appear on **no** active FIPS 140-3

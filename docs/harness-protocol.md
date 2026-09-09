@@ -125,6 +125,10 @@ declining is a first-class answer, see below.
 | `kdf-ssh` | `hashAlg`, `cipher`, `k`, `h`, `sessionId` | six SSH keys |
 | `kdf-tls12` | `hashAlg`, `preMasterSecret`, `sessionHash`, `clientRandom`, `serverRandom`, `keyBlockLength` | `masterSecret`, `keyBlock` |
 | `kdf-tls13` | `hmacAlg`, `psk` ⁺, `dhe` ⁺, four randoms | eight TLS 1.3 secrets |
+| `kas-ifc-recover` | the IUT's RSA key, `serverC` | `z` |
+| `kas-ifc-originate` | `serverN`, `serverE` | `z`, `c` |
+| `kts-ifc-decrypt` | the IUT's RSA key, `serverC`, `hashAlg` | `dkm` |
+| `kts-ifc-encrypt` | `serverN`, `serverE`, `hashAlg`, `keyLen` | `dkm`, `c` |
 | `cmac` | `key`, `message`, `macLen` | `mac` |
 | `gmac` | `key`, `iv`, `aad`, `tagLen` | `tag` |
 | `ccm-encrypt` | `key`, `iv`, `pt`, `aad`, `tagLen` | `ct` — with the tag appended |
@@ -235,6 +239,23 @@ with the last *keyLen* bits of output — which is more than one block once the
 key is 192 or 256 bits — and the next IV is the last block's worth. A harness
 that reuses its CFB128 chain here will return 100 plausible iterations that
 disagree with NIST from the first one.
+
+The four IFC operations carry RSA integers as hex, and **always with an even
+number of digits**. That is worth stating because the obvious way to write it is
+wrong: `format(65537, "X")` is `"10001"`, five digits, and `bytes.fromhex`
+refuses odd-length input — so a harness parsing the obvious way crashes on the
+commonest public exponent there is. This project made exactly that mistake; the
+tests now assert it.
+
+`kas-ifc-recover` and `kts-ifc-decrypt` are given the **IUT's own private key**,
+because the vector set supplies it. That is the difference from the ECC and FFC
+families, where an AFT case has the implementation generate an ephemeral key: an
+IFC recovery is deterministic and the offline runner checks it in full.
+`kas-ifc-originate` and `kts-ifc-encrypt` are the cases that originate fresh
+material, and only the server can verify those.
+
+`z` from `kas-ifc-recover` is left-padded to the modulus length, as `z` from
+`kas-ffc-ssc` is.
 
 The three protocol KDFs each have one detail that changes every output byte if
 taken the other way, and each was settled against the live server rather than

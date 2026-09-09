@@ -1,19 +1,19 @@
 # ACVP Assay
 
 [![CI](https://github.com/Govardhan527/acvp-assay/actions/workflows/ci.yml/badge.svg)](https://github.com/Govardhan527/acvp-assay/actions/workflows/ci.yml)
-[![Verified against NIST ACVTS](https://img.shields.io/badge/NIST%20ACVTS%20Demo-46%2F46%20algorithms%20passed-2ea44f)](#verified-against-nists-own-server)
+[![Verified against NIST ACVTS](https://img.shields.io/badge/NIST%20ACVTS%20Demo-59%2F59%20algorithms%20passed-2ea44f)](#verified-against-nists-own-server)
 [![Coverage](https://img.shields.io/badge/coverage-99.7%25-2ea44f)](#development-commands)
 
 > ## ✅ Judged by NIST's own server
 >
-> **All 57 supported algorithm names** have been run against **vectors NIST generated live** and
-> submitted back for NIST to judge. On `demo.acvts.nist.gov`, **63 vector sets, covering 57,086
+> **All 59 supported algorithm names** have been run against **vectors NIST generated live** and
+> submitted back for NIST to judge. On `demo.acvts.nist.gov`, **65 vector sets, covering 57,116
 > test cases, each came back `"passed"`**, and that verdict is the server's, not this project's.
 > [Exactly which, per algorithm](#coverage).
 >
-> Read those two numbers precisely: ACVP returns one verdict **per vector set**, so 63 is the
-> count of verdicts NIST issued and 57,086 is the number of cases inside them. The server never
-> issued 57,086 separate verdicts, and this project does not claim it did.
+> Read those two numbers precisely: ACVP returns one verdict **per vector set**, so 65 is the
+> count of verdicts NIST issued and 57,116 is the number of cases inside them. The server never
+> issued 57,116 separate verdicts, and this project does not claim it did.
 >
 > **What this does and does not say about ML-KEM and ML-DSA.** Those two sessions were answered
 > by `examples/pqc_reference_harness.py`, which is backed by `kyber-py` and `dilithium-py` —
@@ -24,7 +24,7 @@
 > yours, supplied through `--provider-command`.
 >
 > Most tools of this kind are checked against static files only. Being checked by the system
-> that issues the vectors is what caught the four defects listed under
+> that issues the vectors is what caught the six defects listed under
 > [What this caught that fixtures did not](#what-this-caught-that-fixtures-did-not).
 >
 > **This is test evidence, not a certificate.** It confers no validation status: only an
@@ -56,21 +56,21 @@ matrix, and twelve review comments submitted to the OASIS KMIP Profiles v3.0 pub
 
 Implemented today:
 
-- **57 algorithm names across 32 families** — AES in GCM, CCM, ECB, CBC, CTR, OFB, CFB128,
+- **59 algorithm names across 34 families** — AES in GCM, CCM, ECB, CBC, CTR, OFB, CFB128,
   CFB8, CFB1, CBC-CS1/CS2/CS3,
   GMAC, KW, KWP and XTS; CMAC-AES; all three SP 800-90A DRBGs; KDF SP 800-108; KDA SP 800-56C;
   SHA-1, SHA-2, SHA-3 and the SHAKE XOFs; PBKDF; safePrimes;
-  the SSH KDF, TLS 1.2 and TLS 1.3;
+  the SSH KDF, TLS 1.2 and TLS 1.3; KAS-IFC-SSC and KTS-IFC;
   HMAC over each; RSA; ECDSA; KAS-ECC-SSC and KAS-FFC-SSC; ML-KEM and ML-DSA
-- a replaceable provider boundary, in-process or an external harness over JSON — **all 57
+- a replaceable provider boundary, in-process or an external harness over JSON — **all 59
   names reach a harness**, so nothing silently tests this project's OpenSSL binding when you
   asked for your own implementation
 - **live ACVTS submission from your implementation**: `acvts_client.py submit
   --provider-command ...` answers NIST-generated vectors from your code and returns NIST's
-  verdict — all 57 names, ML-KEM and ML-DSA included
+  verdict — all 59 names, ML-KEM and ML-DSA included
 - run-over-run regression diffing, including coverage that silently disappeared
 - typed parsing that preserves `vsId`, `tgId`, and `tcId`
-- deterministic tests on Linux, verified against pinned NIST vectors, and for **all 57 names
+- deterministic tests on Linux, verified against pinned NIST vectors, and for **all 59 names
   against vectors generated live by NIST's ACVTS server** — see [Coverage](#coverage)
 
 Deliberately out of scope: a general-purpose ACVP protocol client (`libacvp` and
@@ -150,6 +150,8 @@ Three questions a vendor actually needs answered, in one table:
 | `kdf-components` | AFT (`ssh` mode only ⁴) | ✅ | ✅ | `passed` — 766249 |
 | `TLS-v1.2` | AFT (RFC 7627 extended master secret) | ✅ | ✅ | `passed` — 766249 |
 | `TLS-v1.3` | AFT (DHE, PSK, PSK-DHE) | ✅ | ✅ | `passed` — 766249 |
+| `KAS-IFC-SSC` | AFT, VAL (KAS1 and KAS2) | partial ³ | ✅ | `passed` — 766758 |
+| `KTS-IFC` | AFT (KTS-OAEP-basic) | partial ³ | ✅ | `passed` — 766758 |
 | `CMAC-AES` | AFT (gen and ver) | ✅ | ✅ | `passed` — 765342 |
 | `SHA-1` | AFT, MCT | ✅ | ✅ | `passed` — 765345 |
 | `SHA2-224` | AFT, MCT | ✅ | ✅ | `passed` — 765508 |
@@ -182,8 +184,8 @@ It is the most common of them, on 46% of active FIPS 140-3 certificates. The oth
 and `docs/algorithm-frequency.md` records where each sits: `ans9.63` 24%, `tls` 20%, `ikev2` 18%,
 `ans9.42` 17%, `snmp` 17%, `srtp` 8%, `ikev1` 5%, `tpm` 0.1%.
 
-**57 algorithm names across 32 families. All 57 reach a harness, all 57 can be submitted to a
-live session, and all 57 have been.**
+**59 algorithm names across 34 families. All 59 reach a harness, all 59 can be submitted to a
+live session, and all 59 have been.**
 
 The harness path is checked against the built-in one by answering each pinned NIST prompt both
 ways and comparing: **24,048 cases across ten families, byte-identical wherever the answer is
@@ -238,8 +240,7 @@ error rather than a pass:
 
 `AES-XPN`, `AES-GCM-SIV` and the format-preserving modes (`FF1`, `FF3-1`); every TDES
 family; `cSHAKE`, `KMAC`, `ParallelHash` and `TupleHash`; the key-agreement names beyond the
-two SSC variants built here — `KAS-ECC`, `KAS-FFC`, `KAS-IFC`, `KAS-IFC-SSC`, `KAS-KC` and
-`KTS-IFC`; `DSA`, `EDDSA` and `DetECDSA`;
+two SSC variants built here — `KAS-ECC`, `KAS-FFC`, `KAS-IFC` and `KAS-KC`; `DSA`, `EDDSA` and `DetECDSA`;
 the eight `kdf-components` modes other than `ssh`;
 `LMS` and `SLH-DSA`; `ConditioningComponent`; `Ascon`; `XECDH`; key
 generation for RSA or ECDSA; and for the PQC names, everything but ML-KEM `encapDecap`
@@ -428,7 +429,7 @@ This second fixture's tag is deliberately corrupted (see `fixtures/README.md`); 
 ## Verified against NIST's own server
 
 Static vector files tell you whether a runner agrees with a snapshot. They cannot tell you whether
-it agrees with the system that issues the vectors. So all 57 supported algorithm names have been
+it agrees with the system that issues the vectors. So all 59 supported algorithm names have been
 through a live test session on NIST's ACVTS Demo server:
 register capabilities, fetch vectors NIST generated for this client, compute answers, submit them,
 and read back the verdict.
@@ -464,7 +465,8 @@ production ACVTS, which is available to accredited laboratories rather than to t
 | 766220 | safePrimes, KAS-FFC-SSC | 3 | — | **keyGen failed**, see below |
 | 766221 | safePrimes, KAS-FFC-SSC | 3 | 98 | `passed` |
 | 766249 | kdf-components (ssh), TLS-v1.2, TLS-v1.3 | 3 | 410 | `passed` |
-| | **Completed** | **63** | **57,086** | **all `passed`** |
+| 766758 | KAS-IFC-SSC, KTS-IFC | 2 | 30 | `passed` |
+| | **Completed** | **65** | **57,116** | **all `passed`** |
 
 ² Answered through `examples/pqc_reference_harness.py`. `cryptography` implements neither
 ML-KEM nor ML-DSA, so there is nothing built in to answer with; the harness is backed by
@@ -476,7 +478,7 @@ implementation. Both sessions registered narrowly — ML-DSA `pure`/`external` o
 ¹ Session 765508 registered a sixteenth algorithm, AES-GMAC, whose vector set NIST's generator
 refused with `min must be less than max` — the registration declared a zero-width `payloadLen`,
 and GMAC has no payload to describe. That is a bug in the capability file, not in the runner: no
-vectors were ever produced, so there was nothing to answer. The set is excluded from the 43, the
+vectors were ever produced, so there was nothing to answer. The set is excluded from the 65, the
 session therefore reports `passed: false` overall, and GMAC was re-registered correctly as 765518.
 
 **Session 765346 is listed because it failed.** It is where the Monte Carlo decrypt bug below
@@ -486,11 +488,11 @@ Its cases are excluded from the total — a run that was abandoned is not eviden
 it from the table without saying so would make the total flattering rather than true.
 
 **On evidence.** `acvts_client.py results` now writes the server's reply to `results.json` beside
-the vector sets it judges, so 765508 and 765518 are backed by the stored verdict. The seven
-earlier sessions are not: `results` used to print the reply and discard it, and ACVP scopes a
-session's token to its registration, so re-reading them now returns 403. Those verdicts are
-recorded here from the runs themselves and cannot be re-fetched — which is exactly why they are
-now written down.
+the vector sets it judges, so every session from 765508 onward — sixteen of them — is backed
+by a verdict still on disk. The seven earlier ones are not: `results` used to print the reply and
+discard it, and ACVP scopes a session's token to its registration, so re-reading them now returns
+403. Those seven verdicts are recorded here from the runs themselves and cannot be re-fetched —
+which is exactly why every session since is written down.
 
 ### What this caught that fixtures did not
 
@@ -590,13 +592,13 @@ acvp-assay diff baseline.json current.json
 ```text
 verdict: REGRESSED
 provider changed between runs:
-  baseline: cryptography-aes-gcm, cryptography 50.0.1, OpenSSL OpenSSL 4.0.2 25 Aug 2026
-  current : cryptography-aes-gcm, cryptography 50.0.1, OpenSSL OpenSSL 3.5.0 8 Apr 2025
+  baseline: cryptography-aes-gcm, cryptography 50.0.1, OpenSSL OpenSSL 3.5.0 8 Apr 2025
+  current : cryptography-aes-gcm, cryptography 50.0.1, OpenSSL OpenSSL 4.0.2 25 Aug 2026
 regressed: 1
   tgId 1 tcId 1: PASS -> FAIL (tag mismatch)
 coverage lost: 10
   tgId 2 tcId 16: PASS -> UNSUPPORTED (ivGen 'internal' is not supported)
-  ... and 5 more
+  ... and 9 more
 ```
 
 Exit codes: 0 when nothing got worse, 1 on a regression, 2 when a report cannot be read — so

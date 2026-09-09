@@ -45,6 +45,7 @@ from acvp_assay.algorithms import (
     hmac_mac,
     kas_ecc,
     kas_ffc,
+    kas_ifc,
     kda,
     kdf,
     kdf_tls,
@@ -99,6 +100,12 @@ from acvp_assay.providers.kas_ecc import (
     SubprocessKasEcc,
 )
 from acvp_assay.providers.kas_ffc import KasFfcProvider, PythonKasFfc, SubprocessKasFfc
+from acvp_assay.providers.kas_ifc import (
+    KAS2,
+    CryptographyKasIfc,
+    KasIfcProvider,
+    SubprocessKasIfc,
+)
 from acvp_assay.providers.kda import CryptographyKda, KdaProvider, SubprocessKda
 from acvp_assay.providers.kdf import (
     CMAC_MODES,
@@ -989,6 +996,90 @@ def _aes_ccm_groups(
     return groups
 
 
+# --------------------------------------------------------------------------- IFC
+
+
+def _kas_ifc_groups(
+    document: dict[str, object], harness: Harness | None = None
+) -> list[dict[str, object]]:
+    """KAS-IFC-SSC and KTS-IFC: a verdict per VAL, values per AFT.
+
+    The AFT cases where the implementation originates secret material are the
+    ones the offline runner declines, and the only place they are ever checked
+    is here -- the server recomputes them from what is reported.
+    """
+    vector_set = kas_ifc.parse_vector_set(document)
+    provider: KasIfcProvider = (
+        CryptographyKasIfc()
+        if harness is None
+        else harness.open(
+            SubprocessKasIfc.from_command_string(
+                harness.command, timeout_seconds=harness.timeout_seconds
+            )
+        )
+    )
+    groups: list[dict[str, object]] = []
+    for group in vector_set.groups:
+        cases: list[dict[str, object]] = []
+        for case in group.tests:
+            cases.append(_kas_ifc_case(vector_set, group, case, provider))
+        groups.append({"tgId": group.tg_id, "tests": cases})
+    return groups
+
+
+def _kas_ifc_case(
+    vector_set: kas_ifc.IfcVectorSet,
+    group: kas_ifc.IfcGroup,
+    case: kas_ifc.IfcCase,
+    provider: KasIfcProvider,
+) -> dict[str, object]:
+    """One answered IFC case."""
+    if vector_set.algorithm == kas_ifc.KTS_IFC:
+        if group.hash_alg is None:
+            raise ResponseError(f"tgId {group.tg_id} has no KTS hash algorithm")
+        if case.iut_key is not None and case.server_c is not None:
+            dkm = provider.oaep_decrypt(
+                key=case.iut_key, ciphertext=case.server_c, hash_alg=group.hash_alg
+            )
+            return {"tcId": case.tc_id, "dkm": _hex(dkm)}
+        if case.peer_n is None or case.peer_e is None or group.key_bits is None:
+            raise ResponseError(
+                f"tgId {group.tg_id} tcId {case.tc_id} has no peer key or output length"
+            )
+        dkm, ciphertext = provider.oaep_encrypt(
+            peer_n=case.peer_n,
+            peer_e=case.peer_e,
+            hash_alg=group.hash_alg,
+            length_bytes=group.key_bits // 8,
+        )
+        return {"tcId": case.tc_id, "dkm": _hex(dkm), "iutC": _hex(ciphertext)}
+
+    if group.test_type == kas_ifc.VAL:
+        if case.claimed_z is None:
+            raise ResponseError(f"tgId {group.tg_id} tcId {case.tc_id} is a VAL case with no z")
+        computed = kas_ifc.shared_secret(vector_set, group, case, provider)
+        return {"tcId": case.tc_id, "testPassed": computed == case.claimed_z}
+
+    if not kas_ifc.originates(vector_set, group):
+        return {
+            "tcId": case.tc_id,
+            "z": _hex(kas_ifc.shared_secret(vector_set, group, case, provider)),
+        }
+
+    if case.peer_n is None or case.peer_e is None:
+        raise ResponseError(
+            f"tgId {group.tg_id} tcId {case.tc_id} must originate a secret but has no peer key"
+        )
+    own_z, own_c = provider.originate(peer_n=case.peer_n, peer_e=case.peer_e)
+    recovered = b""
+    if case.iut_key is not None and case.server_c is not None:
+        recovered = provider.recover(key=case.iut_key, ciphertext=case.server_c)
+    # Initiator's contribution first, whichever side we are on.
+    combined = own_z + recovered if group.kas_role == kas_ifc.INITIATOR else recovered + own_z
+    z = combined if group.scheme == KAS2 else own_z
+    return {"tcId": case.tc_id, "iutC": _hex(own_c), "iutZ": _hex(own_z), "z": _hex(z)}
+
+
 # --------------------------------------------------------------------------- protocol KDFs
 
 
@@ -1497,6 +1588,7 @@ def _builder_for(algorithm: str) -> _Builder | None:
         safe_primes.ALGORITHM: _safe_primes_groups,
         kas_ffc.ALGORITHM: _kas_ffc_groups,
         **dict.fromkeys(kdf_tls.SUPPORTED, _kdf_tls_groups),
+        **dict.fromkeys(kas_ifc.SUPPORTED, _kas_ifc_groups),
         kas_ecc.ALGORITHM: _kas_ecc_groups,
         "ML-KEM": _ml_kem_groups,
         "ML-DSA": _ml_dsa_groups,
@@ -1561,6 +1653,7 @@ def supported_response_algorithms() -> tuple[str, ...]:
         safe_primes.ALGORITHM,
         kas_ffc.ALGORITHM,
         *kdf_tls.SUPPORTED,
+        *kas_ifc.SUPPORTED,
         "ACVP-AES-GCM",
         aes_modes.ECB,
         aes_modes.CMAC,

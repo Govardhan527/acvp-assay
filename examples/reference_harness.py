@@ -769,6 +769,72 @@ PROTOCOL_HASHES = {
 }
 
 
+def _rsa_key(request: dict[str, Any]) -> Any:
+    """Rebuild the IUT's RSA key from the fields ACVP supplies."""
+    n, e = int(request["iutN"], 16), int(request["iutE"], 16)
+    p_, q_, d = int(request["iutP"], 16), int(request["iutQ"], 16), int(request["iutD"], 16)
+    return rsa.RSAPrivateNumbers(
+        p=p_,
+        q=q_,
+        d=d,
+        dmp1=rsa.rsa_crt_dmp1(d, p_),
+        dmq1=rsa.rsa_crt_dmq1(d, q_),
+        iqmp=rsa.rsa_crt_iqmp(p_, q_),
+        public_numbers=rsa.RSAPublicNumbers(e=e, n=n),
+    ).private_key()
+
+
+def _oaep(hash_alg: str) -> Any:
+    algo = {
+        "SHA2-224": hashes.SHA224(),
+        "SHA2-256": hashes.SHA256(),
+        "SHA2-384": hashes.SHA384(),
+        "SHA2-512": hashes.SHA512(),
+    }.get(hash_alg)
+    if algo is None:
+        return None
+    return padding.OAEP(mgf=padding.MGF1(algorithm=algo), algorithm=algo, label=None)
+
+
+def kas_ifc_recover(request: dict[str, Any]) -> dict[str, str]:
+    """RSADP: recover the peer's secret, padded to the modulus length."""
+    n, d = int(request["iutN"], 16), int(request["iutD"], 16)
+    size = (n.bit_length() + 7) // 8
+    z = pow(int(request["serverC"], 16), d, n)
+    return {"z": z.to_bytes(size, "big").hex().upper()}
+
+
+def kas_ifc_originate(request: dict[str, Any]) -> dict[str, str]:
+    """Choose Z in [1, n-1] and send C = Z^e mod n."""
+    n, e = int(request["serverN"], 16), int(request["serverE"], 16)
+    size = (n.bit_length() + 7) // 8
+    z = secrets.randbelow(n - 2) + 1
+    return {
+        "z": z.to_bytes(size, "big").hex().upper(),
+        "c": pow(z, e, n).to_bytes(size, "big").hex().upper(),
+    }
+
+
+def kts_ifc_decrypt(request: dict[str, Any]) -> dict[str, str]:
+    """Recover transported keying material under RSA-OAEP."""
+    scheme = _oaep(request["hashAlg"])
+    if scheme is None:
+        return {"error": "unsupported"}
+    dkm = _rsa_key(request).decrypt(bytes.fromhex(request["serverC"]), scheme)
+    return {"dkm": dkm.hex().upper()}
+
+
+def kts_ifc_encrypt(request: dict[str, Any]) -> dict[str, str]:
+    """Generate keying material and transport it under the peer's public key."""
+    scheme = _oaep(request["hashAlg"])
+    if scheme is None:
+        return {"error": "unsupported"}
+    n, e = int(request["serverN"], 16), int(request["serverE"], 16)
+    dkm = secrets.token_bytes(int(request["keyLen"]) // 8)
+    public = rsa.RSAPublicNumbers(e=e, n=n).public_key()
+    return {"dkm": dkm.hex().upper(), "c": public.encrypt(dkm, scheme).hex().upper()}
+
+
 def kdf_ssh(request: dict[str, Any]) -> dict[str, str]:
     """RFC 4253 7.2. `k` arrives already mpint-encoded and is hashed as given."""
     name = PROTOCOL_HASHES.get(request["hashAlg"])
@@ -1453,6 +1519,10 @@ HANDLERS = {
     "kdf-ssh": kdf_ssh,
     "kdf-tls12": kdf_tls12,
     "kdf-tls13": kdf_tls13,
+    "kas-ifc-recover": kas_ifc_recover,
+    "kas-ifc-originate": kas_ifc_originate,
+    "kts-ifc-decrypt": kts_ifc_decrypt,
+    "kts-ifc-encrypt": kts_ifc_encrypt,
     "safe-primes-keygen": safe_primes_keygen,
     "safe-primes-keyver": safe_primes_keyver,
     "kas-ffc-keygen": kas_ffc_keygen,
