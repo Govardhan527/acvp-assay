@@ -488,5 +488,10 @@
 - Also left as found: the `status` column is the 2026-09-06 snapshot and still shows twelve names built since as missing. Run again today, the script puts the median module at 100% testable and 382 of 690 modules fully testable, against the 84% and 112 the page quotes. Regenerating it moves the page's headline numbers, which is its own change.
 - Tests run and result: `scripts/dev.py test` - format, lint, strict mypy, 1,012 passed and 9 skipped.
 - Commit/link/path: `scripts/cavp_frequency.py`, `docs/algorithm-frequency.md`, `tests/unit/test_cavp_frequency.py`.
+- **A sentence that could only decay.** Footnote 1 of the results table said the set "is excluded from the 65". It said "the 43" before the last fix, and "the 65" would have been wrong at the next release. It was guarded, so it would not have gone stale silently; it would have failed the build on every release instead. It now says "the completed total", which is true whatever the total is, and the guard is narrowed to the one thing left to check: that a number does not come back.
+- The principle, because it will recur: prefer a claim that cannot go stale over a claim that is checked for staleness. A guarded number is the second-best outcome. The guards in `test_readme_arithmetic.py` are for numbers the README has to state, such as the headline totals and their concentration; a number that is there only because a sentence reached for it should be reworded instead.
+- Still stating the totals outside any guard, and candidates for the same treatment: the banner paragraph that says to read "those two numbers precisely", and `docs/limitations.md`.
+- Tests run and result: `scripts/dev.py test` - format, lint, strict mypy, 1,012 passed and 9 skipped; the narrowed guard replaces the old one, so the count is unchanged.
+- Commit/link/path: `README.md`, `tests/unit/test_readme_arithmetic.py`.
 - Blocker, if any: none.
-- Next unchecked ID: footnote 1 of the README results table, which names a total that moves every release.
+- Next unchecked ID: M26 continues - KMAC-128/256 (22%) and KAS-ECC non-SSC (22%).

@@ -488,8 +488,8 @@ implementation. Both sessions registered narrowly — ML-DSA `pure`/`external` o
 ¹ Session 765508 registered a sixteenth algorithm, AES-GMAC, whose vector set NIST's generator
 refused with `min must be less than max` — the registration declared a zero-width `payloadLen`,
 and GMAC has no payload to describe. That is a bug in the capability file, not in the runner: no
-vectors were ever produced, so there was nothing to answer. The set is excluded from the 65, the
-session therefore reports `passed: false` overall, and GMAC was re-registered correctly as 765518.
+vectors were ever produced, so there was nothing to answer. The set is excluded from the completed
+total, the session therefore reports `passed: false` overall, and GMAC was re-registered correctly as 765518.
 
 **Session 765346 is listed because it failed.** It is where the Monte Carlo decrypt bug below
 was found: the AES-CTR set was submitted, the other three were not, and the session was

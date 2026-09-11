@@ -106,15 +106,16 @@ def test_the_results_table_adds_up() -> None:
     assert (sets, cases) == completed()
 
 
-def test_every_reference_to_the_table_total_uses_the_current_one() -> None:
-    """ "excluded from the 43" outlived the 43 by twenty vector sets."""
-    total_sets, total_cases = completed()
-    stale = [
-        int(value)
-        for value in re.findall(r"excluded from the (\d+)", README)
-        if int(value) != total_sets
-    ]
-    assert not stale, f"the table total is {total_sets}; the text still says {stale}"
+def test_the_footnote_names_no_total_that_will_move() -> None:
+    """ "excluded from the 43" outlived the 43 by twenty vector sets.
+
+    This used to check that the number was current, which would have failed the
+    build on every release for as long as the footnote held one. The footnote now
+    says "the completed total", which cannot go stale, so there is nothing left
+    to check but that a number does not come back.
+    """
+    assert "excluded from the completed total" in " ".join(README.split())
+    assert not re.search(r"excluded from the \d", README)
 
 
 def test_the_concentration_figures_match_the_table() -> None:
