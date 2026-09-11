@@ -43,96 +43,104 @@ need two.
 How many of the 690 modules carry each name — the chance that any given customer
 needs it.
 
-| algorithm | modules | share | 2025+ | share | status |
-| --- | ---: | ---: | ---: | ---: | --- |
-| `SHA2-256` | 654 | 95% | 522 | 95% | built |
-| `HMAC-SHA2-256` | 604 | 88% | 490 | 89% | built |
-| `RSA` | 587 | 85% | 470 | 86% | built |
-| `ACVP-AES-CBC` | 583 | 84% | 469 | 85% | built |
-| `SHA2-384` | 565 | 82% | 457 | 83% | built |
-| `ECDSA` | 548 | 79% | 450 | 82% | built |
-| `SHA2-512` | 546 | 79% | 450 | 82% | built |
-| `ACVP-AES-ECB` | 523 | 76% | 421 | 77% | built |
-| `ACVP-AES-GCM` | 518 | 75% | 429 | 78% | built |
-| `HMAC-SHA2-384` | 516 | 75% | 421 | 77% | built |
-| `HMAC-SHA2-512` | 510 | 74% | 425 | 77% | built |
-| `SHA-1` | 505 | 73% | 420 | 77% | built |
-| `ctrDRBG` | 495 | 72% | 408 | 74% | built |
-| `HMAC-SHA-1` | 492 | 71% | 410 | 75% | built |
-| `ACVP-AES-CTR` | 473 | 69% | 391 | 71% | built |
-| `KAS-ECC-SSC` | 431 | 62% | 359 | 65% | built |
-| `SHA2-224` | 411 | 60% | 336 | 61% | built |
-| `HMAC-SHA2-224` | 391 | 57% | 326 | 59% | built |
-| `kdf-components` | 383 | 56% | 324 | 59% | **missing** |
-| `CMAC-AES` | 372 | 54% | 311 | 57% | built |
-| `ACVP-AES-CCM` | 356 | 52% | 296 | 54% | built |
-| `ACVP-AES-KW` | 344 | 50% | 288 | 52% | built |
-| `ACVP-AES-CFB128` | 337 | 49% | 277 | 50% | built |
-| `safePrimes` | 322 | 47% | 271 | 49% | **missing** |
-| `SHA3-256` | 322 | 47% | 273 | 50% | built |
-| `KAS-FFC-SSC` | 317 | 46% | 263 | 48% | **missing** |
-| `KDF` | 316 | 46% | 265 | 48% | built |
-| `ACVP-AES-XTS` | 303 | 44% | 245 | 45% | built |
-| `hashDRBG` | 299 | 43% | 242 | 44% | built |
-| `PBKDF` | 291 | 42% | 244 | 44% | **missing** |
-| `SHA3-384` | 288 | 42% | 247 | 45% | built |
-| `SHA3-512` | 284 | 41% | 243 | 44% | built |
-| `ACVP-AES-OFB` | 283 | 41% | 233 | 42% | built |
-| `TLS-v1.2` | 281 | 41% | 247 | 45% | **missing** |
-| `SHA3-224` | 280 | 41% | 240 | 44% | built |
-| `ACVP-AES-GMAC` | 277 | 40% | 234 | 43% | built |
-| `KDA` | 272 | 39% | 234 | 43% | built |
-| `hmacDRBG` | 268 | 39% | 231 | 42% | built |
-| `HMAC-SHA3-256` | 256 | 37% | 223 | 41% | built |
-| `HMAC-SHA3-384` | 255 | 37% | 222 | 40% | built |
-| `HMAC-SHA3-512` | 254 | 37% | 221 | 40% | built |
-| `ACVP-AES-CFB8` | 250 | 36% | 213 | 39% | **missing** |
-| `ACVP-AES-KWP` | 250 | 36% | 214 | 39% | built |
-| `HMAC-SHA3-224` | 249 | 36% | 217 | 40% | built |
-| `SHA2-512/256` | 237 | 34% | 206 | 38% | built |
-| `SHAKE-256` | 222 | 32% | 194 | 35% | built |
-| `HMAC-SHA2-512/256` | 221 | 32% | 193 | 35% | built |
-| `SHAKE-128` | 220 | 32% | 192 | 35% | built |
-| `KTS-IFC` | 214 | 31% | 185 | 34% | **missing** |
-| `TLS-v1.3` | 196 | 28% | 171 | 31% | **missing** |
-| `DSA` | 193 | 28% | 163 | 30% | **missing** |
-| `ACVP-AES-CBC-CS3` | 188 | 27% | 162 | 30% | **missing** |
-| `SHA2-512/224` | 186 | 27% | 164 | 30% | built |
-| `HMAC-SHA2-512/224` | 182 | 26% | 161 | 29% | built |
-| `ACVP-AES-CBC-CS1` | 165 | 24% | 145 | 26% | **missing** |
-| `ACVP-AES-CBC-CS2` | 161 | 23% | 140 | 26% | **missing** |
-| `KAS-ECC` | 155 | 22% | 119 | 22% | **missing** |
-| `KMAC-256` | 151 | 22% | 133 | 24% | **missing** |
-| `KMAC-128` | 150 | 22% | 132 | 24% | **missing** |
-| `ACVP-AES-CFB1` | 148 | 21% | 130 | 24% | **missing** |
-| `KAS-IFC-SSC` | 117 | 17% | 100 | 18% | **missing** |
-| `EDDSA` | 97 | 14% | 84 | 15% | **missing** |
-| `ACVP-TDES-CBC` | 74 | 11% | 66 | 12% | dead |
-| `ACVP-TDES-ECB` | 73 | 11% | 66 | 12% | dead |
-| `KAS-FFC` | 50 | 7% | 46 | 8% | **missing** |
-| `cSHAKE-128` | 47 | 7% | 44 | 8% | **missing** |
-| `cSHAKE-256` | 47 | 7% | 44 | 8% | **missing** |
-| `KAS-IFC` | 41 | 6% | 37 | 7% | **missing** |
-| `TupleHash-128` | 40 | 6% | 37 | 7% | **missing** |
-| `ParallelHash-256` | 40 | 6% | 37 | 7% | **missing** |
-| `ACVP-AES-FF1` | 40 | 6% | 37 | 7% | **missing** |
-| `ParallelHash-128` | 40 | 6% | 37 | 7% | **missing** |
-| `TupleHash-256` | 40 | 6% | 37 | 7% | **missing** |
-| `ConditioningComponent` | 29 | 4% | 20 | 4% | **missing** |
-| `ACVP-TDES-CFB8` | 19 | 3% | 15 | 3% | dead |
-| `ACVP-TDES-CFB64` | 18 | 3% | 14 | 3% | dead |
-| `ACVP-TDES-OFB` | 18 | 3% | 14 | 3% | dead |
-| `CMAC-TDES` | 17 | 2% | 14 | 3% | dead |
-| `ACVP-TDES-CFB1` | 14 | 2% | 11 | 2% | dead |
-| `LMS` | 12 | 2% | 12 | 2% | **missing** |
-| `ML-KEM` | 12 | 2% | 12 | 2% | built |
-| `DetECDSA` | 11 | 2% | 11 | 2% | **missing** |
-| `ACVP-AES-XPN` | 10 | 1% | 10 | 2% | **missing** |
-| `ACVP-TDES-CTR` | 5 | 1% | 3 | 1% | dead |
-| `ACVP-TDES-KW` | 5 | 1% | 3 | 1% | dead |
-| `ML-DSA` | 5 | 1% | 5 | 1% | built |
-| `KAS-KC` | 3 | 0% | 3 | 1% | **missing** |
-| `SLH-DSA` | 2 | 0% | 2 | 0% | **missing** |
+The `trend` column says what a standard does to that count, because a rank built by
+counting a population measures what has been validated and cannot see a mandate.
+`stable` means no known policy pressure. `decaying` means a standard disallows new
+use, so the count describes legacy. `mandated` means a standard requires adoption by
+a date, so the count describes a population that has not moved yet. `dead` means
+withdrawn. The column is the fact a consumer of this table can read; the paragraphs
+under [What this changed](#what-this-changed) keep the reasoning and the citations.
+
+| algorithm | modules | share | 2025+ | share | status | trend |
+| --- | ---: | ---: | ---: | ---: | --- | --- |
+| `SHA2-256` | 654 | 95% | 522 | 95% | built | stable |
+| `HMAC-SHA2-256` | 604 | 88% | 490 | 89% | built | stable |
+| `RSA` | 587 | 85% | 470 | 86% | built | stable |
+| `ACVP-AES-CBC` | 583 | 84% | 469 | 85% | built | stable |
+| `SHA2-384` | 565 | 82% | 457 | 83% | built | stable |
+| `ECDSA` | 548 | 79% | 450 | 82% | built | stable |
+| `SHA2-512` | 546 | 79% | 450 | 82% | built | stable |
+| `ACVP-AES-ECB` | 523 | 76% | 421 | 77% | built | stable |
+| `ACVP-AES-GCM` | 518 | 75% | 429 | 78% | built | stable |
+| `HMAC-SHA2-384` | 516 | 75% | 421 | 77% | built | stable |
+| `HMAC-SHA2-512` | 510 | 74% | 425 | 77% | built | stable |
+| `SHA-1` | 505 | 73% | 420 | 77% | built | stable |
+| `ctrDRBG` | 495 | 72% | 408 | 74% | built | stable |
+| `HMAC-SHA-1` | 492 | 71% | 410 | 75% | built | stable |
+| `ACVP-AES-CTR` | 473 | 69% | 391 | 71% | built | stable |
+| `KAS-ECC-SSC` | 431 | 62% | 359 | 65% | built | stable |
+| `SHA2-224` | 411 | 60% | 336 | 61% | built | stable |
+| `HMAC-SHA2-224` | 391 | 57% | 326 | 59% | built | stable |
+| `kdf-components` | 383 | 56% | 324 | 59% | **missing** | stable |
+| `CMAC-AES` | 372 | 54% | 311 | 57% | built | stable |
+| `ACVP-AES-CCM` | 356 | 52% | 296 | 54% | built | stable |
+| `ACVP-AES-KW` | 344 | 50% | 288 | 52% | built | stable |
+| `ACVP-AES-CFB128` | 337 | 49% | 277 | 50% | built | stable |
+| `safePrimes` | 322 | 47% | 271 | 49% | **missing** | stable |
+| `SHA3-256` | 322 | 47% | 273 | 50% | built | stable |
+| `KAS-FFC-SSC` | 317 | 46% | 263 | 48% | **missing** | stable |
+| `KDF` | 316 | 46% | 265 | 48% | built | stable |
+| `ACVP-AES-XTS` | 303 | 44% | 245 | 45% | built | stable |
+| `hashDRBG` | 299 | 43% | 242 | 44% | built | stable |
+| `PBKDF` | 291 | 42% | 244 | 44% | **missing** | stable |
+| `SHA3-384` | 288 | 42% | 247 | 45% | built | stable |
+| `SHA3-512` | 284 | 41% | 243 | 44% | built | stable |
+| `ACVP-AES-OFB` | 283 | 41% | 233 | 42% | built | stable |
+| `TLS-v1.2` | 281 | 41% | 247 | 45% | **missing** | stable |
+| `SHA3-224` | 280 | 41% | 240 | 44% | built | stable |
+| `ACVP-AES-GMAC` | 277 | 40% | 234 | 43% | built | stable |
+| `KDA` | 272 | 39% | 234 | 43% | built | stable |
+| `hmacDRBG` | 268 | 39% | 231 | 42% | built | stable |
+| `HMAC-SHA3-256` | 256 | 37% | 223 | 41% | built | stable |
+| `HMAC-SHA3-384` | 255 | 37% | 222 | 40% | built | stable |
+| `HMAC-SHA3-512` | 254 | 37% | 221 | 40% | built | stable |
+| `ACVP-AES-CFB8` | 250 | 36% | 213 | 39% | **missing** | stable |
+| `ACVP-AES-KWP` | 250 | 36% | 214 | 39% | built | stable |
+| `HMAC-SHA3-224` | 249 | 36% | 217 | 40% | built | stable |
+| `SHA2-512/256` | 237 | 34% | 206 | 38% | built | stable |
+| `SHAKE-256` | 222 | 32% | 194 | 35% | built | stable |
+| `HMAC-SHA2-512/256` | 221 | 32% | 193 | 35% | built | stable |
+| `SHAKE-128` | 220 | 32% | 192 | 35% | built | stable |
+| `KTS-IFC` | 214 | 31% | 185 | 34% | **missing** | stable |
+| `TLS-v1.3` | 196 | 28% | 171 | 31% | **missing** | stable |
+| `DSA` | 193 | 28% | 163 | 30% | **missing** | decaying |
+| `ACVP-AES-CBC-CS3` | 188 | 27% | 162 | 30% | **missing** | stable |
+| `SHA2-512/224` | 186 | 27% | 164 | 30% | built | stable |
+| `HMAC-SHA2-512/224` | 182 | 26% | 161 | 29% | built | stable |
+| `ACVP-AES-CBC-CS1` | 165 | 24% | 145 | 26% | **missing** | stable |
+| `ACVP-AES-CBC-CS2` | 161 | 23% | 140 | 26% | **missing** | stable |
+| `KAS-ECC` | 155 | 22% | 119 | 22% | **missing** | stable |
+| `KMAC-256` | 151 | 22% | 133 | 24% | **missing** | stable |
+| `KMAC-128` | 150 | 22% | 132 | 24% | **missing** | stable |
+| `ACVP-AES-CFB1` | 148 | 21% | 130 | 24% | **missing** | stable |
+| `KAS-IFC-SSC` | 117 | 17% | 100 | 18% | **missing** | stable |
+| `EDDSA` | 97 | 14% | 84 | 15% | **missing** | stable |
+| `ACVP-TDES-CBC` | 74 | 11% | 66 | 12% | dead | dead |
+| `ACVP-TDES-ECB` | 73 | 11% | 66 | 12% | dead | dead |
+| `KAS-FFC` | 50 | 7% | 46 | 8% | **missing** | stable |
+| `cSHAKE-128` | 47 | 7% | 44 | 8% | **missing** | stable |
+| `cSHAKE-256` | 47 | 7% | 44 | 8% | **missing** | stable |
+| `KAS-IFC` | 41 | 6% | 37 | 7% | **missing** | stable |
+| `TupleHash-128` | 40 | 6% | 37 | 7% | **missing** | stable |
+| `ParallelHash-256` | 40 | 6% | 37 | 7% | **missing** | stable |
+| `ACVP-AES-FF1` | 40 | 6% | 37 | 7% | **missing** | stable |
+| `ParallelHash-128` | 40 | 6% | 37 | 7% | **missing** | stable |
+| `TupleHash-256` | 40 | 6% | 37 | 7% | **missing** | stable |
+| `ConditioningComponent` | 29 | 4% | 20 | 4% | **missing** | stable |
+| `ACVP-TDES-CFB8` | 19 | 3% | 15 | 3% | dead | dead |
+| `ACVP-TDES-CFB64` | 18 | 3% | 14 | 3% | dead | dead |
+| `ACVP-TDES-OFB` | 18 | 3% | 14 | 3% | dead | dead |
+| `CMAC-TDES` | 17 | 2% | 14 | 3% | dead | dead |
+| `ACVP-TDES-CFB1` | 14 | 2% | 11 | 2% | dead | dead |
+| `LMS` | 12 | 2% | 12 | 2% | **missing** | stable |
+| `ML-KEM` | 12 | 2% | 12 | 2% | built | mandated |
+| `DetECDSA` | 11 | 2% | 11 | 2% | **missing** | stable |
+| `ACVP-AES-XPN` | 10 | 1% | 10 | 2% | **missing** | stable |
+| `ACVP-TDES-CTR` | 5 | 1% | 3 | 1% | dead | dead |
+| `ACVP-TDES-KW` | 5 | 1% | 3 | 1% | dead | dead |
+| `ML-DSA` | 5 | 1% | 5 | 1% | built | mandated |
+| `KAS-KC` | 3 | 0% | 3 | 1% | **missing** | stable |
+| `SLH-DSA` | 2 | 0% | 2 | 0% | **missing** | stable |
 
 ## What to build next
 
@@ -178,15 +186,19 @@ Four names were correctly dismissed, and more firmly than expected —
 `ACVP-AES-GCM-SIV`, `Ascon`, `XECDH` and `ACVP-AES-FF3-1` appear on **no** active
 FIPS 140-3 certificate at all.
 
-Two names deserve a caveat rather than a rank. `DSA` measures 28%, but SP 800-131A
-disallowed DSA signature generation after 2023, so what remains on certificates is
-legacy verification and the number should decay. The three-key TDES family is
-excluded outright for the same reason, and is marked `dead` in the table above
-rather than silently dropped.
+Three entries have a caveat that contradicts their rank. The `trend` column now
+carries each one where a reader of the table will see it, and these paragraphs keep
+the reasoning. `DSA` measures 28%, but SP 800-131A disallowed DSA signature
+generation after 2023, so what remains on certificates is legacy verification and
+the number should decay: it is marked `decaying`. The three-key TDES family is
+excluded outright for the same reason, and is marked `dead` in both columns rather
+than silently dropped.
 
-The post-quantum names are the opposite case: `ML-KEM` is on 12 modules and
-`ML-DSA` on 5. Both are already built here, ahead of the demand curve rather than
-behind it, which is where CNSA 2.0 requires them to be by January 2027.
+The post-quantum names are the opposite case, marked `mandated`: `ML-KEM` is on 12
+modules and `ML-DSA` on 5. Both are already built here, ahead of the demand curve
+rather than behind it, which is where CNSA 2.0 requires them to be by January 2027.
+A count ranks them near the bottom, confidently and with a real denominator, and
+cannot see the date.
 
 ## Reproducing it
 

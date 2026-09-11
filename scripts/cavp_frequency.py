@@ -133,6 +133,38 @@ DEAD: Final = frozenset(
     }
 )
 
+# --- what a count cannot see -----------------------------------------------
+# A rank built by counting certificates measures what has been validated, and
+# cannot see a mandate. Where a standard changes what a count means, the table
+# says so in a column, because a consumer of the table reads the column and
+# never the paragraph. A name not listed here is ``stable``: no known policy
+# pressure. Every entry names the standard that determines it.
+
+STABLE: Final = "stable"
+#: A standard disallows new use; the count describes legacy.
+DECAYING: Final = "decaying"
+#: A standard requires adoption by a date; the count describes a population
+#: that has not moved yet.
+MANDATED: Final = "mandated"
+#: Withdrawn.
+WITHDRAWN: Final = "dead"
+TRENDS: Final = (STABLE, DECAYING, MANDATED, WITHDRAWN)
+
+TREND: Final[dict[str, tuple[str, str]]] = {
+    "DSA": (DECAYING, "SP 800-131A: DSA signature generation disallowed after 2023"),
+    "ML-KEM": (MANDATED, "CNSA 2.0: required by January 2027"),
+    "ML-DSA": (MANDATED, "CNSA 2.0: required by January 2027"),
+    **{
+        name: (WITHDRAWN, "three-key TDES: disallowed for new validations since 2023")
+        for name in DEAD
+    },
+}
+
+
+def trend(name: str) -> str:
+    """The policy trend behind a name's count: ``stable`` unless a standard says otherwise."""
+    return TREND.get(name, (STABLE, ""))[0]
+
 
 class Module(NamedTuple):
     """One FIPS 140-3 certificate, reduced to the registry names it needs."""
@@ -259,14 +291,14 @@ def report(since: int) -> int:
 
     frequency = collections.Counter(name for names in every for name in names)
     recent_frequency = collections.Counter(name for names in recent for name in names)
-    print(f"| algorithm | modules | share | {since}+ | share | status |")
-    print("| --- | ---: | ---: | ---: | ---: | --- |")
+    print(f"| algorithm | modules | share | {since}+ | share | status | trend |")
+    print("| --- | ---: | ---: | ---: | ---: | --- | --- |")
     for name, count in frequency.most_common():
         status = "built" if name in built else ("dead" if name in DEAD else "**missing**")
         print(
             f"| `{name}` | {count} | {100 * count / len(every):.0f}% "
             f"| {recent_frequency[name]} | {100 * recent_frequency[name] / len(recent):.0f}% "
-            f"| {status} |"
+            f"| {status} | {trend(name)} |"
         )
 
     complete = sum(1 for names in every if names - DEAD <= built)

@@ -90,3 +90,42 @@ def test_the_dead_set_is_only_three_key_tdes() -> None:
     dead = cavp_frequency.DEAD  # type: ignore[attr-defined]
     assert all("TDES" in name for name in dead)
     assert len(dead) == 14
+
+
+# --- the trend column ------------------------------------------------------
+
+trend = cavp_frequency.trend  # type: ignore[attr-defined]
+TREND = cavp_frequency.TREND  # type: ignore[attr-defined]
+TRENDS = cavp_frequency.TRENDS  # type: ignore[attr-defined]
+
+
+def test_the_trend_vocabulary_is_closed() -> None:
+    """Four values, each saying something different about what a count means."""
+    assert TRENDS == ("stable", "decaying", "mandated", "dead")
+    assert {value for value, _ in TREND.values()} <= set(TRENDS) - {"stable"}
+
+
+def test_every_trend_names_the_standard_behind_it() -> None:
+    """A trend without its source would be the claim this column exists to stop making."""
+    for name, (_, source) in TREND.items():
+        assert source.strip(), f"{name} has a trend and no source"
+
+
+def test_the_ranks_a_standard_contradicts_carry_their_trend() -> None:
+    """The three caveats the prose used to hold alone."""
+    assert trend("DSA") == "decaying"
+    assert trend("ML-KEM") == trend("ML-DSA") == "mandated"
+    assert all(trend(name) == "dead" for name in cavp_frequency.DEAD)  # type: ignore[attr-defined]
+    assert trend("SHA2-256") == "stable"
+
+
+def test_the_published_table_carries_the_scripts_trend_on_every_row() -> None:
+    """Someone generating capability files reads the column, so it must agree with its source."""
+    document = (ROOT / "docs/algorithm-frequency.md").read_text(encoding="utf-8")
+    rows = [line for line in document.splitlines() if line.startswith("| `")]
+    assert rows, "the frequency table is missing"
+    for row in rows:
+        cells = [cell.strip() for cell in row.strip().strip("|").split("|")]
+        name = cells[0].strip("`")
+        assert len(cells) == 7, f"{name} has no trend column"
+        assert cells[6] == trend(name), f"{name}: table says {cells[6]}, script says {trend(name)}"
