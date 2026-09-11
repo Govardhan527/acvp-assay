@@ -20,7 +20,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-from acvp_assay.models import DigestValues, ResultStatus, TestCaseResult
+from acvp_assay.models import DeclineReason, DigestValues, ResultStatus, TestCaseResult
 from acvp_assay.parser import (
     AcvpValidationError,
     boolean,
@@ -230,7 +230,7 @@ def load_expected_results(path: str | Path) -> DrbgExpectedSet:
     return parse_expected_results(json.loads(Path(path).read_text(encoding="utf-8")))
 
 
-def _unsupported(tg_id: int, tc_id: int, reason: str) -> TestCaseResult:
+def _unsupported(code: DeclineReason, tg_id: int, tc_id: int, reason: str) -> TestCaseResult:
     return TestCaseResult(
         tg_id=tg_id,
         tc_id=tc_id,
@@ -238,6 +238,7 @@ def _unsupported(tg_id: int, tc_id: int, reason: str) -> TestCaseResult:
         expected=None,
         actual=None,
         diagnostic=reason,
+        decline_reason=code,
     )
 
 
@@ -270,12 +271,22 @@ def _run_case(
         try:
             produced = provider.run_case(**arguments)  # type: ignore[arg-type]
         except HarnessUnsupportedError:
-            return _unsupported(group.tg_id, case.tc_id, "the harness declined this case")
+            return _unsupported(
+                DeclineReason.IMPLEMENTATION_LACKS,
+                group.tg_id,
+                case.tc_id,
+                "the harness declined this case",
+            )
     else:
         produced = run_drbg_case(provider, **arguments)  # type: ignore[arg-type]
 
     if produced is None:
-        return _unsupported(group.tg_id, case.tc_id, "the case requested no generation")
+        return _unsupported(
+            DeclineReason.VECTOR_INCOMPLETE,
+            group.tg_id,
+            case.tc_id,
+            "the case requested no generation",
+        )
 
     status = ResultStatus.PASS if produced == expected else ResultStatus.FAIL
     return TestCaseResult(
@@ -301,6 +312,7 @@ def run_vector_set(
             if not supported_mode:
                 results.append(
                     _unsupported(
+                        DeclineReason.RUNNER_LACKS,
                         group.tg_id,
                         case.tc_id,
                         f"mode {group.mode} is not supported",
@@ -309,7 +321,14 @@ def run_vector_set(
                 continue
             wanted = expected.returned_bits.get(case.tc_id)
             if wanted is None:
-                results.append(_unsupported(group.tg_id, case.tc_id, "no expected result recorded"))
+                results.append(
+                    _unsupported(
+                        DeclineReason.OFFLINE_UNDECIDABLE,
+                        group.tg_id,
+                        case.tc_id,
+                        "no expected result recorded",
+                    )
+                )
                 continue
             results.append(_run_case(group, case, wanted, provider))
     return results

@@ -9,6 +9,7 @@ from acvp_assay.models import (
     AesGcmTestGroup,
     AesGcmValues,
     AesGcmVectorSet,
+    DeclineReason,
     Direction,
     ResultStatus,
     SafeDiagnostic,
@@ -130,3 +131,40 @@ def test_enum_values_match_external_wire_values() -> None:
         "SKIPPED",
         "UNSUPPORTED",
     ]
+    assert [reason.value for reason in DeclineReason] == [
+        "implementation_lacks",
+        "runner_lacks",
+        "offline_undecidable",
+        "vector_incomplete",
+    ]
+
+
+def test_unsupported_without_a_decline_reason_is_rejected() -> None:
+    """UNSUPPORTED alone merges four states with four different repairs."""
+    with pytest.raises(ValueError, match="UNSUPPORTED requires a DeclineReason"):
+        CaseResult(1, 1, ResultStatus.UNSUPPORTED, None, None, "curve not supported")
+
+
+def test_a_decline_reason_must_come_from_the_closed_set() -> None:
+    """The right words as a plain string are still not the closed vocabulary."""
+    reason: object = "implementation_lacks"
+    with pytest.raises(ValueError, match="UNSUPPORTED requires a DeclineReason"):
+        CaseResult(1, 1, ResultStatus.UNSUPPORTED, None, None, "x", reason)  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize(
+    "status", [status for status in ResultStatus if status is not ResultStatus.UNSUPPORTED]
+)
+def test_only_unsupported_carries_a_decline_reason(status: ResultStatus) -> None:
+    """A reason on a PASS or a FAIL would describe a gap that is not there."""
+    diagnostic = SafeDiagnostic.PROVIDER_ERROR.value if status is ResultStatus.ERROR else None
+    with pytest.raises(ValueError, match="only UNSUPPORTED carries a decline reason"):
+        CaseResult(1, 1, status, None, None, diagnostic, DeclineReason.RUNNER_LACKS)
+
+
+def test_every_decline_reason_is_accepted_beside_its_sentence() -> None:
+    """The code is for aggregation; the English stays, for a person reading one case."""
+    for reason in DeclineReason:
+        result = CaseResult(1, 1, ResultStatus.UNSUPPORTED, None, None, "why, in words", reason)
+        assert result.decline_reason is reason
+        assert result.diagnostic == "why, in words"

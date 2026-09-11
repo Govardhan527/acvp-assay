@@ -1,8 +1,9 @@
 """Typed internal models.
 
 The result vocabulary every family shares -- ``ResultStatus``,
-``SafeDiagnostic``, ``TestCaseResult``, ``ProviderMetadata`` and the
-``CaseValues`` shapes -- lives here, alongside the AES-GCM vector models.
+``DeclineReason``, ``SafeDiagnostic``, ``TestCaseResult``,
+``ProviderMetadata`` and the ``CaseValues`` shapes -- lives here, alongside
+the AES-GCM vector models.
 Each other family owns its own vector models in ``algorithms/``, because
 their group shapes have little in common; what they share is everything
 downstream of execution.
@@ -36,6 +37,29 @@ class ResultStatus(StrEnum):
     ERROR = "ERROR"
     SKIPPED = "SKIPPED"
     UNSUPPORTED = "UNSUPPORTED"
+
+
+class DeclineReason(StrEnum):
+    """Why a case is UNSUPPORTED. Each member has a different repair.
+
+    That is the test for whether this vocabulary has finished splitting: two
+    members sharing a repair would be one state under two names, and while each
+    points somewhere different, a further split has nothing left to change.
+    """
+
+    #: The implementation under test lacks it: a harness declined, or the
+    #: provider's declared capability excludes it. The vendor repairs it.
+    IMPLEMENTATION_LACKS = "implementation_lacks"
+    #: This runner lacks it: a path not built here, or a value its own tables
+    #: do not know. Repaired by building it here.
+    RUNNER_LACKS = "runner_lacks"
+    #: The method cannot decide it offline: there is no recorded answer to
+    #: compare with, or the answer is fresh by construction. Repaired by
+    #: submitting to ACVTS, or structurally not at all.
+    OFFLINE_UNDECIDABLE = "offline_undecidable"
+    #: The vector lacks data its own group requires, or contradicts it.
+    #: Repaired by a different registration, or by NIST.
+    VECTOR_INCOMPLETE = "vector_incomplete"
 
 
 class SafeDiagnostic(StrEnum):
@@ -211,7 +235,12 @@ class ProviderMetadata:
 
 @dataclass(frozen=True, slots=True)
 class TestCaseResult:
-    """One classified case outcome with safe diagnostic context."""
+    """One classified case outcome with safe diagnostic context.
+
+    ``decline_reason`` says why a case is UNSUPPORTED, as a code for
+    aggregation and filtering; ``diagnostic`` keeps the sentence, for a person
+    reading one case.
+    """
 
     tg_id: int
     tc_id: int
@@ -219,9 +248,10 @@ class TestCaseResult:
     expected: CaseValues | None
     actual: CaseValues | None
     diagnostic: str | None = None
+    decline_reason: DeclineReason | None = None
 
     def __post_init__(self) -> None:
-        """Reject ERROR diagnostics outside the closed safe vocabulary.
+        """Enforce both closed vocabularies on the model itself.
 
         FAIL diagnostics are dynamically built from a fixed set of field
         names (see comparator.compare_values) and are not restricted here.
@@ -229,12 +259,22 @@ class TestCaseResult:
         construct them from caught provider/library errors that can quote
         secret material; this is enforced on the model itself rather than by
         convention at a single call site.
+
+        UNSUPPORTED must carry a ``DeclineReason``, and no other status may.
+        Without one, four states with four different repairs print alike, and
+        session 766220's keyGen defect sat behind exactly that: a limitation of
+        the method, printed the same as every other gap.
         """
         if self.status is ResultStatus.ERROR and self.diagnostic not in _SAFE_DIAGNOSTIC_VALUES:
             raise ValueError(
                 f"ERROR diagnostic must be one of {sorted(_SAFE_DIAGNOSTIC_VALUES)}, "
                 f"got {self.diagnostic!r}"
             )
+        declined = self.status is ResultStatus.UNSUPPORTED
+        if declined and not isinstance(self.decline_reason, DeclineReason):
+            raise ValueError(f"UNSUPPORTED requires a DeclineReason, got {self.decline_reason!r}")
+        if not declined and self.decline_reason is not None:
+            raise ValueError(f"only UNSUPPORTED carries a decline reason, not {self.status.value}")
 
 
 __all__ = [
@@ -243,6 +283,7 @@ __all__ = [
     "AesGcmValues",
     "AesGcmVectorSet",
     "CaseValues",
+    "DeclineReason",
     "DigestValues",
     "Direction",
     "ExpectedResultCase",

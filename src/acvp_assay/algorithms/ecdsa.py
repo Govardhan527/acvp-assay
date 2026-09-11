@@ -24,6 +24,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from acvp_assay.models import (
+    DeclineReason,
     ResultStatus,
     SignatureValues,
     TestCaseResult,
@@ -173,7 +174,7 @@ def load_expected_results(path: str | Path) -> EcdsaExpectedSet:
     return parse_expected_results(json.loads(Path(path).read_text(encoding="utf-8")))
 
 
-def _unsupported(tg_id: int, tc_id: int, reason: str) -> TestCaseResult:
+def _unsupported(code: DeclineReason, tg_id: int, tc_id: int, reason: str) -> TestCaseResult:
     return TestCaseResult(
         tg_id=tg_id,
         tc_id=tc_id,
@@ -181,6 +182,7 @@ def _unsupported(tg_id: int, tc_id: int, reason: str) -> TestCaseResult:
         expected=None,
         actual=None,
         diagnostic=reason,
+        decline_reason=code,
     )
 
 
@@ -191,9 +193,19 @@ def _run_sig_ver(
     provider: EcdsaProvider,
 ) -> TestCaseResult:
     if expected is None:
-        return _unsupported(group.tg_id, case.tc_id, "no expected verdict recorded")
+        return _unsupported(
+            DeclineReason.OFFLINE_UNDECIDABLE,
+            group.tg_id,
+            case.tc_id,
+            "no expected verdict recorded",
+        )
     if None in (case.qx, case.qy, case.r, case.s):
-        return _unsupported(group.tg_id, case.tc_id, "case is missing a key or signature field")
+        return _unsupported(
+            DeclineReason.VECTOR_INCOMPLETE,
+            group.tg_id,
+            case.tc_id,
+            "case is missing a key or signature field",
+        )
     assert case.qx is not None and case.qy is not None
     assert case.r is not None and case.s is not None
     verdict = provider.verify(
@@ -270,6 +282,7 @@ def run_vector_set(
             if not supported:
                 results.append(
                     _unsupported(
+                        DeclineReason.IMPLEMENTATION_LACKS,
                         group.tg_id,
                         case.tc_id,
                         f"curve {group.curve!r} with {group.hash_algorithm!r} is not supported",
@@ -278,7 +291,12 @@ def run_vector_set(
                 continue
             if group.component_test:
                 results.append(
-                    _unsupported(group.tg_id, case.tc_id, "component-only tests are not supported")
+                    _unsupported(
+                        DeclineReason.RUNNER_LACKS,
+                        group.tg_id,
+                        case.tc_id,
+                        "component-only tests are not supported",
+                    )
                 )
                 continue
             try:
@@ -292,7 +310,12 @@ def run_vector_set(
                     results.append(_run_sig_gen(group, case, provider))
             except HarnessUnsupportedError:
                 results.append(
-                    _unsupported(group.tg_id, case.tc_id, "the harness declined this case")
+                    _unsupported(
+                        DeclineReason.IMPLEMENTATION_LACKS,
+                        group.tg_id,
+                        case.tc_id,
+                        "the harness declined this case",
+                    )
                 )
     return results
 

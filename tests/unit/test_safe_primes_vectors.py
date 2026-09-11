@@ -19,7 +19,7 @@ import pytest
 
 from acvp_assay.algorithms import kas_ffc as ffc_algorithm
 from acvp_assay.algorithms import safe_primes as sp_algorithm
-from acvp_assay.models import ResultStatus
+from acvp_assay.models import DeclineReason, ResultStatus
 from acvp_assay.parser import AcvpValidationError
 from acvp_assay.providers.kas_ffc import PythonKasFfc, SubprocessKasFfc
 from acvp_assay.providers.safe_primes import (
@@ -74,6 +74,9 @@ def test_key_gen_is_declined_with_its_reason_never_passed() -> None:
     assert [r.status for r in results] == [ResultStatus.UNSUPPORTED] * 2
     assert results[0].diagnostic is not None
     assert "submit to ACVTS" in results[0].diagnostic
+    # A limitation of the method, and only that. The code must not blame the
+    # implementation or the vector, and must not read as a gap in this runner.
+    assert {r.decline_reason for r in results} == {DeclineReason.OFFLINE_UNDECIDABLE}
 
 
 def test_key_ver_agrees_with_a_recorded_verdict() -> None:

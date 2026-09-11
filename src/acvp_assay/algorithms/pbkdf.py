@@ -12,7 +12,7 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 
-from acvp_assay.models import ResultStatus, TestCaseResult
+from acvp_assay.models import DeclineReason, ResultStatus, TestCaseResult
 from acvp_assay.parser import (
     AcvpValidationError,
     hex_bytes,
@@ -141,7 +141,7 @@ def provider_for(provider_command: str | None, timeout_seconds: float) -> PbkdfP
     return SubprocessPbkdf.from_command_string(provider_command, timeout_seconds=timeout_seconds)
 
 
-def _unsupported(tg_id: int, tc_id: int, reason: str) -> TestCaseResult:
+def _unsupported(code: DeclineReason, tg_id: int, tc_id: int, reason: str) -> TestCaseResult:
     return TestCaseResult(
         tg_id=tg_id,
         tc_id=tc_id,
@@ -149,6 +149,7 @@ def _unsupported(tg_id: int, tc_id: int, reason: str) -> TestCaseResult:
         expected=None,
         actual=None,
         diagnostic=reason,
+        decline_reason=code,
     )
 
 
@@ -164,13 +165,21 @@ def run_vector_set(
             want = expected.get((group.tg_id, case.tc_id))
             if want is None:
                 results.append(
-                    _unsupported(group.tg_id, case.tc_id, "no expected derivedKey recorded")
+                    _unsupported(
+                        DeclineReason.OFFLINE_UNDECIDABLE,
+                        group.tg_id,
+                        case.tc_id,
+                        "no expected derivedKey recorded",
+                    )
                 )
                 continue
             if group.hmac_alg not in SUPPORTED_HMACS:
                 results.append(
                     _unsupported(
-                        group.tg_id, case.tc_id, f"hmacAlg {group.hmac_alg} is not supported"
+                        DeclineReason.RUNNER_LACKS,
+                        group.tg_id,
+                        case.tc_id,
+                        f"hmacAlg {group.hmac_alg} is not supported",
                     )
                 )
                 continue
@@ -184,7 +193,12 @@ def run_vector_set(
                 )
             except HarnessUnsupportedError:
                 results.append(
-                    _unsupported(group.tg_id, case.tc_id, "the harness declined this case")
+                    _unsupported(
+                        DeclineReason.IMPLEMENTATION_LACKS,
+                        group.tg_id,
+                        case.tc_id,
+                        "the harness declined this case",
+                    )
                 )
                 continue
             passed = produced == want

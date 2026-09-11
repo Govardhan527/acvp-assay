@@ -12,7 +12,7 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 
-from acvp_assay.models import ProviderMetadata, ResultStatus, TestCaseResult
+from acvp_assay.models import DeclineReason, ProviderMetadata, ResultStatus, TestCaseResult
 from acvp_assay.parser import (
     AcvpValidationError,
     integer,
@@ -147,7 +147,7 @@ def metadata_for(provider: KasFfcProvider) -> ProviderMetadata:
     return provider.metadata()
 
 
-def _unsupported(tg_id: int, tc_id: int, reason: str) -> TestCaseResult:
+def _unsupported(code: DeclineReason, tg_id: int, tc_id: int, reason: str) -> TestCaseResult:
     return TestCaseResult(
         tg_id=tg_id,
         tc_id=tc_id,
@@ -155,6 +155,7 @@ def _unsupported(tg_id: int, tc_id: int, reason: str) -> TestCaseResult:
         expected=None,
         actual=None,
         diagnostic=reason,
+        decline_reason=code,
     )
 
 
@@ -169,16 +170,27 @@ def run_vector_set(
         for case in group.tests:
             key = (group.tg_id, case.tc_id)
             if group.scheme != DH_EPHEM:
-                results.append(_unsupported(*key, f"scheme {group.scheme!r} is not supported"))
+                results.append(
+                    _unsupported(
+                        DeclineReason.RUNNER_LACKS,
+                        *key,
+                        f"scheme {group.scheme!r} is not supported",
+                    )
+                )
                 continue
             if not provider.supports(group=group.group):
                 results.append(
-                    _unsupported(*key, f"domain parameters {group.group!r} are not supported")
+                    _unsupported(
+                        DeclineReason.IMPLEMENTATION_LACKS,
+                        *key,
+                        f"domain parameters {group.group!r} are not supported",
+                    )
                 )
                 continue
             if group.test_type == AFT:
                 results.append(
                     _unsupported(
+                        DeclineReason.OFFLINE_UNDECIDABLE,
                         *key,
                         "AFT generates an ephemeral key, so z cannot be compared with the "
                         "recorded value; submit to ACVTS, which can verify it",
@@ -187,26 +199,40 @@ def run_vector_set(
                 continue
             if group.test_type != VAL:
                 results.append(
-                    _unsupported(*key, f"test type {group.test_type!r} is not supported")
+                    _unsupported(
+                        DeclineReason.RUNNER_LACKS,
+                        *key,
+                        f"test type {group.test_type!r} is not supported",
+                    )
                 )
                 continue
             if case.private_key is None or case.peer_public is None or case.claimed_z is None:
                 results.append(
                     _unsupported(
-                        *key, "a VAL case must supply a private key, a peer public key and z"
+                        DeclineReason.VECTOR_INCOMPLETE,
+                        *key,
+                        "a VAL case must supply a private key, a peer public key and z",
                     )
                 )
                 continue
             recorded = expected.get(key)
             if recorded is None or not isinstance(recorded.get("testPassed"), bool):
-                results.append(_unsupported(*key, "no expected verdict recorded"))
+                results.append(
+                    _unsupported(
+                        DeclineReason.OFFLINE_UNDECIDABLE, *key, "no expected verdict recorded"
+                    )
+                )
                 continue
             try:
                 computed = provider.shared_secret(
                     group=group.group, private_key=case.private_key, peer_public=case.peer_public
                 )
             except HarnessUnsupportedError:
-                results.append(_unsupported(*key, "the harness declined this case"))
+                results.append(
+                    _unsupported(
+                        DeclineReason.IMPLEMENTATION_LACKS, *key, "the harness declined this case"
+                    )
+                )
                 continue
             except ValueError:
                 # A peer key outside the usable range is a case that should fail,

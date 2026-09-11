@@ -36,13 +36,19 @@ def report(
     cases: list[Case],
     *,
     provider: dict[str, Any] | None = None,
+    reasons: dict[tuple[int, int], str] | None = None,
 ) -> dict[str, Any]:
-    """Build a report document from (tgId, tcId, status, diagnostic) tuples."""
+    """Build a report document from (tgId, tcId, status, diagnostic) tuples.
+
+    ``reasons`` supplies the decline reason for the UNSUPPORTED cases that have one.
+    """
     documents = []
     for tg_id, tc_id, status, diagnostic in cases:
         case: dict[str, Any] = {"tgId": tg_id, "tcId": tc_id, "status": status}
         if diagnostic is not None:
             case["diagnostic"] = diagnostic
+        if reasons and (tg_id, tc_id) in reasons:
+            case["declineReason"] = reasons[(tg_id, tc_id)]
         documents.append(case)
     counts = {
         "total": len(cases),
@@ -115,6 +121,84 @@ def test_a_case_that_stops_being_executed_is_coverage_lost() -> None:
     assert not result.regressed
     assert len(result.coverage_lost) == 1
     assert result.coverage_lost[0].now == "UNSUPPORTED"
+
+
+def test_coverage_lost_says_whose_repair_it_needs() -> None:
+    """The decline reason travels with the change, so the list names who must act."""
+    result = compare(
+        parse_report(report([(2, 16, "PASS", None)])),
+        parse_report(
+            report(
+                [(2, 16, "UNSUPPORTED", "ivGen 'internal' is not supported")],
+                reasons={(2, 16): "runner_lacks"},
+            )
+        ),
+    )
+
+    assert result.coverage_lost[0].now_reason == "runner_lacks"
+    assert (
+        "tgId 2 tcId 16: PASS -> UNSUPPORTED [runner_lacks] (ivGen 'internal' is not supported)"
+        in summarize_text(result)
+    )
+
+
+def test_a_changed_decline_reason_is_reported_though_the_status_is_not() -> None:
+    """runner_lacks becoming implementation_lacks is news the totals cannot carry.
+
+    Both runs count one UNSUPPORTED case, so the summary delta is zero; only the
+    case-level comparison can see that the gap moved from this runner to the
+    implementation under test.
+    """
+    result = compare(
+        parse_report(
+            report([(1, 1, "UNSUPPORTED", "curve not supported")], reasons={(1, 1): "runner_lacks"})
+        ),
+        parse_report(
+            report(
+                [(1, 1, "UNSUPPORTED", "the harness declined this case")],
+                reasons={(1, 1): "implementation_lacks"},
+            )
+        ),
+    )
+
+    assert result.summary_delta["unsupported"] == 0
+    assert len(result.reason_changed) == 1
+    change = result.reason_changed[0]
+    assert (change.was, change.now) == ("UNSUPPORTED", "UNSUPPORTED")
+    assert (change.was_reason, change.now_reason) == ("runner_lacks", "implementation_lacks")
+    counts = build_document(result)["counts"]
+    assert isinstance(counts, dict)
+    assert counts["reasonChanged"] == 1
+    text = summarize_text(result)
+    assert "decline reason changed: 1" in text
+    assert "UNSUPPORTED [runner_lacks] -> UNSUPPORTED [implementation_lacks]" in text
+    assert not result.has_regressions
+
+
+def test_a_baseline_that_predates_decline_reasons_is_not_a_change() -> None:
+    """A report with no reason recorded is missing evidence, not a different world."""
+    result = compare(
+        parse_report(report([(1, 1, "UNSUPPORTED", "curve not supported")])),
+        parse_report(
+            report(
+                [(1, 1, "UNSUPPORTED", "curve not supported")],
+                reasons={(1, 1): "implementation_lacks"},
+            )
+        ),
+    )
+
+    assert not result.reason_changed
+    assert result.verdict == VERDICT_UNCHANGED
+
+
+@pytest.mark.parametrize("reason", ["unsupported", "RUNNER_LACKS", 3])
+def test_a_decline_reason_outside_the_closed_set_is_rejected(reason: object) -> None:
+    """A reason the vocabulary does not name is an unreadable report, not a new state."""
+    document = report([(1, 1, "UNSUPPORTED", "x")])
+    document["cases"][0]["declineReason"] = reason
+
+    with pytest.raises(AcvpValidationError, match="expected one of"):
+        parse_report(document)
 
 
 def test_a_disappearing_case_is_coverage_lost() -> None:
@@ -203,6 +287,7 @@ def test_document_and_json_are_deterministic() -> None:
         "coverageLost": 0,
         "fixed": 0,
         "stillFailing": 0,
+        "reasonChanged": 0,
         "added": 0,
     }
     assert rendered.endswith("\n")

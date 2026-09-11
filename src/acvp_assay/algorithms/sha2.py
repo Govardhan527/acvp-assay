@@ -21,7 +21,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 
-from acvp_assay.models import DigestValues, ResultStatus, TestCaseResult
+from acvp_assay.models import DeclineReason, DigestValues, ResultStatus, TestCaseResult
 from acvp_assay.parser import (
     AcvpValidationError,
     hex_bytes,
@@ -204,7 +204,7 @@ def load_expected_results(path: str | Path) -> Sha2ExpectedSet:
     return parse_expected_results(json.loads(Path(path).read_text(encoding="utf-8")))
 
 
-def _unsupported(tg_id: int, tc_id: int, reason: str) -> TestCaseResult:
+def _unsupported(code: DeclineReason, tg_id: int, tc_id: int, reason: str) -> TestCaseResult:
     return TestCaseResult(
         tg_id=tg_id,
         tc_id=tc_id,
@@ -212,6 +212,7 @@ def _unsupported(tg_id: int, tc_id: int, reason: str) -> TestCaseResult:
         expected=None,
         actual=None,
         diagnostic=reason,
+        decline_reason=code,
     )
 
 
@@ -242,9 +243,19 @@ def _run_mct(
 ) -> TestCaseResult:
     version = group.mct_version or "standard"
     if version not in SUPPORTED_MCT_VERSIONS:
-        return _unsupported(group.tg_id, case.tc_id, f"mctVersion {version!r} is not supported")
+        return _unsupported(
+            DeclineReason.RUNNER_LACKS,
+            group.tg_id,
+            case.tc_id,
+            f"mctVersion {version!r} is not supported",
+        )
     if expected.results_array is None:
-        return _unsupported(group.tg_id, case.tc_id, "MCT case has no expected resultsArray")
+        return _unsupported(
+            DeclineReason.OFFLINE_UNDECIDABLE,
+            group.tg_id,
+            case.tc_id,
+            "MCT case has no expected resultsArray",
+        )
     assert case.message is not None
     produced = provider.digest_mct(case.message, alternate=version == "alternate")
     if len(produced) != len(expected.results_array):
@@ -289,22 +300,44 @@ def run_vector_set(
         for case in group.tests:
             expected_case = expected.cases.get((group.tg_id, case.tc_id))
             if expected_case is None:
-                results.append(_unsupported(group.tg_id, case.tc_id, "no expected result recorded"))
+                results.append(
+                    _unsupported(
+                        DeclineReason.OFFLINE_UNDECIDABLE,
+                        group.tg_id,
+                        case.tc_id,
+                        "no expected result recorded",
+                    )
+                )
                 continue
             if group.test_type is Sha2TestType.LDT or case.is_large:
                 results.append(
                     _unsupported(
-                        group.tg_id, case.tc_id, "large data tests (LDT) are not supported"
+                        DeclineReason.RUNNER_LACKS,
+                        group.tg_id,
+                        case.tc_id,
+                        "large data tests (LDT) are not supported",
                     )
                 )
                 continue
             if case.length_bits is not None and case.length_bits % 8 != 0:
                 results.append(
-                    _unsupported(group.tg_id, case.tc_id, "bit-oriented messages are not supported")
+                    _unsupported(
+                        DeclineReason.RUNNER_LACKS,
+                        group.tg_id,
+                        case.tc_id,
+                        "bit-oriented messages are not supported",
+                    )
                 )
                 continue
             if expected_case.digest is None and group.test_type is not Sha2TestType.MCT:
-                results.append(_unsupported(group.tg_id, case.tc_id, "no expected digest recorded"))
+                results.append(
+                    _unsupported(
+                        DeclineReason.OFFLINE_UNDECIDABLE,
+                        group.tg_id,
+                        case.tc_id,
+                        "no expected digest recorded",
+                    )
+                )
                 continue
             try:
                 if group.test_type is Sha2TestType.MCT:
@@ -319,7 +352,12 @@ def run_vector_set(
                 )
             except HarnessUnsupportedError:
                 results.append(
-                    _unsupported(group.tg_id, case.tc_id, "the harness declined this case")
+                    _unsupported(
+                        DeclineReason.IMPLEMENTATION_LACKS,
+                        group.tg_id,
+                        case.tc_id,
+                        "the harness declined this case",
+                    )
                 )
     return results
 

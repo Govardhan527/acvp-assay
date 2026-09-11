@@ -4,11 +4,12 @@ from __future__ import annotations
 
 import json
 from collections import Counter
-from collections.abc import Sequence
-from dataclasses import asdict, dataclass
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 
 from acvp_assay.models import (
     CaseValues,
+    DeclineReason,
     ProviderMetadata,
     ResultStatus,
     TestCaseResult,
@@ -17,7 +18,12 @@ from acvp_assay.models import (
 
 @dataclass(frozen=True, slots=True)
 class ReportSummary:
-    """Stable aggregate counts for one run."""
+    """Stable aggregate counts for one run.
+
+    ``unsupported_by_reason`` breaks ``unsupported`` down by ``DeclineReason``,
+    because the total alone cannot say whose repair a gap needs. Every reason is
+    present, zero or not, so the schema does not change with the run.
+    """
 
     total: int
     passed: int
@@ -25,11 +31,13 @@ class ReportSummary:
     errored: int
     skipped: int
     unsupported: int
+    unsupported_by_reason: Mapping[str, int]
 
 
 def summarize(results: Sequence[TestCaseResult]) -> ReportSummary:
-    """Count every stable result classification."""
+    """Count every stable result classification, and every decline reason."""
     counts = Counter(result.status for result in results)
+    reasons = Counter(result.decline_reason for result in results)
     return ReportSummary(
         total=len(results),
         passed=counts[ResultStatus.PASS],
@@ -37,7 +45,20 @@ def summarize(results: Sequence[TestCaseResult]) -> ReportSummary:
         errored=counts[ResultStatus.ERROR],
         skipped=counts[ResultStatus.SKIPPED],
         unsupported=counts[ResultStatus.UNSUPPORTED],
+        unsupported_by_reason={reason.value: reasons[reason] for reason in DeclineReason},
     )
+
+
+def _summary_document(summary: ReportSummary) -> dict[str, object]:
+    return {
+        "total": summary.total,
+        "passed": summary.passed,
+        "failed": summary.failed,
+        "errored": summary.errored,
+        "skipped": summary.skipped,
+        "unsupported": summary.unsupported,
+        "unsupportedByReason": dict(summary.unsupported_by_reason),
+    }
 
 
 def _values_document(values: CaseValues | None) -> dict[str, object] | None:
@@ -56,6 +77,8 @@ def _case_document(result: TestCaseResult) -> dict[str, object]:
     }
     if result.diagnostic is not None:
         document["diagnostic"] = result.diagnostic
+    if result.decline_reason is not None:
+        document["declineReason"] = result.decline_reason.value
     return document
 
 
@@ -77,7 +100,7 @@ def build_report(
                 "version": provider.backend_version,
             },
         },
-        "summary": asdict(summary),
+        "summary": _summary_document(summary),
         "cases": [_case_document(result) for result in results],
     }
 

@@ -10,6 +10,7 @@ from acvp_assay.models import (
     AesGcmTestGroup,
     AesGcmValues,
     AesGcmVectorSet,
+    DeclineReason,
     Direction,
     ExpectedResultCase,
     ExpectedResultSet,
@@ -84,6 +85,7 @@ def _run_case(
             expected=None,
             actual=None,
             diagnostic=f"ivGen {group.iv_generation!r} is not supported",
+            decline_reason=DeclineReason.RUNNER_LACKS,
         )
     expected_case = expected_by_case.get((group.tg_id, case.tc_id))
     if expected_case is None:

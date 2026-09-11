@@ -16,7 +16,7 @@ from typing import Any
 import pytest
 
 from acvp_assay.algorithms import run_vector_file
-from acvp_assay.models import ResultStatus
+from acvp_assay.models import DeclineReason, ResultStatus
 from acvp_assay.providers.digest import SubprocessHashProvider, SubprocessMacProvider
 from acvp_assay.providers.ecdsa import SubprocessEcdsaProvider
 from acvp_assay.providers.subprocess_harness import (
@@ -126,6 +126,7 @@ def test_a_declining_harness_yields_unsupported_cases(tmp_path: Path, directory:
     assert results
     assert {r.status for r in results} == {ResultStatus.UNSUPPORTED}
     assert all("declined" in (r.diagnostic or "") for r in results)
+    assert {r.decline_reason for r in results} == {DeclineReason.IMPLEMENTATION_LACKS}
 
 
 def test_external_ecdsa_does_not_prejudge_capability() -> None:

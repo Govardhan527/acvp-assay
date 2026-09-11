@@ -179,6 +179,7 @@ def test_unsupported_iv_generation_is_not_executed() -> None:
     results = run_vector_set(vector_set, expected, provider())
 
     assert results[0].status is ResultStatus.UNSUPPORTED
+    assert results[0].decline_reason == "runner_lacks"
     assert results[0].expected is None
     assert results[0].actual is None
 

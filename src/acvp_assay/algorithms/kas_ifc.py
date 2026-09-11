@@ -30,7 +30,7 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 
-from acvp_assay.models import ProviderMetadata, ResultStatus, TestCaseResult
+from acvp_assay.models import DeclineReason, ProviderMetadata, ResultStatus, TestCaseResult
 from acvp_assay.parser import (
     AcvpValidationError,
     integer,
@@ -221,7 +221,7 @@ def metadata_for(provider: KasIfcProvider) -> ProviderMetadata:
     return provider.metadata()
 
 
-def _unsupported(tg_id: int, tc_id: int, reason: str) -> TestCaseResult:
+def _unsupported(code: DeclineReason, tg_id: int, tc_id: int, reason: str) -> TestCaseResult:
     return TestCaseResult(
         tg_id=tg_id,
         tc_id=tc_id,
@@ -229,6 +229,7 @@ def _unsupported(tg_id: int, tc_id: int, reason: str) -> TestCaseResult:
         expected=None,
         actual=None,
         diagnostic=reason,
+        decline_reason=code,
     )
 
 
@@ -282,11 +283,18 @@ def run_vector_set(
         for case in group.tests:
             key = (group.tg_id, case.tc_id)
             if group.scheme not in SCHEMES and vector_set.algorithm == KAS_IFC:
-                results.append(_unsupported(*key, f"scheme {group.scheme!r} is not supported"))
+                results.append(
+                    _unsupported(
+                        DeclineReason.RUNNER_LACKS,
+                        *key,
+                        f"scheme {group.scheme!r} is not supported",
+                    )
+                )
                 continue
             if originates(vector_set, group):
                 results.append(
                     _unsupported(
+                        DeclineReason.OFFLINE_UNDECIDABLE,
                         *key,
                         "this case originates fresh secret material, so it cannot be compared "
                         "with the recorded value; submit to ACVTS, which recomputes it",
@@ -295,14 +303,28 @@ def run_vector_set(
                 continue
             recorded = expected.get(key)
             if recorded is None:
-                results.append(_unsupported(*key, "no expected result recorded"))
+                results.append(
+                    _unsupported(
+                        DeclineReason.OFFLINE_UNDECIDABLE, *key, "no expected result recorded"
+                    )
+                )
                 continue
             try:
                 results.append(_check(vector_set, group, case, recorded, provider, key))
             except HarnessUnsupportedError:
-                results.append(_unsupported(*key, "the harness declined this case"))
+                results.append(
+                    _unsupported(
+                        DeclineReason.IMPLEMENTATION_LACKS, *key, "the harness declined this case"
+                    )
+                )
             except ValueError as error:
-                results.append(_unsupported(*key, f"this case cannot be answered: {error.args[0]}"))
+                results.append(
+                    _unsupported(
+                        DeclineReason.IMPLEMENTATION_LACKS,
+                        *key,
+                        f"this case cannot be answered: {error.args[0]}",
+                    )
+                )
     return results
 
 
@@ -318,34 +340,40 @@ def _check(
     if vector_set.algorithm == KTS_IFC:
         if case.iut_key is None or case.server_c is None or group.hash_alg is None:
             return _unsupported(
-                *key, "a KTS-IFC recovery case needs a key, a ciphertext and a hash"
+                DeclineReason.VECTOR_INCOMPLETE,
+                *key,
+                "a KTS-IFC recovery case needs a key, a ciphertext and a hash",
             )
         dkm = provider.oaep_decrypt(
             key=case.iut_key, ciphertext=case.server_c, hash_alg=group.hash_alg
         )
         wanted = recorded.get("dkm")
         if not isinstance(wanted, str):
-            return _unsupported(*key, "no expected dkm recorded")
+            return _unsupported(DeclineReason.OFFLINE_UNDECIDABLE, *key, "no expected dkm recorded")
         return _result(*key, agrees=dkm.hex().upper() == wanted.upper(), detail="dkm differs")
 
     if group.test_type == AFT:
         wanted = recorded.get("z")
         if not isinstance(wanted, str):
-            return _unsupported(*key, "no expected z recorded")
+            return _unsupported(DeclineReason.OFFLINE_UNDECIDABLE, *key, "no expected z recorded")
         produced = shared_secret(vector_set, group, case, provider)
         return _result(*key, agrees=produced.hex().upper() == wanted.upper(), detail="z differs")
 
     verdict = recorded.get("testPassed")
     if not isinstance(verdict, bool):
-        return _unsupported(*key, "no expected verdict recorded")
+        return _unsupported(DeclineReason.OFFLINE_UNDECIDABLE, *key, "no expected verdict recorded")
     if case.claimed_z is None:
-        return _unsupported(*key, "a VAL case must supply z")
+        return _unsupported(DeclineReason.VECTOR_INCOMPLETE, *key, "a VAL case must supply z")
     agrees = shared_secret(vector_set, group, case, provider) == case.claimed_z
     # Both conditions, though the server's vectors never separate them; see the
     # module docstring.
     if agrees and case.iut_z is not None and case.iut_c is not None:
         if case.peer_n is None or case.peer_e is None:
-            return _unsupported(*key, "an initiator VAL case must supply the peer public key")
+            return _unsupported(
+                DeclineReason.VECTOR_INCOMPLETE,
+                *key,
+                "an initiator VAL case must supply the peer public key",
+            )
         size = (case.peer_n.bit_length() + 7) // 8
         encrypted = pow(int.from_bytes(case.iut_z, "big"), case.peer_e, case.peer_n)
         agrees = encrypted.to_bytes(size, "big") == case.iut_c

@@ -15,7 +15,7 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 
-from acvp_assay.models import ProviderMetadata, ResultStatus, TestCaseResult
+from acvp_assay.models import DeclineReason, ProviderMetadata, ResultStatus, TestCaseResult
 from acvp_assay.parser import (
     AcvpValidationError,
     hex_bytes,
@@ -200,7 +200,7 @@ def metadata_for(provider: ProtocolKdfProvider) -> ProviderMetadata:
     return provider.metadata()
 
 
-def _unsupported(tg_id: int, tc_id: int, reason: str) -> TestCaseResult:
+def _unsupported(code: DeclineReason, tg_id: int, tc_id: int, reason: str) -> TestCaseResult:
     return TestCaseResult(
         tg_id=tg_id,
         tc_id=tc_id,
@@ -208,6 +208,7 @@ def _unsupported(tg_id: int, tc_id: int, reason: str) -> TestCaseResult:
         expected=None,
         actual=None,
         diagnostic=reason,
+        decline_reason=code,
     )
 
 
@@ -217,7 +218,9 @@ def _compare(
     """Every output must match; the first that does not names itself."""
     for field, value in produced.items():
         if field not in wanted:
-            return _unsupported(tg_id, tc_id, f"no expected {field} recorded")
+            return _unsupported(
+                DeclineReason.OFFLINE_UNDECIDABLE, tg_id, tc_id, f"no expected {field} recorded"
+            )
         if wanted[field] != value:
             return TestCaseResult(
                 tg_id=tg_id,
@@ -287,6 +290,7 @@ def run_vector_set(
             if unsupported_mode:
                 results.append(
                     _unsupported(
+                        DeclineReason.RUNNER_LACKS,
                         *key,
                         f"kdf-components mode {vector_set.mode!r} is not implemented; "
                         f"only {SSH_MODE!r} is",
@@ -295,15 +299,41 @@ def run_vector_set(
                 continue
             wanted = expected.get(key)
             if wanted is None:
-                results.append(_unsupported(*key, "no expected result recorded"))
+                results.append(
+                    _unsupported(
+                        DeclineReason.OFFLINE_UNDECIDABLE, *key, "no expected result recorded"
+                    )
+                )
                 continue
             try:
                 produced = derive(vector_set, group, case, provider)
             except HarnessUnsupportedError:
-                results.append(_unsupported(*key, "the harness declined this case"))
+                results.append(
+                    _unsupported(
+                        DeclineReason.IMPLEMENTATION_LACKS, *key, "the harness declined this case"
+                    )
+                )
                 continue
-            except (KeyError, ValueError) as error:
-                results.append(_unsupported(*key, f"this case cannot be answered: {error.args[0]}"))
+            except KeyError as error:
+                # A field this case must carry is absent from the vector.
+                results.append(
+                    _unsupported(
+                        DeclineReason.VECTOR_INCOMPLETE,
+                        *key,
+                        f"this case cannot be answered: {error.args[0]}",
+                    )
+                )
+                continue
+            except ValueError as error:
+                # Raised by the implementation: a hash or cipher the provider
+                # refuses, or a harness reply that breaks the protocol.
+                results.append(
+                    _unsupported(
+                        DeclineReason.IMPLEMENTATION_LACKS,
+                        *key,
+                        f"this case cannot be answered: {error.args[0]}",
+                    )
+                )
                 continue
             results.append(_compare(*key, produced, wanted))
     return results

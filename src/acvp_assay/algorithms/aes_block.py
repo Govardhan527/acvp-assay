@@ -18,7 +18,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from acvp_assay.models import AesGcmValues, ResultStatus, TestCaseResult
+from acvp_assay.models import AesGcmValues, DeclineReason, ResultStatus, TestCaseResult
 from acvp_assay.parser import (
     AcvpValidationError,
     hex_bytes,
@@ -185,7 +185,7 @@ def load_expected_results(path: str | Path) -> BlockExpectedSet:
     return parse_expected_results(json.loads(Path(path).read_text(encoding="utf-8")))
 
 
-def _unsupported(tg_id: int, tc_id: int, reason: str) -> TestCaseResult:
+def _unsupported(code: DeclineReason, tg_id: int, tc_id: int, reason: str) -> TestCaseResult:
     return TestCaseResult(
         tg_id=tg_id,
         tc_id=tc_id,
@@ -193,6 +193,7 @@ def _unsupported(tg_id: int, tc_id: int, reason: str) -> TestCaseResult:
         expected=None,
         actual=None,
         diagnostic=reason,
+        decline_reason=code,
     )
 
 
@@ -222,7 +223,12 @@ def _run_monte_carlo(
 ) -> TestCaseResult:
     """Run the chain and compare every outer iteration, not just the last."""
     if expected.results_array is None:
-        return _unsupported(group.tg_id, case.tc_id, "MCT case has no expected resultsArray")
+        return _unsupported(
+            DeclineReason.OFFLINE_UNDECIDABLE,
+            group.tg_id,
+            case.tc_id,
+            "MCT case has no expected resultsArray",
+        )
     encrypt = group.direction == "encrypt"
     name = "ct" if encrypt else "pt"
     produced = provider.monte_carlo(
@@ -277,7 +283,14 @@ def run_vector_set(
         for case in group.tests:
             wanted = expected.cases.get((group.tg_id, case.tc_id))
             if wanted is None:
-                results.append(_unsupported(group.tg_id, case.tc_id, "no expected result recorded"))
+                results.append(
+                    _unsupported(
+                        DeclineReason.OFFLINE_UNDECIDABLE,
+                        group.tg_id,
+                        case.tc_id,
+                        "no expected result recorded",
+                    )
+                )
                 continue
             if group.test_type == MCT:
                 try:
@@ -286,12 +299,22 @@ def run_vector_set(
                     )
                 except HarnessUnsupportedError:
                     results.append(
-                        _unsupported(group.tg_id, case.tc_id, "the harness declined this case")
+                        _unsupported(
+                            DeclineReason.IMPLEMENTATION_LACKS,
+                            group.tg_id,
+                            case.tc_id,
+                            "the harness declined this case",
+                        )
                     )
                 continue
             if name not in wanted.values:
                 results.append(
-                    _unsupported(group.tg_id, case.tc_id, f"no expected {name} recorded")
+                    _unsupported(
+                        DeclineReason.OFFLINE_UNDECIDABLE,
+                        group.tg_id,
+                        case.tc_id,
+                        f"no expected {name} recorded",
+                    )
                 )
                 continue
             try:
@@ -305,7 +328,12 @@ def run_vector_set(
                 )
             except HarnessUnsupportedError:
                 results.append(
-                    _unsupported(group.tg_id, case.tc_id, "the harness declined this case")
+                    _unsupported(
+                        DeclineReason.IMPLEMENTATION_LACKS,
+                        group.tg_id,
+                        case.tc_id,
+                        "the harness declined this case",
+                    )
                 )
                 continue
             results.append(_compare(group.tg_id, case.tc_id, name, wanted.values[name], produced))

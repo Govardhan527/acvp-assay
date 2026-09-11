@@ -20,7 +20,13 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 
-from acvp_assay.models import ProviderMetadata, ResultStatus, TestCaseResult, VerdictValues
+from acvp_assay.models import (
+    DeclineReason,
+    ProviderMetadata,
+    ResultStatus,
+    TestCaseResult,
+    VerdictValues,
+)
 from acvp_assay.parser import (
     AcvpValidationError,
     hex_bytes,
@@ -180,7 +186,7 @@ def load_expected_results(path: str | Path) -> dict[tuple[int, int], KdaExpectat
     return parse_expected_results(json.loads(Path(path).read_text(encoding="utf-8")))
 
 
-def _unsupported(tg_id: int, tc_id: int, reason: str) -> TestCaseResult:
+def _unsupported(code: DeclineReason, tg_id: int, tc_id: int, reason: str) -> TestCaseResult:
     return TestCaseResult(
         tg_id=tg_id,
         tc_id=tc_id,
@@ -188,6 +194,7 @@ def _unsupported(tg_id: int, tc_id: int, reason: str) -> TestCaseResult:
         expected=None,
         actual=None,
         diagnostic=reason,
+        decline_reason=code,
     )
 
 
@@ -226,12 +233,16 @@ def run_vector_set(
         for case in group.tests:
             key = (group.tg_id, case.tc_id)
             if decline is not None:
-                results.append(_unsupported(*key, decline))
+                results.append(_unsupported(DeclineReason.RUNNER_LACKS, *key, decline))
                 continue
             info = fixed_info(group.pattern, case.party_u, case.party_v)
             want = expected.get(key)
             if want is None:
-                results.append(_unsupported(*key, "no expected result recorded"))
+                results.append(
+                    _unsupported(
+                        DeclineReason.OFFLINE_UNDECIDABLE, *key, "no expected result recorded"
+                    )
+                )
                 continue
             try:
                 produced = provider.derive(
@@ -242,12 +253,33 @@ def run_vector_set(
                     output_bytes=case.output_bits // 8,
                 )
             except HarnessUnsupportedError:
-                results.append(_unsupported(*key, "the harness declined this case"))
+                results.append(
+                    _unsupported(
+                        DeclineReason.IMPLEMENTATION_LACKS, *key, "the harness declined this case"
+                    )
+                )
                 continue
 
             if group.test_type == VAL:
-                if case.claimed_dkm is None or want.test_passed is None:
-                    results.append(_unsupported(*key, "a VAL case needs a dkm and a verdict"))
+                # One sentence, two owners: the dkm is the vector's to supply and
+                # the verdict is the answer key's.
+                if case.claimed_dkm is None:
+                    results.append(
+                        _unsupported(
+                            DeclineReason.VECTOR_INCOMPLETE,
+                            *key,
+                            "a VAL case needs a dkm and a verdict",
+                        )
+                    )
+                    continue
+                if want.test_passed is None:
+                    results.append(
+                        _unsupported(
+                            DeclineReason.OFFLINE_UNDECIDABLE,
+                            *key,
+                            "a VAL case needs a dkm and a verdict",
+                        )
+                    )
                     continue
                 verdict = produced == case.claimed_dkm
                 agreed = verdict == want.test_passed
@@ -270,7 +302,11 @@ def run_vector_set(
                 continue
 
             if want.dkm is None:
-                results.append(_unsupported(*key, "no expected dkm recorded"))
+                results.append(
+                    _unsupported(
+                        DeclineReason.OFFLINE_UNDECIDABLE, *key, "no expected dkm recorded"
+                    )
+                )
                 continue
             matched = produced == want.dkm
             results.append(

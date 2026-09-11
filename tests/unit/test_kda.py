@@ -323,6 +323,22 @@ def test_a_val_case_without_a_verdict_is_declined(tmp_path: Path) -> None:
 
     assert [r.status for r in results] == [ResultStatus.UNSUPPORTED]
     assert "needs a dkm and a verdict" in (results[0].diagnostic or "")
+    # The dkm is present, so what is missing is the answer key's, not the vector's.
+    assert results[0].decline_reason == "offline_undecidable"
+
+
+def test_a_val_case_without_a_dkm_is_the_vectors_gap(tmp_path: Path) -> None:
+    """The same sentence with the other owner: the vector did not supply the candidate."""
+    prompt = val_prompt(tmp_path, {})
+
+    results = kda.run_vector_set(
+        kda.load_vector_set(prompt),
+        {(1, 1): kda.KdaExpectation(dkm=None, test_passed=True)},
+        CryptographyKda(),
+    )
+
+    assert [r.status for r in results] == [ResultStatus.UNSUPPORTED]
+    assert results[0].decline_reason == "vector_incomplete"
 
 
 def test_accepting_wrong_material_is_a_failure(tmp_path: Path) -> None:

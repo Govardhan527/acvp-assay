@@ -20,6 +20,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from acvp_assay.models import (
+    DeclineReason,
     DigestValues,
     ResultStatus,
     TestCaseResult,
@@ -183,7 +184,7 @@ def load_expected_results(path: str | Path) -> PqcExpectedSet:
     return parse_expected_results(json.loads(Path(path).read_text(encoding="utf-8")))
 
 
-def _unsupported(tg_id: int, tc_id: int, reason: str) -> TestCaseResult:
+def _unsupported(code: DeclineReason, tg_id: int, tc_id: int, reason: str) -> TestCaseResult:
     return TestCaseResult(
         tg_id=tg_id,
         tc_id=tc_id,
@@ -191,6 +192,7 @@ def _unsupported(tg_id: int, tc_id: int, reason: str) -> TestCaseResult:
         expected=None,
         actual=None,
         diagnostic=reason,
+        decline_reason=code,
     )
 
 
@@ -246,6 +248,7 @@ def run_ml_kem(
             if not supported:
                 results.append(
                     _unsupported(
+                        DeclineReason.RUNNER_LACKS,
                         group.tg_id,
                         case.tc_id,
                         f"parameter set {group.parameter_set!r} is not supported",
@@ -253,18 +256,35 @@ def run_ml_kem(
                 )
                 continue
             if expected_case is None:
-                results.append(_unsupported(group.tg_id, case.tc_id, "no expected result recorded"))
+                results.append(
+                    _unsupported(
+                        DeclineReason.OFFLINE_UNDECIDABLE,
+                        group.tg_id,
+                        case.tc_id,
+                        "no expected result recorded",
+                    )
+                )
                 continue
             if group.function in KEY_CHECKS:
                 if expected_case.test_passed is None:
                     results.append(
-                        _unsupported(group.tg_id, case.tc_id, "no expected verdict recorded")
+                        _unsupported(
+                            DeclineReason.OFFLINE_UNDECIDABLE,
+                            group.tg_id,
+                            case.tc_id,
+                            "no expected verdict recorded",
+                        )
                     )
                     continue
                 key_type = "ek" if group.function == ENCAP_KEY_CHECK else "dk"
                 if key_type not in case.fields:
                     results.append(
-                        _unsupported(group.tg_id, case.tc_id, f"case is missing {key_type}")
+                        _unsupported(
+                            DeclineReason.VECTOR_INCOMPLETE,
+                            group.tg_id,
+                            case.tc_id,
+                            f"case is missing {key_type}",
+                        )
                     )
                     continue
                 verdict = provider.check_key(
@@ -280,7 +300,14 @@ def run_ml_kem(
                 continue
             if group.function == ENCAPSULATION:
                 if not {"ek", "m"} <= set(case.fields):
-                    results.append(_unsupported(group.tg_id, case.tc_id, "case is missing ek or m"))
+                    results.append(
+                        _unsupported(
+                            DeclineReason.VECTOR_INCOMPLETE,
+                            group.tg_id,
+                            case.tc_id,
+                            "case is missing ek or m",
+                        )
+                    )
                     continue
                 ciphertext, shared = provider.encapsulate(
                     parameter_set=group.parameter_set,
@@ -298,7 +325,14 @@ def run_ml_kem(
                 continue
             if group.function == DECAPSULATION:
                 if not {"dk", "c"} <= set(case.fields):
-                    results.append(_unsupported(group.tg_id, case.tc_id, "case is missing dk or c"))
+                    results.append(
+                        _unsupported(
+                            DeclineReason.VECTOR_INCOMPLETE,
+                            group.tg_id,
+                            case.tc_id,
+                            "case is missing dk or c",
+                        )
+                    )
                     continue
                 shared = provider.decapsulate(
                     parameter_set=group.parameter_set,
@@ -311,7 +345,10 @@ def run_ml_kem(
                 continue
             results.append(
                 _unsupported(
-                    group.tg_id, case.tc_id, f"function {group.function!r} is not supported"
+                    DeclineReason.RUNNER_LACKS,
+                    group.tg_id,
+                    case.tc_id,
+                    f"function {group.function!r} is not supported",
                 )
             )
     return results
@@ -331,6 +368,7 @@ def run_ml_dsa(
             if not supported:
                 results.append(
                     _unsupported(
+                        DeclineReason.RUNNER_LACKS,
                         group.tg_id,
                         case.tc_id,
                         f"parameter set {group.parameter_set!r} is not supported",
@@ -339,12 +377,18 @@ def run_ml_dsa(
                 continue
             if expected_case is None or expected_case.test_passed is None:
                 results.append(
-                    _unsupported(group.tg_id, case.tc_id, "no expected verdict recorded")
+                    _unsupported(
+                        DeclineReason.OFFLINE_UNDECIDABLE,
+                        group.tg_id,
+                        case.tc_id,
+                        "no expected verdict recorded",
+                    )
                 )
                 continue
             if group.external_mu or "mu" in case.fields:
                 results.append(
                     _unsupported(
+                        DeclineReason.RUNNER_LACKS,
                         group.tg_id,
                         case.tc_id,
                         "externalMu groups supply a precomputed mu and are not supported",
@@ -354,14 +398,22 @@ def run_ml_dsa(
             if group.pre_hash != "pure":
                 results.append(
                     _unsupported(
-                        group.tg_id, case.tc_id, f"preHash {group.pre_hash!r} is not supported"
+                        DeclineReason.RUNNER_LACKS,
+                        group.tg_id,
+                        case.tc_id,
+                        f"preHash {group.pre_hash!r} is not supported",
                     )
                 )
                 continue
             missing = [name for name in ("pk", "message", "signature") if name not in case.fields]
             if missing:
                 results.append(
-                    _unsupported(group.tg_id, case.tc_id, f"case is missing {', '.join(missing)}")
+                    _unsupported(
+                        DeclineReason.VECTOR_INCOMPLETE,
+                        group.tg_id,
+                        case.tc_id,
+                        f"case is missing {', '.join(missing)}",
+                    )
                 )
                 continue
             verdict = provider.verify(

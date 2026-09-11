@@ -27,7 +27,13 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 
-from acvp_assay.models import DigestValues, ResultStatus, TestCaseResult, VerdictValues
+from acvp_assay.models import (
+    DeclineReason,
+    DigestValues,
+    ResultStatus,
+    TestCaseResult,
+    VerdictValues,
+)
 from acvp_assay.parser import (
     AcvpValidationError,
     integer,
@@ -209,7 +215,7 @@ def load_expected_results(path: str | Path) -> RsaExpectedSet:
     return parse_expected_results(json.loads(Path(path).read_text(encoding="utf-8")))
 
 
-def _unsupported(tg_id: int, tc_id: int, reason: str) -> TestCaseResult:
+def _unsupported(code: DeclineReason, tg_id: int, tc_id: int, reason: str) -> TestCaseResult:
     return TestCaseResult(
         tg_id=tg_id,
         tc_id=tc_id,
@@ -217,12 +223,15 @@ def _unsupported(tg_id: int, tc_id: int, reason: str) -> TestCaseResult:
         expected=None,
         actual=None,
         diagnostic=reason,
+        decline_reason=code,
     )
 
 
 def _declined(tg_id: int, tc_id: int) -> TestCaseResult:
     """A harness said it does not implement this case."""
-    return _unsupported(tg_id, tc_id, "the harness declined this case")
+    return _unsupported(
+        DeclineReason.IMPLEMENTATION_LACKS, tg_id, tc_id, "the harness declined this case"
+    )
 
 
 def _verdict(tg_id: int, tc_id: int, expected: bool, actual: bool, subject: str) -> TestCaseResult:
@@ -244,7 +253,9 @@ def _run_primitive(
 ) -> TestCaseResult:
     """Answer one raw-primitive case: a value when in range, a verdict when not."""
     if not case.n:
-        return _unsupported(group.tg_id, case.tc_id, "case carries no modulus")
+        return _unsupported(
+            DeclineReason.VECTOR_INCOMPLETE, group.tg_id, case.tc_id, "case carries no modulus"
+        )
 
     def number(field: bytes) -> int:
         return int.from_bytes(field, "big")
@@ -268,24 +279,41 @@ def _run_primitive(
                 message=number(case.message),
             )
         else:
-            return _unsupported(group.tg_id, case.tc_id, "case carries no usable private key")
+            return _unsupported(
+                DeclineReason.VECTOR_INCOMPLETE,
+                group.tg_id,
+                case.tc_id,
+                "case carries no usable private key",
+            )
         wanted = expected.signature
     else:
         if not case.d:
-            return _unsupported(group.tg_id, case.tc_id, "case carries no private exponent")
+            return _unsupported(
+                DeclineReason.VECTOR_INCOMPLETE,
+                group.tg_id,
+                case.tc_id,
+                "case carries no private exponent",
+            )
         produced = provider.decryption_primitive(
             n=n, d=number(case.d), ciphertext=number(case.ciphertext)
         )
         wanted = expected.plaintext
 
     if expected.test_passed is None:
-        return _unsupported(group.tg_id, case.tc_id, "no expected verdict recorded")
+        return _unsupported(
+            DeclineReason.OFFLINE_UNDECIDABLE,
+            group.tg_id,
+            case.tc_id,
+            "no expected verdict recorded",
+        )
     if produced is None or not expected.test_passed:
         return _verdict(
             group.tg_id, case.tc_id, expected.test_passed, produced is not None, "an input"
         )
     if not wanted:
-        return _unsupported(group.tg_id, case.tc_id, "no expected value recorded")
+        return _unsupported(
+            DeclineReason.OFFLINE_UNDECIDABLE, group.tg_id, case.tc_id, "no expected value recorded"
+        )
 
     actual = produced.to_bytes(group.modulo // 8, "big")
     passed = actual == wanted
@@ -336,6 +364,7 @@ def run_vector_set(
             if not usable:
                 results.append(
                     _unsupported(
+                        DeclineReason.IMPLEMENTATION_LACKS,
                         group.tg_id,
                         case.tc_id,
                         declined
@@ -347,7 +376,14 @@ def run_vector_set(
                 continue
             wanted = expected.cases.get(case.tc_id)
             if wanted is None:
-                results.append(_unsupported(group.tg_id, case.tc_id, "no expected result recorded"))
+                results.append(
+                    _unsupported(
+                        DeclineReason.OFFLINE_UNDECIDABLE,
+                        group.tg_id,
+                        case.tc_id,
+                        "no expected result recorded",
+                    )
+                )
                 continue
             if vector_set.mode in PRIMITIVES:
                 try:
@@ -358,7 +394,12 @@ def run_vector_set(
             if vector_set.mode == SIG_VER:
                 if wanted.test_passed is None:
                     results.append(
-                        _unsupported(group.tg_id, case.tc_id, "no expected verdict recorded")
+                        _unsupported(
+                            DeclineReason.OFFLINE_UNDECIDABLE,
+                            group.tg_id,
+                            case.tc_id,
+                            "no expected verdict recorded",
+                        )
                     )
                     continue
                 try:

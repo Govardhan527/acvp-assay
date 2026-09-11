@@ -21,7 +21,13 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 
-from acvp_assay.models import DigestValues, ProviderMetadata, ResultStatus, TestCaseResult
+from acvp_assay.models import (
+    DeclineReason,
+    DigestValues,
+    ProviderMetadata,
+    ResultStatus,
+    TestCaseResult,
+)
 from acvp_assay.parser import (
     AcvpValidationError,
     hex_bytes,
@@ -137,7 +143,7 @@ def load_expected_results(path: str | Path) -> dict[tuple[int, int], bytes]:
     return parse_expected_results(json.loads(Path(path).read_text(encoding="utf-8")))
 
 
-def _unsupported(tg_id: int, tc_id: int, reason: str) -> TestCaseResult:
+def _unsupported(code: DeclineReason, tg_id: int, tc_id: int, reason: str) -> TestCaseResult:
     return TestCaseResult(
         tg_id=tg_id,
         tc_id=tc_id,
@@ -145,6 +151,7 @@ def _unsupported(tg_id: int, tc_id: int, reason: str) -> TestCaseResult:
         expected=None,
         actual=None,
         diagnostic=reason,
+        decline_reason=code,
     )
 
 
@@ -169,12 +176,17 @@ def run_vector_set(
             key = (group.tg_id, case.tc_id)
             if vector_set.algorithm not in XOF_ALGORITHMS:
                 results.append(
-                    _unsupported(*key, f"{vector_set.algorithm} is not an XOF this runner offers")
+                    _unsupported(
+                        DeclineReason.RUNNER_LACKS,
+                        *key,
+                        f"{vector_set.algorithm} is not an XOF this runner offers",
+                    )
                 )
                 continue
             if group.test_type != AFT:
                 results.append(
                     _unsupported(
+                        DeclineReason.RUNNER_LACKS,
                         *key,
                         f"test type {group.test_type!r} is not answered; the SHAKE Monte Carlo "
                         "chain is not implemented, so register only AFT for a submission",
@@ -183,12 +195,20 @@ def run_vector_set(
                 continue
             if case.output_bits % 8:
                 results.append(
-                    _unsupported(*key, f"outLen {case.output_bits} is not a whole number of bytes")
+                    _unsupported(
+                        DeclineReason.RUNNER_LACKS,
+                        *key,
+                        f"outLen {case.output_bits} is not a whole number of bytes",
+                    )
                 )
                 continue
             want = expected.get(key)
             if want is None:
-                results.append(_unsupported(*key, "no expected result recorded"))
+                results.append(
+                    _unsupported(
+                        DeclineReason.OFFLINE_UNDECIDABLE, *key, "no expected result recorded"
+                    )
+                )
                 continue
             try:
                 produced = provider.squeeze(
@@ -197,7 +217,11 @@ def run_vector_set(
                     output_bytes=case.output_bits // 8,
                 )
             except HarnessUnsupportedError:
-                results.append(_unsupported(*key, "the harness declined this case"))
+                results.append(
+                    _unsupported(
+                        DeclineReason.IMPLEMENTATION_LACKS, *key, "the harness declined this case"
+                    )
+                )
                 continue
             matched = produced == want
             results.append(

@@ -16,6 +16,7 @@ from pathlib import Path
 
 from acvp_assay.models import (
     AesGcmValues,
+    DeclineReason,
     ProviderMetadata,
     ResultStatus,
     SafeDiagnostic,
@@ -166,7 +167,7 @@ def _values(payload: bytes, encrypt: bool) -> AesGcmValues:
     return AesGcmValues(plaintext=payload)
 
 
-def _unsupported(tg_id: int, tc_id: int, reason: str) -> TestCaseResult:
+def _unsupported(code: DeclineReason, tg_id: int, tc_id: int, reason: str) -> TestCaseResult:
     return TestCaseResult(
         tg_id=tg_id,
         tc_id=tc_id,
@@ -174,6 +175,7 @@ def _unsupported(tg_id: int, tc_id: int, reason: str) -> TestCaseResult:
         expected=None,
         actual=None,
         diagnostic=reason,
+        decline_reason=code,
     )
 
 
@@ -197,11 +199,18 @@ def run_vector_set(
         for case in group.tests:
             key = (group.tg_id, case.tc_id)
             if group.key_bits not in KEY_LENGTHS:
-                results.append(_unsupported(*key, f"keyLen {group.key_bits} is not supported"))
+                results.append(
+                    _unsupported(
+                        DeclineReason.RUNNER_LACKS,
+                        *key,
+                        f"keyLen {group.key_bits} is not supported",
+                    )
+                )
                 continue
             if len(case.key) != KEY_LENGTHS[group.key_bits]:
                 results.append(
                     _unsupported(
+                        DeclineReason.VECTOR_INCOMPLETE,
                         *key,
                         f"an XTS key for keyLen {group.key_bits} is "
                         f"{KEY_LENGTHS[group.key_bits]} bytes, two AES keys concatenated",
@@ -211,12 +220,20 @@ def run_vector_set(
             tweak = tweak_of(group, case)
             if tweak is None:
                 results.append(
-                    _unsupported(*key, f"tweakMode {group.tweak_mode!r} is not supported")
+                    _unsupported(
+                        DeclineReason.RUNNER_LACKS,
+                        *key,
+                        f"tweakMode {group.tweak_mode!r} is not supported",
+                    )
                 )
                 continue
             want = expected.get(key)
             if want is None:
-                results.append(_unsupported(*key, "no expected result recorded"))
+                results.append(
+                    _unsupported(
+                        DeclineReason.OFFLINE_UNDECIDABLE, *key, "no expected result recorded"
+                    )
+                )
                 continue
             try:
                 produced = provider.transform(
@@ -227,7 +244,11 @@ def run_vector_set(
                     encrypt=encrypt,
                 )
             except HarnessUnsupportedError:
-                results.append(_unsupported(*key, "the harness declined this case"))
+                results.append(
+                    _unsupported(
+                        DeclineReason.IMPLEMENTATION_LACKS, *key, "the harness declined this case"
+                    )
+                )
                 continue
             except ValueError:
                 # XTS forbids the two key halves being equal, and a provider is

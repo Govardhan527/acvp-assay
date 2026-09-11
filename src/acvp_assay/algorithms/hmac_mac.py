@@ -12,7 +12,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
-from acvp_assay.models import DigestValues, ResultStatus, TestCaseResult
+from acvp_assay.models import DeclineReason, DigestValues, ResultStatus, TestCaseResult
 from acvp_assay.parser import (
     AcvpValidationError,
     hex_bytes,
@@ -158,6 +158,7 @@ def run_vector_set(
                         expected=None,
                         actual=None,
                         diagnostic="no expected result recorded",
+                        decline_reason=DeclineReason.OFFLINE_UNDECIDABLE,
                     )
                 )
                 continue
@@ -176,6 +177,7 @@ def run_vector_set(
                         expected=None,
                         actual=None,
                         diagnostic="the harness declined this case",
+                        decline_reason=DeclineReason.IMPLEMENTATION_LACKS,
                     )
                 )
                 continue

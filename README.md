@@ -121,6 +121,8 @@ The algorithm is read from the vector file itself and routed automatically.
 
 `VECTOR_FILE` is an ACVP-shaped `prompt.json`; an `expectedResults.json` must sit next to it in the same directory (every directory under `fixtures/` already follows this layout). Without `--output`, the JSON report is printed to stdout; with it, the report is written to `RESULT_FILE` instead. `--strict` also fails the run if any case is `SKIPPED` or `UNSUPPORTED`. See `docs/architecture.md` for the full exit-code table.
 
+Every `UNSUPPORTED` case carries a `declineReason` beside its English `diagnostic`, from a closed set of four with four different repairs: `implementation_lacks` (the implementation under test lacks it, so the vendor fixes it), `runner_lacks` (this runner has not built it), `offline_undecidable` (no recorded answer can decide it, so only a submission to ACVTS can, or nothing can), and `vector_incomplete` (the vector lacks or contradicts what its own group requires). The summary counts each under `unsupportedByReason`, so one total never stands in for four different gaps.
+
 ## Coverage
 
 Three questions a vendor actually needs answered, in one table:
@@ -391,7 +393,8 @@ $ acvp-assay run fixtures/aes-gcm-valid-encrypt/prompt.json; echo "exit: $?"
     }
   ],
   "provider": { "name": "cryptography-aes-gcm", "...": "..." },
-  "summary": { "total": 1, "passed": 1, "failed": 0, "errored": 0, "skipped": 0, "unsupported": 0 }
+  "summary": { "total": 1, "passed": 1, "failed": 0, "errored": 0, "skipped": 0, "unsupported": 0,
+               "unsupportedByReason": { "implementation_lacks": 0, "offline_undecidable": 0, "runner_lacks": 0, "vector_incomplete": 0 } }
 }
 ```
 ```text
@@ -417,7 +420,8 @@ $ acvp-assay run fixtures/aes-gcm-invalid-decrypt-tag/prompt.json; echo "exit: $
     }
   ],
   "provider": { "name": "cryptography-aes-gcm", "...": "..." },
-  "summary": { "total": 1, "passed": 0, "failed": 0, "errored": 1, "skipped": 0, "unsupported": 0 }
+  "summary": { "total": 1, "passed": 0, "failed": 0, "errored": 1, "skipped": 0, "unsupported": 0,
+               "unsupportedByReason": { "implementation_lacks": 0, "offline_undecidable": 0, "runner_lacks": 0, "vector_incomplete": 0 } }
 }
 ```
 ```text
@@ -597,7 +601,7 @@ provider changed between runs:
 regressed: 1
   tgId 1 tcId 1: PASS -> FAIL (tag mismatch)
 coverage lost: 10
-  tgId 2 tcId 16: PASS -> UNSUPPORTED (ivGen 'internal' is not supported)
+  tgId 2 tcId 16: PASS -> UNSUPPORTED [runner_lacks] (ivGen 'internal' is not supported)
   ... and 9 more
 ```
 
@@ -609,6 +613,10 @@ Exit codes: 0 when nothing got worse, 1 on a regression, 2 when a report cannot 
 failure mode that hides: the totals still look clean, since the case has stopped being counted.
 Provider identity is diffed alongside the cases, since a changed library or backend is usually the
 cause rather than a detail.
+
+A case that stays `UNSUPPORTED` for a different reason is listed as well, under `decline reason
+changed`, though it is neither a regression nor a fix. A gap that moved from `runner_lacks` to
+`implementation_lacks` has a different owner, and the totals cannot show it.
 
 ## Development commands
 

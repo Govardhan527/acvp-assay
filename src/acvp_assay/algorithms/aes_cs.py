@@ -13,7 +13,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
-from acvp_assay.models import AesGcmValues, ResultStatus, TestCaseResult
+from acvp_assay.models import AesGcmValues, DeclineReason, ResultStatus, TestCaseResult
 from acvp_assay.parser import (
     AcvpValidationError,
     hex_bytes,
@@ -144,7 +144,7 @@ def provider_for(provider_command: str | None, timeout_seconds: float) -> AesCsP
     return SubprocessAesCs.from_command_string(provider_command, timeout_seconds=timeout_seconds)
 
 
-def _unsupported(tg_id: int, tc_id: int, reason: str) -> TestCaseResult:
+def _unsupported(code: DeclineReason, tg_id: int, tc_id: int, reason: str) -> TestCaseResult:
     return TestCaseResult(
         tg_id=tg_id,
         tc_id=tc_id,
@@ -152,6 +152,7 @@ def _unsupported(tg_id: int, tc_id: int, reason: str) -> TestCaseResult:
         expected=None,
         actual=None,
         diagnostic=reason,
+        decline_reason=code,
     )
 
 
@@ -186,7 +187,12 @@ def run_vector_set(
             wanted = expected.get((group.tg_id, case.tc_id))
             if wanted is None or name not in wanted:
                 results.append(
-                    _unsupported(group.tg_id, case.tc_id, f"no expected {name} recorded")
+                    _unsupported(
+                        DeclineReason.OFFLINE_UNDECIDABLE,
+                        group.tg_id,
+                        case.tc_id,
+                        f"no expected {name} recorded",
+                    )
                 )
                 continue
             try:
@@ -199,7 +205,12 @@ def run_vector_set(
                 )
             except HarnessUnsupportedError:
                 results.append(
-                    _unsupported(group.tg_id, case.tc_id, "the harness declined this case")
+                    _unsupported(
+                        DeclineReason.IMPLEMENTATION_LACKS,
+                        group.tg_id,
+                        case.tc_id,
+                        "the harness declined this case",
+                    )
                 )
                 continue
             results.append(_compare(group.tg_id, case.tc_id, name, wanted[name], produced))

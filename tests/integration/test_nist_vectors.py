@@ -50,6 +50,12 @@ def test_full_nist_vector_set_passes(tmp_path: Path) -> None:
         "errored": 0,
         "skipped": 0,
         "unsupported": 0,
+        "unsupportedByReason": {
+            "implementation_lacks": 0,
+            "offline_undecidable": 0,
+            "runner_lacks": 0,
+            "vector_incomplete": 0,
+        },
     }
 
     rejected = [
@@ -103,6 +109,8 @@ def test_full_sha2_vector_set(tmp_path: Path) -> None:
     assert report["summary"]["passed"] == 513
     assert report["summary"]["failed"] == 0
     assert report["summary"]["unsupported"] == 4
+    # LDT is declined because this runner does not expand it, not for want of an answer.
+    assert report["summary"]["unsupportedByReason"]["runner_lacks"] == 4
 
     monte_carlo = [
         case for case in report["cases"] if "Monte Carlo" in (case.get("diagnostic") or "")
@@ -142,4 +150,10 @@ def test_full_hmac_vector_set(tmp_path: Path) -> None:
         "errored": 0,
         "skipped": 0,
         "unsupported": 0,
+        "unsupportedByReason": {
+            "implementation_lacks": 0,
+            "offline_undecidable": 0,
+            "runner_lacks": 0,
+            "vector_incomplete": 0,
+        },
     }

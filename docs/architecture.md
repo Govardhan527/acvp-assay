@@ -95,7 +95,18 @@ Exit codes:
 | 1 | At least one case is FAILED or ERRORED, or (`--strict` only) SKIPPED or UNSUPPORTED. |
 | 2 | The run could not start: a missing file, malformed JSON, a schema violation, or an `expectedResults.json` that does not identify the same `vsId`/`algorithm`/`revision` as the vector file. |
 
-A group is classified UNSUPPORTED rather than executed when the runner cannot answer it faithfully — AES-GCM `ivGen` other than `external`, AES-KW/KWP `kwCipher: inverse`, SHA large data tests, RSA SHAKE mask functions, ctrDRBG `TDES`, KDF `CMAC-TDES`, ECDSA component tests. `docs/limitations.md` keeps the current list. With `--provider-command`, the capability decisions among these are deferred to the implementation, which declines per case with `{"error": "unsupported"}`. A case present in the vector file but absent from `expectedResults.json` is classified ERROR/`invalid case` rather than silently skipped.
+A group is classified UNSUPPORTED rather than executed when the runner cannot answer it faithfully — AES-GCM `ivGen` other than `external`, AES-KW/KWP `kwCipher: inverse`, SHA large data tests, RSA SHAKE mask functions, ctrDRBG `TDES`, KDF `CMAC-TDES`, ECDSA component tests. `docs/limitations.md` keeps the current list. With `--provider-command`, the capability decisions among these are deferred to the implementation, which declines per case with `{"error": "unsupported"}`. For AES-GCM, a case present in the vector file but absent from `expectedResults.json` is classified ERROR/`invalid case` rather than silently skipped; the other families report it UNSUPPORTED as `offline_undecidable`.
+
+Every UNSUPPORTED case carries a `decline_reason` from a closed set of four, because the reasons are properties of different things and have different repairs:
+
+| Reason | Whose property | Repaired by |
+| --- | --- | --- |
+| `implementation_lacks` | the implementation under test: a harness declined, or the provider's declared capability excludes it | the vendor |
+| `runner_lacks` | this runner: a path it has not built, or a value its own tables do not know | building it here |
+| `offline_undecidable` | the method: no recorded answer to compare with, or an answer that is fresh by construction | submitting to ACVTS, or structurally not at all |
+| `vector_incomplete` | the vector: a case missing data its group requires, or contradicting it | a different registration, or NIST |
+
+`TestCaseResult` rejects UNSUPPORTED without a reason, and a reason on any other status. The English `diagnostic` stays beside the code: the code is for aggregation and filtering, the sentence for a person reading one case. The run summary counts each reason, and `acvp-assay diff` reports a case whose reason changed even when its status did not, since the totals cannot show it.
 
 ## Boundaries
 

@@ -13,7 +13,7 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 
-from acvp_assay.models import ProviderMetadata, ResultStatus, TestCaseResult
+from acvp_assay.models import DeclineReason, ProviderMetadata, ResultStatus, TestCaseResult
 from acvp_assay.parser import (
     AcvpValidationError,
     integer,
@@ -151,7 +151,7 @@ def metadata_for(provider: SafePrimesProvider) -> ProviderMetadata:
     return provider.metadata()
 
 
-def _unsupported(tg_id: int, tc_id: int, reason: str) -> TestCaseResult:
+def _unsupported(code: DeclineReason, tg_id: int, tc_id: int, reason: str) -> TestCaseResult:
     return TestCaseResult(
         tg_id=tg_id,
         tc_id=tc_id,
@@ -159,6 +159,7 @@ def _unsupported(tg_id: int, tc_id: int, reason: str) -> TestCaseResult:
         expected=None,
         actual=None,
         diagnostic=reason,
+        decline_reason=code,
     )
 
 
@@ -190,6 +191,7 @@ def run_vector_set(
                 # it with. The server recomputes g^x mod p and can.
                 results.append(
                     _unsupported(
+                        DeclineReason.OFFLINE_UNDECIDABLE,
                         *key,
                         "keyGen produces a fresh key, so it cannot be compared with the "
                         "recorded value; submit to ACVTS, which recomputes it",
@@ -198,20 +200,38 @@ def run_vector_set(
                 continue
             if not known:
                 results.append(
-                    _unsupported(*key, f"safe prime group {group.safe_prime_group!r} is unknown")
+                    _unsupported(
+                        DeclineReason.RUNNER_LACKS,
+                        *key,
+                        f"safe prime group {group.safe_prime_group!r} is unknown",
+                    )
                 )
                 continue
             if case.x is None or case.y is None:
-                results.append(_unsupported(*key, "a keyVer case must supply both x and y"))
+                results.append(
+                    _unsupported(
+                        DeclineReason.VECTOR_INCOMPLETE,
+                        *key,
+                        "a keyVer case must supply both x and y",
+                    )
+                )
                 continue
             recorded = expected.get(key)
             if recorded is None or not isinstance(recorded.get("testPassed"), bool):
-                results.append(_unsupported(*key, "no expected verdict recorded"))
+                results.append(
+                    _unsupported(
+                        DeclineReason.OFFLINE_UNDECIDABLE, *key, "no expected verdict recorded"
+                    )
+                )
                 continue
             try:
                 computed = provider.key_ver(group=group.safe_prime_group, x=case.x, y=case.y)
             except HarnessUnsupportedError:
-                results.append(_unsupported(*key, "the harness declined this case"))
+                results.append(
+                    _unsupported(
+                        DeclineReason.IMPLEMENTATION_LACKS, *key, "the harness declined this case"
+                    )
+                )
                 continue
             results.append(_verdict(*key, expected=bool(recorded["testPassed"]), actual=computed))
     return results

@@ -19,7 +19,13 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 
-from acvp_assay.models import ProviderMetadata, ResultStatus, TestCaseResult, VerdictValues
+from acvp_assay.models import (
+    DeclineReason,
+    ProviderMetadata,
+    ResultStatus,
+    TestCaseResult,
+    VerdictValues,
+)
 from acvp_assay.parser import (
     AcvpValidationError,
     hex_bytes,
@@ -148,7 +154,7 @@ def load_expected_results(path: str | Path) -> dict[tuple[int, int], dict[str, o
     return parse_expected_results(json.loads(Path(path).read_text(encoding="utf-8")))
 
 
-def _unsupported(tg_id: int, tc_id: int, reason: str) -> TestCaseResult:
+def _unsupported(code: DeclineReason, tg_id: int, tc_id: int, reason: str) -> TestCaseResult:
     return TestCaseResult(
         tg_id=tg_id,
         tc_id=tc_id,
@@ -156,6 +162,7 @@ def _unsupported(tg_id: int, tc_id: int, reason: str) -> TestCaseResult:
         expected=None,
         actual=None,
         diagnostic=reason,
+        decline_reason=code,
     )
 
 
@@ -177,10 +184,22 @@ def run_vector_set(
         for case in group.tests:
             key = (group.tg_id, case.tc_id)
             if group.scheme != EPHEMERAL_UNIFIED:
-                results.append(_unsupported(*key, f"scheme {group.scheme!r} is not supported"))
+                results.append(
+                    _unsupported(
+                        DeclineReason.RUNNER_LACKS,
+                        *key,
+                        f"scheme {group.scheme!r} is not supported",
+                    )
+                )
                 continue
             if not provider.supports(curve=group.curve):
-                results.append(_unsupported(*key, f"curve {group.curve!r} is not supported"))
+                results.append(
+                    _unsupported(
+                        DeclineReason.IMPLEMENTATION_LACKS,
+                        *key,
+                        f"curve {group.curve!r} is not supported",
+                    )
+                )
                 continue
             if group.test_type == AFT:
                 # The implementation generates its own ephemeral key, so Z
@@ -188,6 +207,7 @@ def run_vector_set(
                 # check it; ACVTS can, because it holds the peer private key.
                 results.append(
                     _unsupported(
+                        DeclineReason.OFFLINE_UNDECIDABLE,
                         *key,
                         "AFT generates an ephemeral key, so Z cannot be compared with the "
                         "recorded value; submit to ACVTS, which can verify it",
@@ -196,18 +216,30 @@ def run_vector_set(
                 continue
             if group.test_type != VAL:
                 results.append(
-                    _unsupported(*key, f"test type {group.test_type!r} is not supported")
+                    _unsupported(
+                        DeclineReason.RUNNER_LACKS,
+                        *key,
+                        f"test type {group.test_type!r} is not supported",
+                    )
                 )
                 continue
             if case.private_key is None or case.claimed_z is None:
                 results.append(
-                    _unsupported(*key, "a VAL case must supply both a private key and z")
+                    _unsupported(
+                        DeclineReason.VECTOR_INCOMPLETE,
+                        *key,
+                        "a VAL case must supply both a private key and z",
+                    )
                 )
                 continue
 
             expected_case = expected.get(key)
             if expected_case is None or not isinstance(expected_case.get("testPassed"), bool):
-                results.append(_unsupported(*key, "no expected verdict recorded"))
+                results.append(
+                    _unsupported(
+                        DeclineReason.OFFLINE_UNDECIDABLE, *key, "no expected verdict recorded"
+                    )
+                )
                 continue
 
             try:

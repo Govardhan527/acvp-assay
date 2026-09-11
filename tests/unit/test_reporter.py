@@ -7,11 +7,14 @@ from typing import cast
 
 from acvp_assay.models import (
     AesGcmValues,
+    DeclineReason,
     ProviderMetadata,
     ResultStatus,
 )
 from acvp_assay.models import TestCaseResult as CaseResult
 from acvp_assay.reporter import ReportSummary, build_report, report_json, summarize
+
+NO_DECLINES = {reason.value: 0 for reason in DeclineReason}
 
 
 def provider_metadata() -> ProviderMetadata:
@@ -34,7 +37,15 @@ def all_status_results() -> list[CaseResult]:
         CaseResult(1, 2, ResultStatus.FAIL, expected, actual, "ciphertext mismatch"),
         CaseResult(1, 3, ResultStatus.ERROR, expected, None, "provider error"),
         CaseResult(1, 4, ResultStatus.SKIPPED, None, None, "not selected"),
-        CaseResult(1, 5, ResultStatus.UNSUPPORTED, None, None, "unsupported group"),
+        CaseResult(
+            1,
+            5,
+            ResultStatus.UNSUPPORTED,
+            None,
+            None,
+            "unsupported group",
+            DeclineReason.RUNNER_LACKS,
+        ),
     ]
 
 
@@ -47,12 +58,39 @@ def test_summary_counts_every_status() -> None:
         errored=1,
         skipped=1,
         unsupported=1,
+        unsupported_by_reason={**NO_DECLINES, "runner_lacks": 1},
     )
 
 
 def test_empty_summary_contains_explicit_zeroes() -> None:
     """An empty run keeps a stable summary schema."""
-    assert summarize([]) == ReportSummary(0, 0, 0, 0, 0, 0)
+    assert summarize([]) == ReportSummary(0, 0, 0, 0, 0, 0, NO_DECLINES)
+
+
+def test_the_summary_breaks_declined_cases_down_by_reason() -> None:
+    """One UNSUPPORTED total would merge four states with four different repairs."""
+    reasons = [
+        DeclineReason.IMPLEMENTATION_LACKS,
+        DeclineReason.IMPLEMENTATION_LACKS,
+        DeclineReason.RUNNER_LACKS,
+        DeclineReason.OFFLINE_UNDECIDABLE,
+        DeclineReason.VECTOR_INCOMPLETE,
+    ]
+    results = [
+        CaseResult(1, index, ResultStatus.UNSUPPORTED, None, None, "declined", reason)
+        for index, reason in enumerate(reasons, start=1)
+    ]
+
+    summary = summarize(results)
+
+    assert summary.unsupported == 5
+    assert summary.unsupported_by_reason == {
+        "implementation_lacks": 2,
+        "runner_lacks": 1,
+        "offline_undecidable": 1,
+        "vector_incomplete": 1,
+    }
+    assert sum(summary.unsupported_by_reason.values()) == summary.unsupported
 
 
 def test_report_contains_provider_versions_summary_and_case_values() -> None:
@@ -71,6 +109,7 @@ def test_report_contains_provider_versions_summary_and_case_values() -> None:
         "errored": 1,
         "skipped": 1,
         "unsupported": 1,
+        "unsupportedByReason": {**NO_DECLINES, "runner_lacks": 1},
     }
     cases = report["cases"]
     assert isinstance(cases, list)
@@ -84,6 +123,8 @@ def test_report_contains_provider_versions_summary_and_case_values() -> None:
     assert cases[1]["diagnostic"] == "ciphertext mismatch"
     assert cases[2]["actual"] is None
     assert cases[3]["expected"] is None
+    assert cases[4]["declineReason"] == "runner_lacks"
+    assert cases[4]["diagnostic"] == "unsupported group"
 
 
 def test_values_report_all_direction_specific_fields() -> None:

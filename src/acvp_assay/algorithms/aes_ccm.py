@@ -20,6 +20,7 @@ from cryptography.exceptions import InvalidTag
 
 from acvp_assay.models import (
     AesGcmValues,
+    DeclineReason,
     ProviderMetadata,
     ResultStatus,
     TestCaseResult,
@@ -158,7 +159,7 @@ def load_expected_results(path: str | Path) -> dict[tuple[int, int], CcmExpectat
     return parse_expected_results(json.loads(Path(path).read_text(encoding="utf-8")))
 
 
-def _unsupported(tg_id: int, tc_id: int, reason: str) -> TestCaseResult:
+def _unsupported(code: DeclineReason, tg_id: int, tc_id: int, reason: str) -> TestCaseResult:
     return TestCaseResult(
         tg_id=tg_id,
         tc_id=tc_id,
@@ -166,6 +167,7 @@ def _unsupported(tg_id: int, tc_id: int, reason: str) -> TestCaseResult:
         expected=None,
         actual=None,
         diagnostic=reason,
+        decline_reason=code,
     )
 
 
@@ -211,7 +213,12 @@ def _decrypt_case(
             diagnostic="accepted a tag ACVP declares invalid",
         )
     if want.payload is None:
-        return _unsupported(group.tg_id, case.tc_id, "no expected plaintext recorded")
+        return _unsupported(
+            DeclineReason.OFFLINE_UNDECIDABLE,
+            group.tg_id,
+            case.tc_id,
+            "no expected plaintext recorded",
+        )
     matched = produced == want.payload
     return TestCaseResult(
         tg_id=group.tg_id,
@@ -235,11 +242,21 @@ def run_vector_set(
         for case in group.tests:
             key = (group.tg_id, case.tc_id)
             if group.tag_bits not in TAG_LENGTHS:
-                results.append(_unsupported(*key, f"tagLen {group.tag_bits} is not a CCM tag"))
+                results.append(
+                    _unsupported(
+                        DeclineReason.VECTOR_INCOMPLETE,
+                        *key,
+                        f"tagLen {group.tag_bits} is not a CCM tag",
+                    )
+                )
                 continue
             want = expected.get(key)
             if want is None:
-                results.append(_unsupported(*key, "no expected result recorded"))
+                results.append(
+                    _unsupported(
+                        DeclineReason.OFFLINE_UNDECIDABLE, *key, "no expected result recorded"
+                    )
+                )
                 continue
             try:
                 if not encrypt:
@@ -253,10 +270,18 @@ def run_vector_set(
                     tag_bits=group.tag_bits,
                 )
             except HarnessUnsupportedError:
-                results.append(_unsupported(*key, "the harness declined this case"))
+                results.append(
+                    _unsupported(
+                        DeclineReason.IMPLEMENTATION_LACKS, *key, "the harness declined this case"
+                    )
+                )
                 continue
             if want.payload is None:
-                results.append(_unsupported(*key, "no expected ciphertext recorded"))
+                results.append(
+                    _unsupported(
+                        DeclineReason.OFFLINE_UNDECIDABLE, *key, "no expected ciphertext recorded"
+                    )
+                )
                 continue
             matched = produced == want.payload
             results.append(

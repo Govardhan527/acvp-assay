@@ -19,7 +19,13 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 
-from acvp_assay.models import DigestValues, ResultStatus, SafeDiagnostic, TestCaseResult
+from acvp_assay.models import (
+    DeclineReason,
+    DigestValues,
+    ResultStatus,
+    SafeDiagnostic,
+    TestCaseResult,
+)
 from acvp_assay.parser import (
     AcvpValidationError,
     hex_bytes,
@@ -179,7 +185,7 @@ def load_expected_results(path: str | Path) -> KdfExpectedSet:
     return parse_expected_results(json.loads(Path(path).read_text(encoding="utf-8")))
 
 
-def _unsupported(tg_id: int, tc_id: int, reason: str) -> TestCaseResult:
+def _unsupported(code: DeclineReason, tg_id: int, tc_id: int, reason: str) -> TestCaseResult:
     return TestCaseResult(
         tg_id=tg_id,
         tc_id=tc_id,
@@ -187,6 +193,7 @@ def _unsupported(tg_id: int, tc_id: int, reason: str) -> TestCaseResult:
         expected=None,
         actual=None,
         diagnostic=reason,
+        decline_reason=code,
     )
 
 
@@ -245,6 +252,7 @@ def run_vector_set(
             if not known_mac:
                 results.append(
                     _unsupported(
+                        DeclineReason.RUNNER_LACKS,
                         group.tg_id,
                         case.tc_id,
                         f"macMode {group.mac_mode} is not supported",
@@ -253,13 +261,25 @@ def run_vector_set(
                 continue
             wanted = expected.cases.get(case.tc_id)
             if wanted is None:
-                results.append(_unsupported(group.tg_id, case.tc_id, "no expected result recorded"))
+                results.append(
+                    _unsupported(
+                        DeclineReason.OFFLINE_UNDECIDABLE,
+                        group.tg_id,
+                        case.tc_id,
+                        "no expected result recorded",
+                    )
+                )
                 continue
             try:
                 results.append(_run_case(group, case, wanted, provider))
             except HarnessUnsupportedError:
                 results.append(
-                    _unsupported(group.tg_id, case.tc_id, "the harness declined this case")
+                    _unsupported(
+                        DeclineReason.IMPLEMENTATION_LACKS,
+                        group.tg_id,
+                        case.tc_id,
+                        "the harness declined this case",
+                    )
                 )
     return results
 

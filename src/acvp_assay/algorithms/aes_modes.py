@@ -21,6 +21,7 @@ from pathlib import Path
 
 from acvp_assay.models import (
     AesGcmValues,
+    DeclineReason,
     DigestValues,
     ResultStatus,
     TestCaseResult,
@@ -200,7 +201,7 @@ def load_expected_results(path: str | Path) -> AesExpectedSet:
     return parse_expected_results(json.loads(Path(path).read_text(encoding="utf-8")))
 
 
-def _unsupported(tg_id: int, tc_id: int, reason: str) -> TestCaseResult:
+def _unsupported(code: DeclineReason, tg_id: int, tc_id: int, reason: str) -> TestCaseResult:
     return TestCaseResult(
         tg_id=tg_id,
         tc_id=tc_id,
@@ -208,6 +209,7 @@ def _unsupported(tg_id: int, tc_id: int, reason: str) -> TestCaseResult:
         expected=None,
         actual=None,
         diagnostic=reason,
+        decline_reason=code,
     )
 
 
@@ -255,7 +257,12 @@ def _run_ecb_mct(
     group: AesGroup, case: AesCase, expected: AesExpectedCase, provider: AesModeProvider
 ) -> TestCaseResult:
     if expected.results_array is None:
-        return _unsupported(group.tg_id, case.tc_id, "MCT case has no expected resultsArray")
+        return _unsupported(
+            DeclineReason.OFFLINE_UNDECIDABLE,
+            group.tg_id,
+            case.tc_id,
+            "MCT case has no expected resultsArray",
+        )
     encrypt = group.direction == "encrypt"
     start = case.fields["pt"] if encrypt else case.fields["ct"]
     produced = provider.ecb_monte_carlo(key=case.fields["key"], data=start, encrypt=encrypt)
@@ -309,7 +316,12 @@ def _run_case(
         encrypt = group.direction == "encrypt"
         name = "ct" if encrypt else "pt"
         if name not in expected.values:
-            return _unsupported(group.tg_id, case.tc_id, f"no expected {name} recorded")
+            return _unsupported(
+                DeclineReason.OFFLINE_UNDECIDABLE,
+                group.tg_id,
+                case.tc_id,
+                f"no expected {name} recorded",
+            )
         produced = provider.ecb(
             key=case.fields["key"],
             data=case.fields["pt" if encrypt else "ct"],
@@ -326,10 +338,20 @@ def _run_case(
         )
         if group.direction == "gen":
             if "mac" not in expected.values:
-                return _unsupported(group.tg_id, case.tc_id, "no expected mac recorded")
+                return _unsupported(
+                    DeclineReason.OFFLINE_UNDECIDABLE,
+                    group.tg_id,
+                    case.tc_id,
+                    "no expected mac recorded",
+                )
             return _compare(group.tg_id, case.tc_id, "mac", expected.values["mac"], produced)
         if expected.test_passed is None:
-            return _unsupported(group.tg_id, case.tc_id, "no expected verdict recorded")
+            return _unsupported(
+                DeclineReason.OFFLINE_UNDECIDABLE,
+                group.tg_id,
+                case.tc_id,
+                "no expected verdict recorded",
+            )
         return _verdict(
             group.tg_id,
             case.tc_id,
@@ -348,10 +370,20 @@ def _run_case(
         )
         if group.direction == "encrypt":
             if "tag" not in expected.values:
-                return _unsupported(group.tg_id, case.tc_id, "no expected tag recorded")
+                return _unsupported(
+                    DeclineReason.OFFLINE_UNDECIDABLE,
+                    group.tg_id,
+                    case.tc_id,
+                    "no expected tag recorded",
+                )
             return _compare(group.tg_id, case.tc_id, "tag", expected.values["tag"], produced)
         if expected.test_passed is None:
-            return _unsupported(group.tg_id, case.tc_id, "no expected verdict recorded")
+            return _unsupported(
+                DeclineReason.OFFLINE_UNDECIDABLE,
+                group.tg_id,
+                case.tc_id,
+                "no expected verdict recorded",
+            )
         return _verdict(
             group.tg_id,
             case.tc_id,
@@ -373,11 +405,21 @@ def _run_case(
     except ValueError:
         if expected.test_passed is not None:
             return _verdict(group.tg_id, case.tc_id, expected.test_passed, False, "a wrapping")
-        return _unsupported(group.tg_id, case.tc_id, "unwrapping failed with no expected verdict")
+        return _unsupported(
+            DeclineReason.IMPLEMENTATION_LACKS,
+            group.tg_id,
+            case.tc_id,
+            "unwrapping failed with no expected verdict",
+        )
     if expected.test_passed is not None:
         return _verdict(group.tg_id, case.tc_id, expected.test_passed, True, "a wrapping")
     if name not in expected.values:
-        return _unsupported(group.tg_id, case.tc_id, f"no expected {name} recorded")
+        return _unsupported(
+            DeclineReason.OFFLINE_UNDECIDABLE,
+            group.tg_id,
+            case.tc_id,
+            f"no expected {name} recorded",
+        )
     return _compare(group.tg_id, case.tc_id, name, expected.values[name], produced)
 
 
@@ -395,10 +437,19 @@ def run_vector_set(
         for case in group.tests:
             expected_case = expected.cases.get((group.tg_id, case.tc_id))
             if declined is not None:
-                results.append(_unsupported(group.tg_id, case.tc_id, declined))
+                results.append(
+                    _unsupported(DeclineReason.RUNNER_LACKS, group.tg_id, case.tc_id, declined)
+                )
                 continue
             if expected_case is None:
-                results.append(_unsupported(group.tg_id, case.tc_id, "no expected result recorded"))
+                results.append(
+                    _unsupported(
+                        DeclineReason.OFFLINE_UNDECIDABLE,
+                        group.tg_id,
+                        case.tc_id,
+                        "no expected result recorded",
+                    )
+                )
                 continue
             try:
                 results.append(
@@ -406,7 +457,12 @@ def run_vector_set(
                 )
             except HarnessUnsupportedError:
                 results.append(
-                    _unsupported(group.tg_id, case.tc_id, "the harness declined this case")
+                    _unsupported(
+                        DeclineReason.IMPLEMENTATION_LACKS,
+                        group.tg_id,
+                        case.tc_id,
+                        "the harness declined this case",
+                    )
                 )
     return results
 
