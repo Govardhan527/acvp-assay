@@ -5,6 +5,62 @@ All notable changes to this project are recorded here. The format follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Before 1.0.0 the
 provider protocols may change between minor versions.
 
+## [0.22.0] - 2026-09-11
+
+### Added
+
+- **The runner pins itself.** `acvp-assay info` now reports `runner_commit`, the
+  full hash of HEAD, and `runner_tree_clean`. Where there is no commit,
+  `runner_commit` is null and `runner_commit_absent_reason` says which of three
+  states applies: `no_checkout` for an installed wheel, `not_a_repository` for a
+  source tree outside version control, or `vcs_unavailable` when git could not
+  be run. A version names a release, and two runs a commit apart report the
+  same one.
+- **Every UNSUPPORTED case carries a `declineReason`**, from a closed set of four
+  with four different repairs: `implementation_lacks`, `runner_lacks`,
+  `offline_undecidable` and `vector_incomplete`. The English `diagnostic` stays
+  beside it. The run summary counts each under `unsupportedByReason`, and
+  `acvp-assay diff` lists a case whose reason changed even when its status did
+  not, under `decline reason changed`.
+- **Concentration in the run summary**: the two largest test groups' share of
+  the cases, with the partition that produced it (`cases-by-tgId`) and how many
+  groups there are.
+- **A `trend` column in `docs/algorithm-frequency.md`**, printed by
+  `scripts/cavp_frequency.py`: `stable`, `decaying`, `mandated` or `dead`, each
+  entry naming the standard that determines it.
+
+### Changed
+
+- **The report and diff documents gained fields.** Report summaries carry
+  `unsupportedByReason` and `concentration`, and UNSUPPORTED cases carry
+  `declineReason`. Diff changes carry `wasReason` and `nowReason`, and the diff
+  counts and change lists carry `reasonChanged`. A report written before 0.22.0
+  still diffs: it records no reasons, and that is not reported as a change.
+- **`TestCaseResult` refuses UNSUPPORTED without a `DeclineReason`, and a reason
+  on any other status.** Code that constructs results directly must supply one.
+- **The README headline states its concentration beside its totals**: 65 vector
+  sets and 57,116 test cases across 21 completed sessions, where the two largest
+  sessions are 53.4% of the cases, partitioned cases-by-session, against 9.5%
+  for a flat split. A test computes all three from the results table.
+- **Footnote 1 of the results table says "the completed total"** rather than a
+  number that moved with every release, and its guard now checks only that a
+  number does not come back.
+
+### Notes
+
+- **Session 766220 is why the decline reasons exist.** safePrimes keyGen was
+  declined offline as a limitation of the method while it concealed a defect in
+  the implementation, and the two printed identically.
+- Found while classifying, and left as it was: AES-KW reports UNSUPPORTED when
+  unwrapping fails on a case whose plaintext NIST recorded. That is a failure,
+  and it is coded `implementation_lacks` so that it points at the vendor rather
+  than at ACVTS; making it FAIL is a separate change.
+- Run reports carry the provider's identity but not yet the runner's commit.
+
+This produces test evidence, not a certificate. It confers no validation status:
+only an accredited CST or 17ACVT laboratory performs CAVP or FIPS 140-3
+validation, and Demo is not the production ACVTS.
+
 ## [0.21.0] - 2026-09-09
 
 ### Added
