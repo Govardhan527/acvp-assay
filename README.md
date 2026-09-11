@@ -105,7 +105,7 @@ python3.12 scripts/dev.py demo
 .venv/bin/python -m acvp_assay run fixtures/aes-gcm-valid-encrypt/prompt.json
 ```
 
-The demo prints machine-readable runtime metadata, including the `cryptography` and OpenSSL versions that identify the provider. The last command executes a tiny local fixture end to end and prints a JSON report.
+The demo prints machine-readable runtime metadata: the `cryptography` and OpenSSL versions that identify the provider, and the full commit the runner was built from, with whether the working tree matched it. A version alone does not identify the runner, since two runs a commit apart report the same one. Where there is no commit, `runner_commit` is null and `runner_commit_absent_reason` says why: `no_checkout` for an installed wheel, `not_a_repository` for a source tree outside version control, and `vcs_unavailable` when git could not be run. The last command executes a tiny local fixture end to end and prints a JSON report.
 
 New to the project? **[`docs/design.md`](docs/design.md) has the diagrams** — what the
 system is for, how the two paths differ, and the end-to-end sequence for a run, a live

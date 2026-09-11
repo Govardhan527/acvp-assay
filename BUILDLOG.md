@@ -459,3 +459,17 @@
 - Commit/link/path: `src/acvp_assay/providers/kas_ifc.py`, `src/acvp_assay/algorithms/kas_ifc.py`, `src/acvp_assay/responder.py`, `examples/reference_harness.py`, `acvts-capabilities/kas-kts-ifc.json`, `acvts-capabilities/kas-ifc-broad.json`.
 - Blocker, if any: none.
 - Next unchecked ID: M26 continues - KMAC-128/256 (22%) and KAS-ECC non-SSC (22%).
+
+## 2026-09-11 - Claims that did not carry what determines them
+
+- Project and task ID: ACVP Assay - five corrections, one commit each, all breaking one rule the README argues for: a claim that does not carry what determines it is not a claim.
+- Done condition: each place that breaks the rule either carries what determines the claim, or is reworded so there is nothing left to go stale.
+- **The runner did not pin itself.** `runtime_metadata()` reported `runner_version` and nothing that identifies the code. A version is a claim about the instrument, not its identity: two runs a commit apart report the same one, so two result sets can name the same runner and not be comparable. It now carries `runner_commit`, the full hash of HEAD, because an abbreviated one is not fetchable and collides as history grows, and `runner_tree_clean`, from `git status --porcelain` being empty.
+- Where there is no commit, `runner_commit` is null and `runner_commit_absent_reason` names which of three states applies: `no_checkout` for an installed wheel, `not_a_repository` for a source tree outside version control, `vcs_unavailable` when git could not be run. They have three different remedies, so one bare null for all three would have been the same defect one level up.
+- Each branch was run rather than reasoned about. The wheel built from this tree and installed into a fresh virtualenv reports `no_checkout`, through `acvp-assay info` as well as the function; the tree copied outside git reports `not_a_repository`; the checkout itself, with git removed from PATH, reports `vcs_unavailable`.
+- Two cases turned up while writing it that would have named the **wrong** commit rather than none, which is worse than either. A wheel installed into a virtualenv inside a checkout would have borrowed the checkout's HEAD, so a checkout is recognised by its layout before git is asked anything. A copy of the tree dropped inside an unrelated repository would have been given that repository's HEAD, so the tree must be tracked by the repository git finds. Both have tests.
+- Still open: `acvp-assay run` records the provider's identity in its report but not the runner's, so a result set does not yet say which commit produced it. The metadata exists; the report does not carry it.
+- Tests run and result: `scripts/dev.py test` - format, lint, strict mypy, 991 passed and 9 skipped.
+- Commit/link/path: `src/acvp_assay/metadata.py`, `tests/unit/test_metadata.py`, `README.md`.
+- Blocker, if any: none.
+- Next unchecked ID: UNSUPPORTED, which collapses four states with four different repairs into one word.
