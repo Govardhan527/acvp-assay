@@ -56,6 +56,7 @@ def test_full_nist_vector_set_passes(tmp_path: Path) -> None:
             "runner_lacks": 0,
             "vector_incomplete": 0,
         },
+        "concentration": {"partition": "cases-by-tgId", "cardinality": 4, "largestTwoShare": 0.5},
     }
 
     rejected = [
@@ -155,5 +156,10 @@ def test_full_hmac_vector_set(tmp_path: Path) -> None:
             "offline_undecidable": 0,
             "runner_lacks": 0,
             "vector_incomplete": 0,
+        },
+        "concentration": {
+            "partition": "cases-by-tgId",
+            "cardinality": 13,
+            "largestTwoShare": 0.1538,
         },
     }

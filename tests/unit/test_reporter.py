@@ -12,9 +12,16 @@ from acvp_assay.models import (
     ResultStatus,
 )
 from acvp_assay.models import TestCaseResult as CaseResult
-from acvp_assay.reporter import ReportSummary, build_report, report_json, summarize
+from acvp_assay.reporter import (
+    Concentration,
+    ReportSummary,
+    build_report,
+    report_json,
+    summarize,
+)
 
 NO_DECLINES = {reason.value: 0 for reason in DeclineReason}
+ONE_GROUP = Concentration("cases-by-tgId", 1, 1.0)
 
 
 def provider_metadata() -> ProviderMetadata:
@@ -59,12 +66,15 @@ def test_summary_counts_every_status() -> None:
         skipped=1,
         unsupported=1,
         unsupported_by_reason={**NO_DECLINES, "runner_lacks": 1},
+        concentration=ONE_GROUP,
     )
 
 
 def test_empty_summary_contains_explicit_zeroes() -> None:
-    """An empty run keeps a stable summary schema."""
-    assert summarize([]) == ReportSummary(0, 0, 0, 0, 0, 0, NO_DECLINES)
+    """An empty run keeps a stable summary schema; a share of nothing is undefined."""
+    assert summarize([]) == ReportSummary(
+        0, 0, 0, 0, 0, 0, NO_DECLINES, Concentration("cases-by-tgId", 0, None)
+    )
 
 
 def test_the_summary_breaks_declined_cases_down_by_reason() -> None:
@@ -93,6 +103,18 @@ def test_the_summary_breaks_declined_cases_down_by_reason() -> None:
     assert sum(summary.unsupported_by_reason.values()) == summary.unsupported
 
 
+def test_the_concentration_carries_its_partition_and_cardinality() -> None:
+    """Ten cases read as breadth; nine of them are in two of the three groups."""
+    sizes = {1: 6, 2: 3, 3: 1}
+    results = [
+        CaseResult(tg_id, tc_id, ResultStatus.PASS, None, None)
+        for tg_id, size in sizes.items()
+        for tc_id in range(1, size + 1)
+    ]
+
+    assert summarize(results).concentration == Concentration("cases-by-tgId", 3, 0.9)
+
+
 def test_report_contains_provider_versions_summary_and_case_values() -> None:
     """Report fields retain IDs, uppercase hex values, and safe diagnostics."""
     report = build_report(all_status_results(), provider_metadata())
@@ -110,6 +132,7 @@ def test_report_contains_provider_versions_summary_and_case_values() -> None:
         "skipped": 1,
         "unsupported": 1,
         "unsupportedByReason": {**NO_DECLINES, "runner_lacks": 1},
+        "concentration": {"partition": "cases-by-tgId", "cardinality": 1, "largestTwoShare": 1.0},
     }
     cases = report["cases"]
     assert isinstance(cases, list)

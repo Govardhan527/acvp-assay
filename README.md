@@ -7,8 +7,10 @@
 > ## ✅ Judged by NIST's own server
 >
 > **All 59 supported algorithm names** have been run against **vectors NIST generated live** and
-> submitted back for NIST to judge. On `demo.acvts.nist.gov`, **65 vector sets, covering 57,116
-> test cases, each came back `"passed"`**, and that verdict is the server's, not this project's.
+> submitted back for NIST to judge. On `demo.acvts.nist.gov`, that is **65 vector sets and 57,116
+> test cases across 21 completed sessions**, where the two largest sessions are 53.4% of the cases
+> (partitioned cases-by-session; a flat split across 21 would be 9.5%). **Every one of those sets
+> came back `"passed"`**, and that verdict is the server's, not this project's.
 > [Exactly which, per algorithm](#coverage).
 >
 > Read those two numbers precisely: ACVP returns one verdict **per vector set**, so 65 is the
@@ -122,6 +124,8 @@ The algorithm is read from the vector file itself and routed automatically.
 `VECTOR_FILE` is an ACVP-shaped `prompt.json`; an `expectedResults.json` must sit next to it in the same directory (every directory under `fixtures/` already follows this layout). Without `--output`, the JSON report is printed to stdout; with it, the report is written to `RESULT_FILE` instead. `--strict` also fails the run if any case is `SKIPPED` or `UNSUPPORTED`. See `docs/architecture.md` for the full exit-code table.
 
 Every `UNSUPPORTED` case carries a `declineReason` beside its English `diagnostic`, from a closed set of four with four different repairs: `implementation_lacks` (the implementation under test lacks it, so the vendor fixes it), `runner_lacks` (this runner has not built it), `offline_undecidable` (no recorded answer can decide it, so only a submission to ACVTS can, or nothing can), and `vector_incomplete` (the vector lacks or contradicts what its own group requires). The summary counts each under `unsupportedByReason`, so one total never stands in for four different gaps.
+
+The summary also carries `concentration`: the two largest test groups' share of the cases, with the partition that produced it (`cases-by-tgId`) and how many groups there are. A case total reads as breadth and can be substantially one or two groups; NIST's pinned SHA2-256 set is 517 cases, and 99.8% of them are in two of its three groups.
 
 ## Coverage
 
@@ -394,7 +398,8 @@ $ acvp-assay run fixtures/aes-gcm-valid-encrypt/prompt.json; echo "exit: $?"
   ],
   "provider": { "name": "cryptography-aes-gcm", "...": "..." },
   "summary": { "total": 1, "passed": 1, "failed": 0, "errored": 0, "skipped": 0, "unsupported": 0,
-               "unsupportedByReason": { "implementation_lacks": 0, "offline_undecidable": 0, "runner_lacks": 0, "vector_incomplete": 0 } }
+               "unsupportedByReason": { "implementation_lacks": 0, "offline_undecidable": 0, "runner_lacks": 0, "vector_incomplete": 0 },
+               "concentration": { "partition": "cases-by-tgId", "cardinality": 1, "largestTwoShare": 1.0 } }
 }
 ```
 ```text
@@ -421,7 +426,8 @@ $ acvp-assay run fixtures/aes-gcm-invalid-decrypt-tag/prompt.json; echo "exit: $
   ],
   "provider": { "name": "cryptography-aes-gcm", "...": "..." },
   "summary": { "total": 1, "passed": 0, "failed": 0, "errored": 1, "skipped": 0, "unsupported": 0,
-               "unsupportedByReason": { "implementation_lacks": 0, "offline_undecidable": 0, "runner_lacks": 0, "vector_incomplete": 0 } }
+               "unsupportedByReason": { "implementation_lacks": 0, "offline_undecidable": 0, "runner_lacks": 0, "vector_incomplete": 0 },
+               "concentration": { "partition": "cases-by-tgId", "cardinality": 1, "largestTwoShare": 1.0 } }
 }
 ```
 ```text

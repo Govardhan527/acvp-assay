@@ -53,6 +53,12 @@ NUMBER_WORDS = {
 #: One row per live session: id, algorithms, vector sets, cases, verdict.
 SESSION_ROW = re.compile(r"^\| (7\d{5}) \|([^|]*)\|\s*(\d+)\s*\|\s*([\d,—-]+)\s*\|", re.M)
 COMPLETED = re.compile(r"\| \| \*\*Completed\*\* \| \*\*(\d+)\*\* \| \*\*([\d,]+)\*\* \|")
+#: The headline totals, with the concentration that has to be quoted alongside them.
+HEADLINE = re.compile(
+    r"\*\*(\d+) vector sets and ([\d,]+) test cases across (\d+) completed sessions\*\*, "
+    r"where the two largest sessions are ([\d.]+)% of the cases "
+    r"\(partitioned cases-by-session; a flat split across (\d+) would be ([\d.]+)%\)"
+)
 
 
 def _int(text: str) -> int:
@@ -109,8 +115,28 @@ def test_every_reference_to_the_table_total_uses_the_current_one() -> None:
         if int(value) != total_sets
     ]
     assert not stale, f"the table total is {total_sets}; the text still says {stale}"
-    for value in re.findall(r"covering ([\d,]+)\s*\n?> ?test cases", README):
-        assert _int(value) == total_cases
+
+
+def test_the_concentration_figures_match_the_table() -> None:
+    """The headline total reads as breadth, and is substantially two sessions.
+
+    So the headline carries the share, the flat baseline it should be read
+    against, and the partition that produced it, in the same sentence as the
+    totals so that quoting one quotes the other. All of it is computed from the
+    rows here rather than written into the test, so it moves with the table
+    instead of going stale the way the numbers above did.
+    """
+    prose = " ".join(re.sub(r"^>\s?", "", README, flags=re.M).split())
+    match = HEADLINE.search(prose)
+    assert match is not None, "the headline no longer states its totals with their concentration"
+    scored = [row for row in SESSION_ROW.findall(README) if row[3].strip() not in {"—", "-"}]
+    cases = sorted((_int(row[3]) for row in scored), reverse=True)
+    total_sets, total_cases = completed()
+
+    assert (int(match.group(1)), _int(match.group(2))) == (total_sets, total_cases)
+    assert int(match.group(3)) == int(match.group(5)) == len(scored)
+    assert match.group(4) == f"{100 * sum(cases[:2]) / total_cases:.1f}"
+    assert match.group(6) == f"{100 * 2 / len(scored):.1f}"
 
 
 @pytest.mark.parametrize("label", ["regressed", "coverage lost"])

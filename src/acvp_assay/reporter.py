@@ -15,6 +15,25 @@ from acvp_assay.models import (
     TestCaseResult,
 )
 
+#: How a run's cases are partitioned when their concentration is measured.
+PARTITION = "cases-by-tgId"
+
+
+@dataclass(frozen=True, slots=True)
+class Concentration:
+    """How unevenly a run's cases fall across its test groups.
+
+    A case total reads as breadth, and it can be substantially one or two
+    groups. The share therefore travels with what determines it: the partition
+    that produced it and how many members that partition has. The same run gives
+    a different figure under a different partition, so a share without its
+    partition named is a share without its base.
+    """
+
+    partition: str
+    cardinality: int
+    largest_two_share: float | None
+
 
 @dataclass(frozen=True, slots=True)
 class ReportSummary:
@@ -32,6 +51,21 @@ class ReportSummary:
     skipped: int
     unsupported: int
     unsupported_by_reason: Mapping[str, int]
+    concentration: Concentration
+
+
+def concentration(results: Sequence[TestCaseResult]) -> Concentration:
+    """The two largest test groups' share of the cases, with its partition and base.
+
+    The share is null for an empty run, where it is undefined rather than zero.
+    """
+    groups = Counter(result.tg_id for result in results)
+    largest = sum(count for _, count in groups.most_common(2))
+    return Concentration(
+        partition=PARTITION,
+        cardinality=len(groups),
+        largest_two_share=round(largest / len(results), 4) if results else None,
+    )
 
 
 def summarize(results: Sequence[TestCaseResult]) -> ReportSummary:
@@ -46,6 +80,7 @@ def summarize(results: Sequence[TestCaseResult]) -> ReportSummary:
         skipped=counts[ResultStatus.SKIPPED],
         unsupported=counts[ResultStatus.UNSUPPORTED],
         unsupported_by_reason={reason.value: reasons[reason] for reason in DeclineReason},
+        concentration=concentration(results),
     )
 
 
@@ -58,6 +93,11 @@ def _summary_document(summary: ReportSummary) -> dict[str, object]:
         "skipped": summary.skipped,
         "unsupported": summary.unsupported,
         "unsupportedByReason": dict(summary.unsupported_by_reason),
+        "concentration": {
+            "partition": summary.concentration.partition,
+            "cardinality": summary.concentration.cardinality,
+            "largestTwoShare": summary.concentration.largest_two_share,
+        },
     }
 
 
@@ -113,4 +153,11 @@ def report_json(
     return json.dumps(build_report(results, provider), indent=2, sort_keys=True) + "\n"
 
 
-__all__ = ["ReportSummary", "build_report", "report_json", "summarize"]
+__all__ = [
+    "Concentration",
+    "ReportSummary",
+    "build_report",
+    "concentration",
+    "report_json",
+    "summarize",
+]
