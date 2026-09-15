@@ -368,6 +368,29 @@ parameter set, a mode. It is reported UNSUPPORTED, not as a failure. Capability
 is yours to declare, not the runner's to assume; an HSM's binary curves are not
 "unsupported" merely because Python's `cryptography` lacks them.
 
+A decline may also say why, and it should, because the report separates what your
+harness declined from what the runner declined:
+
+```
+← {"error": "unsupported", "declineReason": "implementation_lacks", "detail": "curve B-163 is not on this token"}
+← {"error": "unsupported", "declineReason": "vector_incomplete", "detail": "the case carries no modulus"}
+```
+
+`declineReason` is optional, and a decline without one claims `implementation_lacks`,
+which is what declining has always meant. A harness may claim only those two codes.
+The other two are refused: `runner_lacks` says this runner has not built something,
+and `offline_undecidable` says no recorded answer can decide a case. Both are
+properties of this runner and of its method, which a harness is never in a position
+to assert, so a claim of either, or of any other value, is a protocol error that names
+the code. `detail` is optional and at most 200 characters. It is copied into the report
+after the runner's own sentence, so it should describe the capability and never quote
+the input.
+
+The report's summary counts declines under `unsupportedByClaimant`, split into
+`harness` and `runner`, and each declined case carries `declinedBy`. The `harness`
+counts are what your harness said about itself; the `runner` counts are what this
+runner decided.
+
 **`{"error": "authentication failed"}`** — an AEAD tag or a wrapping was
 rejected. This is **not** a crash and **not** a non-zero exit. Roughly a third
 of NIST's AES-GCM decrypt cases are deliberate authentication failures where

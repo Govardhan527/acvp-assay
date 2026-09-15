@@ -7,6 +7,7 @@ from typing import cast
 
 from acvp_assay.models import (
     AesGcmValues,
+    DeclineClaimant,
     DeclineReason,
     ProviderKind,
     ProviderMetadata,
@@ -22,6 +23,10 @@ from acvp_assay.reporter import (
 )
 
 NO_DECLINES = {reason.value: 0 for reason in DeclineReason}
+NO_CLAIMS = {
+    "harness": {"implementation_lacks": 0, "vector_incomplete": 0},
+    "runner": dict(NO_DECLINES),
+}
 ONE_GROUP = Concentration("cases-by-tgId", 1, 1.0)
 
 
@@ -54,6 +59,7 @@ def all_status_results() -> list[CaseResult]:
             None,
             "unsupported group",
             DeclineReason.RUNNER_LACKS,
+            DeclineClaimant.RUNNER,
         ),
     ]
 
@@ -68,6 +74,7 @@ def test_summary_counts_every_status() -> None:
         skipped=1,
         unsupported=1,
         unsupported_by_reason={**NO_DECLINES, "runner_lacks": 1},
+        unsupported_by_claimant={**NO_CLAIMS, "runner": {**NO_DECLINES, "runner_lacks": 1}},
         concentration=ONE_GROUP,
     )
 
@@ -75,7 +82,7 @@ def test_summary_counts_every_status() -> None:
 def test_empty_summary_contains_explicit_zeroes() -> None:
     """An empty run keeps a stable summary schema; a share of nothing is undefined."""
     assert summarize([]) == ReportSummary(
-        0, 0, 0, 0, 0, 0, NO_DECLINES, Concentration("cases-by-tgId", 0, None)
+        0, 0, 0, 0, 0, 0, NO_DECLINES, NO_CLAIMS, Concentration("cases-by-tgId", 0, None)
     )
 
 
@@ -89,7 +96,16 @@ def test_the_summary_breaks_declined_cases_down_by_reason() -> None:
         DeclineReason.VECTOR_INCOMPLETE,
     ]
     results = [
-        CaseResult(1, index, ResultStatus.UNSUPPORTED, None, None, "declined", reason)
+        CaseResult(
+            1,
+            index,
+            ResultStatus.UNSUPPORTED,
+            None,
+            None,
+            "declined",
+            reason,
+            DeclineClaimant.RUNNER,
+        )
         for index, reason in enumerate(reasons, start=1)
     ]
 
@@ -135,6 +151,7 @@ def test_report_contains_provider_versions_summary_and_case_values() -> None:
         "skipped": 1,
         "unsupported": 1,
         "unsupportedByReason": {**NO_DECLINES, "runner_lacks": 1},
+        "unsupportedByClaimant": {**NO_CLAIMS, "runner": {**NO_DECLINES, "runner_lacks": 1}},
         "concentration": {"partition": "cases-by-tgId", "cardinality": 1, "largestTwoShare": 1.0},
     }
     cases = report["cases"]
@@ -150,6 +167,7 @@ def test_report_contains_provider_versions_summary_and_case_values() -> None:
     assert cases[2]["actual"] is None
     assert cases[3]["expected"] is None
     assert cases[4]["declineReason"] == "runner_lacks"
+    assert cases[4]["declinedBy"] == "runner"
     assert cases[4]["diagnostic"] == "unsupported group"
 
 
@@ -190,3 +208,30 @@ def test_json_is_deterministic_valid_and_newline_terminated() -> None:
     assert rendered.endswith("\n")
     assert json.loads(rendered) == build_report(all_status_results(), provider_metadata())
     assert rendered == report_json(all_status_results(), provider_metadata())
+
+
+def test_declines_are_split_by_who_claimed_them() -> None:
+    """A module author reads the harness's own claims as their list, and the rest as not."""
+    harness, runner = DeclineClaimant.HARNESS, DeclineClaimant.RUNNER
+    implementation = DeclineReason.IMPLEMENTATION_LACKS
+    unsupported = ResultStatus.UNSUPPORTED
+    results = [
+        CaseResult(1, 1, unsupported, None, None, "curve", implementation, harness),
+        CaseResult(1, 2, unsupported, None, None, "curve", implementation, harness),
+        CaseResult(1, 3, unsupported, None, None, "no x", DeclineReason.VECTOR_INCOMPLETE, harness),
+        CaseResult(1, 4, unsupported, None, None, "LDT", DeclineReason.RUNNER_LACKS, runner),
+        CaseResult(1, 5, unsupported, None, None, "curve", implementation, runner),
+    ]
+
+    summary = summarize(results)
+
+    assert summary.unsupported_by_claimant == {
+        "harness": {"implementation_lacks": 2, "vector_incomplete": 1},
+        "runner": {
+            "implementation_lacks": 1,
+            "runner_lacks": 1,
+            "offline_undecidable": 0,
+            "vector_incomplete": 0,
+        },
+    }
+    assert summary.unsupported_by_reason["implementation_lacks"] == 3

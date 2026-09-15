@@ -22,6 +22,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from acvp_assay.models import (
+    DeclineClaimant,
     DeclineReason,
     DigestValues,
     ProviderMetadata,
@@ -42,7 +43,7 @@ from acvp_assay.providers.digest import (
     SubprocessXofProvider,
     XofProvider,
 )
-from acvp_assay.providers.subprocess_harness import HarnessUnsupportedError
+from acvp_assay.providers.subprocess_harness import HarnessUnsupportedError, declined_result
 
 REVISION = "FIPS202"
 SUPPORTED = tuple(XOF_ALGORITHMS)
@@ -152,6 +153,7 @@ def _unsupported(code: DeclineReason, tg_id: int, tc_id: int, reason: str) -> Te
         actual=None,
         diagnostic=reason,
         decline_reason=code,
+        declined_by=DeclineClaimant.RUNNER,
     )
 
 
@@ -216,12 +218,8 @@ def run_vector_set(
                     message=case.message,
                     output_bytes=case.output_bits // 8,
                 )
-            except HarnessUnsupportedError:
-                results.append(
-                    _unsupported(
-                        DeclineReason.IMPLEMENTATION_LACKS, *key, "the harness declined this case"
-                    )
-                )
+            except HarnessUnsupportedError as declined:
+                results.append(declined_result(*key, declined))
                 continue
             matched = produced == want
             results.append(

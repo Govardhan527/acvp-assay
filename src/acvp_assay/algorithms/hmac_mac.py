@@ -12,7 +12,13 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
-from acvp_assay.models import DeclineReason, DigestValues, ResultStatus, TestCaseResult
+from acvp_assay.models import (
+    DeclineClaimant,
+    DeclineReason,
+    DigestValues,
+    ResultStatus,
+    TestCaseResult,
+)
 from acvp_assay.parser import (
     AcvpValidationError,
     hex_bytes,
@@ -22,7 +28,7 @@ from acvp_assay.parser import (
     string_field,
 )
 from acvp_assay.providers.digest import HASHLIB_ALGORITHMS, MacProvider
-from acvp_assay.providers.subprocess_harness import HarnessUnsupportedError
+from acvp_assay.providers.subprocess_harness import HarnessUnsupportedError, declined_result
 
 
 @dataclass(frozen=True, slots=True)
@@ -159,6 +165,7 @@ def run_vector_set(
                         actual=None,
                         diagnostic="no expected result recorded",
                         decline_reason=DeclineReason.OFFLINE_UNDECIDABLE,
+                        declined_by=DeclineClaimant.RUNNER,
                     )
                 )
                 continue
@@ -168,18 +175,8 @@ def run_vector_set(
                     message=case.message,
                     mac_length_bits=group.mac_length_bits,
                 )
-            except HarnessUnsupportedError:
-                results.append(
-                    TestCaseResult(
-                        tg_id=group.tg_id,
-                        tc_id=case.tc_id,
-                        status=ResultStatus.UNSUPPORTED,
-                        expected=None,
-                        actual=None,
-                        diagnostic="the harness declined this case",
-                        decline_reason=DeclineReason.IMPLEMENTATION_LACKS,
-                    )
-                )
+            except HarnessUnsupportedError as declined:
+                results.append(declined_result(group.tg_id, case.tc_id, declined))
                 continue
             status = ResultStatus.PASS if want == got else ResultStatus.FAIL
             results.append(

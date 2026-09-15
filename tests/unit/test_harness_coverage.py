@@ -16,13 +16,14 @@ from typing import Any
 import pytest
 
 from acvp_assay.algorithms import run_vector_file
-from acvp_assay.models import DeclineReason, ResultStatus
+from acvp_assay.models import DeclineClaimant, DeclineReason, ResultStatus
 from acvp_assay.providers.digest import SubprocessHashProvider, SubprocessMacProvider
 from acvp_assay.providers.ecdsa import SubprocessEcdsaProvider
 from acvp_assay.providers.subprocess_harness import (
     HarnessProtocolError,
     HarnessUnsupportedError,
 )
+from acvp_assay.reporter import summarize
 
 ROOT = Path(__file__).resolve().parents[2]
 FIXTURES = ROOT / "fixtures"
@@ -127,6 +128,40 @@ def test_a_declining_harness_yields_unsupported_cases(tmp_path: Path, directory:
     assert {r.status for r in results} == {ResultStatus.UNSUPPORTED}
     assert all("declined" in (r.diagnostic or "") for r in results)
     assert {r.decline_reason for r in results} == {DeclineReason.IMPLEMENTATION_LACKS}
+    assert {r.declined_by for r in results} == {DeclineClaimant.HARNESS}
+
+
+def test_a_harness_decline_carries_its_own_reason_and_detail_into_the_report(
+    tmp_path: Path,
+) -> None:
+    """A module author's list is what their harness claimed, named as theirs."""
+    meta = (
+        '{"name":"stub","libraryName":"s","libraryVersion":"0",'
+        '"backendName":"s","backendVersion":"0"}'
+    )
+    decline = '{"error": "unsupported", "declineReason": "vector_incomplete", "detail": "empty"}'
+    command_file = tmp_path / "vector.py"
+    command_file.write_text(
+        "import json, sys\n"
+        "req = json.loads(sys.stdin.read())\n"
+        f"out = {meta} if req['operation'] == 'metadata' else {decline}\n"
+        "sys.stdout.write(json.dumps(out))\n"
+    )
+    prompt = FIXTURES / "sha2-256-known-answers" / "prompt.json"
+
+    results, _ = run_vector_file(
+        prompt,
+        prompt.parent / "expectedResults.json",
+        provider_command=f"{sys.executable} {command_file}",
+    )
+
+    assert results
+    assert {r.decline_reason for r in results} == {DeclineReason.VECTOR_INCOMPLETE}
+    assert {r.declined_by for r in results} == {DeclineClaimant.HARNESS}
+    assert {r.diagnostic for r in results} == {"the harness declined this case: empty"}
+    claims = summarize(results).unsupported_by_claimant
+    assert claims["harness"]["vector_incomplete"] == len(results)
+    assert sum(claims["runner"].values()) == 0
 
 
 def test_external_ecdsa_does_not_prejudge_capability() -> None:

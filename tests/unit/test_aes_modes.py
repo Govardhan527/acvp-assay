@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import pytest
 
 from acvp_assay.algorithms import aes_modes
-from acvp_assay.models import ResultStatus
+from acvp_assay.models import DeclineClaimant, ResultStatus
 from acvp_assay.parser import AcvpValidationError
 from acvp_assay.providers.aes_modes import (
     MCT_OUTER_ITERATIONS,
@@ -17,6 +17,7 @@ from acvp_assay.providers.aes_modes import (
     CryptographyAesModeProvider,
     key_shuffle,
 )
+from acvp_assay.providers.subprocess_harness import HarnessUnsupportedError
 
 KEY128 = bytes.fromhex("000102030405060708090A0B0C0D0E0F")
 BLOCK = bytes.fromhex("00112233445566778899AABBCCDDEEFF")
@@ -518,3 +519,49 @@ def test_key_wrap_missing_expected_value_is_unsupported() -> None:
     )
 
     assert results[0].status is ResultStatus.UNSUPPORTED
+
+
+class _DecliningOnce:
+    """A harness stand-in that declines the first wrap it is asked for and answers the rest."""
+
+    def __init__(self) -> None:
+        self.inner = CryptographyAesModeProvider()
+        self.declined = False
+
+    def key_wrap(self, **arguments: Any) -> bytes:
+        if not self.declined:
+            self.declined = True
+            raise HarnessUnsupportedError("the harness declined 'key-wrap'")
+        return self.inner.key_wrap(**arguments)
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self.inner, name)
+
+
+def test_a_harness_decline_does_not_break_the_cases_after_it() -> None:
+    """One declined case must not take the rest of its group down with it.
+
+    The handler's name once shadowed this group's kwCipher sentence, and Python
+    unbinds an ``except ... as`` name when the handler ends, so the case after a
+    decline raised instead of running.
+    """
+    payload = bytes(range(32))
+    wrapped = provider().key_wrap(key=KEY128, data=payload, padded=False, wrap=True)
+    prompt, expected = documents(
+        aes_modes.KW,
+        {"direction": "encrypt", "keyLen": 128, "kwCipher": "cipher"},
+        [
+            {"tcId": 1, "key": KEY128.hex(), "pt": payload.hex()},
+            {"tcId": 2, "key": KEY128.hex(), "pt": payload.hex()},
+        ],
+        [{"tcId": 1, "ct": wrapped.hex()}, {"tcId": 2, "ct": wrapped.hex()}],
+    )
+
+    results = aes_modes.run_vector_set(
+        aes_modes.parse_vector_set(prompt),
+        aes_modes.parse_expected_results(expected),
+        cast(AesModeProvider, _DecliningOnce()),
+    )
+
+    assert [r.status for r in results] == [ResultStatus.UNSUPPORTED, ResultStatus.PASS]
+    assert results[0].declined_by is DeclineClaimant.HARNESS

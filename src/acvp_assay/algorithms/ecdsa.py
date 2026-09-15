@@ -24,6 +24,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from acvp_assay.models import (
+    DeclineClaimant,
     DeclineReason,
     ResultStatus,
     SignatureValues,
@@ -40,7 +41,7 @@ from acvp_assay.parser import (
     string_field,
 )
 from acvp_assay.providers.ecdsa import EcdsaProvider
-from acvp_assay.providers.subprocess_harness import HarnessUnsupportedError
+from acvp_assay.providers.subprocess_harness import HarnessUnsupportedError, declined_result
 
 SIG_GEN = "sigGen"
 SIG_VER = "sigVer"
@@ -183,6 +184,7 @@ def _unsupported(code: DeclineReason, tg_id: int, tc_id: int, reason: str) -> Te
         actual=None,
         diagnostic=reason,
         decline_reason=code,
+        declined_by=DeclineClaimant.RUNNER,
     )
 
 
@@ -308,15 +310,8 @@ def run_vector_set(
                     )
                 else:
                     results.append(_run_sig_gen(group, case, provider))
-            except HarnessUnsupportedError:
-                results.append(
-                    _unsupported(
-                        DeclineReason.IMPLEMENTATION_LACKS,
-                        group.tg_id,
-                        case.tc_id,
-                        "the harness declined this case",
-                    )
-                )
+            except HarnessUnsupportedError as declined:
+                results.append(declined_result(group.tg_id, case.tc_id, declined))
     return results
 
 

@@ -12,7 +12,13 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 
-from acvp_assay.models import DeclineReason, ProviderMetadata, ResultStatus, TestCaseResult
+from acvp_assay.models import (
+    DeclineClaimant,
+    DeclineReason,
+    ProviderMetadata,
+    ResultStatus,
+    TestCaseResult,
+)
 from acvp_assay.parser import (
     AcvpValidationError,
     integer,
@@ -28,7 +34,7 @@ from acvp_assay.providers.kas_ffc import (
     PythonKasFfc,
     SubprocessKasFfc,
 )
-from acvp_assay.providers.subprocess_harness import HarnessUnsupportedError
+from acvp_assay.providers.subprocess_harness import HarnessUnsupportedError, declined_result
 
 AFT = "AFT"
 VAL = "VAL"
@@ -156,6 +162,7 @@ def _unsupported(code: DeclineReason, tg_id: int, tc_id: int, reason: str) -> Te
         actual=None,
         diagnostic=reason,
         decline_reason=code,
+        declined_by=DeclineClaimant.RUNNER,
     )
 
 
@@ -227,12 +234,8 @@ def run_vector_set(
                 computed = provider.shared_secret(
                     group=group.group, private_key=case.private_key, peer_public=case.peer_public
                 )
-            except HarnessUnsupportedError:
-                results.append(
-                    _unsupported(
-                        DeclineReason.IMPLEMENTATION_LACKS, *key, "the harness declined this case"
-                    )
-                )
+            except HarnessUnsupportedError as declined:
+                results.append(declined_result(*key, declined))
                 continue
             except ValueError:
                 # A peer key outside the usable range is a case that should fail,

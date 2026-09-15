@@ -12,7 +12,7 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 
-from acvp_assay.models import DeclineReason, ResultStatus, TestCaseResult
+from acvp_assay.models import DeclineClaimant, DeclineReason, ResultStatus, TestCaseResult
 from acvp_assay.parser import (
     AcvpValidationError,
     hex_bytes,
@@ -28,7 +28,7 @@ from acvp_assay.providers.pbkdf import (
     PbkdfProvider,
     SubprocessPbkdf,
 )
-from acvp_assay.providers.subprocess_harness import HarnessUnsupportedError
+from acvp_assay.providers.subprocess_harness import HarnessUnsupportedError, declined_result
 
 
 @dataclass(frozen=True, slots=True)
@@ -150,6 +150,7 @@ def _unsupported(code: DeclineReason, tg_id: int, tc_id: int, reason: str) -> Te
         actual=None,
         diagnostic=reason,
         decline_reason=code,
+        declined_by=DeclineClaimant.RUNNER,
     )
 
 
@@ -191,15 +192,8 @@ def run_vector_set(
                     iterations=case.iterations,
                     key_bits=case.key_bits,
                 )
-            except HarnessUnsupportedError:
-                results.append(
-                    _unsupported(
-                        DeclineReason.IMPLEMENTATION_LACKS,
-                        group.tg_id,
-                        case.tc_id,
-                        "the harness declined this case",
-                    )
-                )
+            except HarnessUnsupportedError as declined:
+                results.append(declined_result(group.tg_id, case.tc_id, declined))
                 continue
             passed = produced == want
             results.append(

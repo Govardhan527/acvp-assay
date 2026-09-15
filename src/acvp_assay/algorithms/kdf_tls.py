@@ -15,7 +15,13 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 
-from acvp_assay.models import DeclineReason, ProviderMetadata, ResultStatus, TestCaseResult
+from acvp_assay.models import (
+    DeclineClaimant,
+    DeclineReason,
+    ProviderMetadata,
+    ResultStatus,
+    TestCaseResult,
+)
 from acvp_assay.parser import (
     AcvpValidationError,
     hex_bytes,
@@ -35,7 +41,7 @@ from acvp_assay.providers.kdf_tls import (
     ProtocolKdfProvider,
     SubprocessProtocolKdf,
 )
-from acvp_assay.providers.subprocess_harness import HarnessUnsupportedError
+from acvp_assay.providers.subprocess_harness import HarnessUnsupportedError, declined_result
 
 SUPPORTED: tuple[str, ...] = (KDF_COMPONENTS, TLS_V12, TLS_V13)
 
@@ -209,6 +215,7 @@ def _unsupported(code: DeclineReason, tg_id: int, tc_id: int, reason: str) -> Te
         actual=None,
         diagnostic=reason,
         decline_reason=code,
+        declined_by=DeclineClaimant.RUNNER,
     )
 
 
@@ -307,12 +314,8 @@ def run_vector_set(
                 continue
             try:
                 produced = derive(vector_set, group, case, provider)
-            except HarnessUnsupportedError:
-                results.append(
-                    _unsupported(
-                        DeclineReason.IMPLEMENTATION_LACKS, *key, "the harness declined this case"
-                    )
-                )
+            except HarnessUnsupportedError as declined:
+                results.append(declined_result(*key, declined))
                 continue
             except KeyError as error:
                 # A field this case must carry is absent from the vector.

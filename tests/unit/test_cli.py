@@ -127,6 +127,15 @@ def test_run_prints_json_report_and_exits_zero_on_pass(
             "runner_lacks": 0,
             "vector_incomplete": 0,
         },
+        "unsupportedByClaimant": {
+            "harness": {"implementation_lacks": 0, "vector_incomplete": 0},
+            "runner": {
+                "implementation_lacks": 0,
+                "offline_undecidable": 0,
+                "runner_lacks": 0,
+                "vector_incomplete": 0,
+            },
+        },
         "concentration": {"partition": "cases-by-tgId", "cardinality": 1, "largestTwoShare": 1.0},
     }
 

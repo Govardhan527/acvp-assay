@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+import re
 import shlex
 import sys
 from pathlib import Path
@@ -9,9 +11,10 @@ from pathlib import Path
 import pytest
 from cryptography.exceptions import InvalidTag
 
-from acvp_assay.models import ProviderKind
+from acvp_assay.models import DeclineReason, ProviderKind
 from acvp_assay.providers.subprocess_harness import (
     HarnessProtocolError,
+    HarnessUnsupportedError,
     SubprocessAesGcmProvider,
     recorded_command,
 )
@@ -439,3 +442,50 @@ def test_harness_metadata_is_marked_external_with_where_it_ran() -> None:
 def test_the_recorded_command_carries_no_secret(command: list[str], recorded: str) -> None:
     """Reports are shared as evidence, so a PIN on the command line must not travel with one."""
     assert recorded_command(command) == recorded
+
+
+def test_a_plain_decline_claims_the_implementation_lacks_it(tmp_path: Path) -> None:
+    """What declining has always meant, so a harness written before reasons keeps its meaning."""
+    provider = responding(tmp_path, '{"error": "unsupported"}')
+
+    with pytest.raises(HarnessUnsupportedError) as declined:
+        provider.decrypt(key=KEY, iv=IV, ciphertext=b"", aad=b"", tag=b"")
+
+    assert declined.value.reason is DeclineReason.IMPLEMENTATION_LACKS
+    assert declined.value.detail is None
+
+
+def test_a_harness_can_say_the_vector_is_incomplete_and_why(tmp_path: Path) -> None:
+    """The harness knows which gaps are its own; the runner cannot."""
+    response = {
+        "error": "unsupported",
+        "declineReason": "vector_incomplete",
+        "detail": "the case carries no tag",
+    }
+    provider = responding(tmp_path, json.dumps(response))
+
+    with pytest.raises(HarnessUnsupportedError) as declined:
+        provider.decrypt(key=KEY, iv=IV, ciphertext=b"", aad=b"", tag=b"")
+
+    assert declined.value.reason is DeclineReason.VECTOR_INCOMPLETE
+    assert declined.value.detail == "the case carries no tag"
+
+
+@pytest.mark.parametrize("code", ["runner_lacks", "offline_undecidable", "not_a_reason", 7])
+def test_a_harness_cannot_claim_a_reason_only_the_runner_can_know(
+    tmp_path: Path, code: object
+) -> None:
+    """runner_lacks and offline_undecidable belong to this runner; a claim of either is refused."""
+    provider = responding(tmp_path, json.dumps({"error": "unsupported", "declineReason": code}))
+
+    with pytest.raises(HarnessProtocolError, match=re.escape(repr(code))):
+        provider.decrypt(key=KEY, iv=IV, ciphertext=b"", aad=b"", tag=b"")
+
+
+@pytest.mark.parametrize("detail", [7, "x" * 201])
+def test_a_decline_detail_is_a_short_string(tmp_path: Path, detail: object) -> None:
+    """The detail is copied into the report, so it is held to a sentence."""
+    provider = responding(tmp_path, json.dumps({"error": "unsupported", "detail": detail}))
+
+    with pytest.raises(HarnessProtocolError, match="at most 200 characters"):
+        provider.decrypt(key=KEY, iv=IV, ciphertext=b"", aad=b"", tag=b"")

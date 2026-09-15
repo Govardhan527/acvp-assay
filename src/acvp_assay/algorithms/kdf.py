@@ -20,6 +20,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from acvp_assay.models import (
+    DeclineClaimant,
     DeclineReason,
     DigestValues,
     ResultStatus,
@@ -44,7 +45,7 @@ from acvp_assay.providers.kdf import (
     KdfProvider,
     KdfRequest,
 )
-from acvp_assay.providers.subprocess_harness import HarnessUnsupportedError
+from acvp_assay.providers.subprocess_harness import HarnessUnsupportedError, declined_result
 
 ALGORITHM = "KDF"
 
@@ -194,6 +195,7 @@ def _unsupported(code: DeclineReason, tg_id: int, tc_id: int, reason: str) -> Te
         actual=None,
         diagnostic=reason,
         decline_reason=code,
+        declined_by=DeclineClaimant.RUNNER,
     )
 
 
@@ -272,15 +274,8 @@ def run_vector_set(
                 continue
             try:
                 results.append(_run_case(group, case, wanted, provider))
-            except HarnessUnsupportedError:
-                results.append(
-                    _unsupported(
-                        DeclineReason.IMPLEMENTATION_LACKS,
-                        group.tg_id,
-                        case.tc_id,
-                        "the harness declined this case",
-                    )
-                )
+            except HarnessUnsupportedError as declined:
+                results.append(declined_result(group.tg_id, case.tc_id, declined))
     return results
 
 

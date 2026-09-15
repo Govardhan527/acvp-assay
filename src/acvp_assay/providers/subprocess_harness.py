@@ -66,7 +66,16 @@ from typing import Self
 
 from cryptography.exceptions import InvalidTag
 
-from acvp_assay.models import AesGcmValues, ProviderKind, ProviderMetadata
+from acvp_assay.models import (
+    HARNESS_CLAIMABLE_REASONS,
+    AesGcmValues,
+    DeclineClaimant,
+    DeclineReason,
+    ProviderKind,
+    ProviderMetadata,
+    ResultStatus,
+    TestCaseResult,
+)
 
 _POLL_SECONDS = 0.2
 _PROBE_SECONDS = 5.0
@@ -90,6 +99,10 @@ SECRET_OPTIONS = frozenset(
     {"--pin", "--so-pin", "--user-pin", "--password", "--passphrase", "--secret"}
 )
 REDACTED = "REDACTED"
+
+#: The longest ``detail`` a declining harness may send. It is copied into the
+#: report as the case's diagnostic, so it is kept to a sentence.
+DETAIL_LIMIT = 200
 
 
 def recorded_command(command: Sequence[str]) -> str:
@@ -119,7 +132,21 @@ class HarnessUnsupportedError(Exception):
     Deliberately not a ``ValueError``: an implementation saying "I do not
     support this curve/parameter set" is a coverage statement, not a failure,
     and must be reported UNSUPPORTED rather than as an errored case.
+
+    ``reason`` is what the harness claimed, ``implementation_lacks`` when it
+    claimed nothing, and ``detail`` is its own sentence about why, if it gave one.
     """
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        reason: DeclineReason = DeclineReason.IMPLEMENTATION_LACKS,
+        detail: str | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.reason = reason
+        self.detail = detail
 
 
 class HarnessProtocolError(ValueError):
@@ -145,6 +172,56 @@ def _decode(document: Mapping[str, object], key: str) -> bytes:
         return bytes.fromhex(value)
     except ValueError:
         raise HarnessProtocolError(f"harness returned invalid hex in {key!r}") from None
+
+
+def _claimed_decline(
+    response: Mapping[str, object], operation: object
+) -> tuple[DeclineReason, str | None]:
+    """Read what a declining harness claims, refusing a claim it cannot make.
+
+    A plain ``{"error": "unsupported"}`` claims ``implementation_lacks``, which
+    is what declining has always meant. A harness may claim ``vector_incomplete``
+    instead. ``runner_lacks`` and ``offline_undecidable`` are properties of this
+    runner and of its method, which a harness is never in a position to assert,
+    so claiming either is a protocol error that names the code.
+    """
+    code = response.get("declineReason", DeclineReason.IMPLEMENTATION_LACKS.value)
+    allowed = sorted(reason.value for reason in HARNESS_CLAIMABLE_REASONS)
+    if not isinstance(code, str) or code not in allowed:
+        raise HarnessProtocolError(
+            f"harness declined {operation!r} claiming declineReason {repr(code)[:40]}; "
+            f"a harness may claim only {' or '.join(allowed)}"
+        )
+    detail = response.get("detail")
+    if detail is not None and (not isinstance(detail, str) or len(detail) > DETAIL_LIMIT):
+        raise HarnessProtocolError(
+            f"harness declined {operation!r} with a detail that is not a string "
+            f"of at most {DETAIL_LIMIT} characters"
+        )
+    return DeclineReason(code), detail or None
+
+
+def declined_result(
+    tg_id: int, tc_id: int, declined: HarnessUnsupportedError, *, subject: str = "case"
+) -> TestCaseResult:
+    """The result for a case a harness declined, with the harness named as claimant.
+
+    The reason is the harness's own claim, and its detail follows the runner's
+    sentence, so a module author can tell their own gaps from the runner's.
+    """
+    diagnostic = f"the harness declined this {subject}"
+    if declined.detail:
+        diagnostic = f"{diagnostic}: {declined.detail}"
+    return TestCaseResult(
+        tg_id=tg_id,
+        tc_id=tc_id,
+        status=ResultStatus.UNSUPPORTED,
+        expected=None,
+        actual=None,
+        diagnostic=diagnostic,
+        decline_reason=declined.reason,
+        declined_by=DeclineClaimant.HARNESS,
+    )
 
 
 def _reap(process: subprocess.Popen[str], timeout_seconds: float) -> None:
@@ -419,7 +496,10 @@ class HarnessClient:
                 # Name the operation: a vendor reading "the harness declined a
                 # case" needs to know which one before they can either extend
                 # the harness or narrow their registration.
-                raise HarnessUnsupportedError(f"the harness declined {operation!r}")
+                reason, detail = _claimed_decline(response, operation)
+                raise HarnessUnsupportedError(
+                    f"the harness declined {operation!r}", reason=reason, detail=detail
+                )
             # The operation, never the harness's own message: a failure text
             # commonly quotes the key or plaintext it failed on, and this
             # error reaches logs and CI output.
@@ -481,6 +561,7 @@ class SubprocessAesGcmProvider(HarnessClient):
 __all__ = [
     "AUTHENTICATION_FAILED",
     "DEFAULT_TIMEOUT_SECONDS",
+    "DETAIL_LIMIT",
     "UNSUPPORTED",
     "HarnessClient",
     "HarnessProtocolError",
@@ -488,6 +569,7 @@ __all__ = [
     "REDACTED",
     "SECRET_OPTIONS",
     "SubprocessAesGcmProvider",
+    "declined_result",
     "decode_hex",
     "recorded_command",
 ]

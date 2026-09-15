@@ -21,7 +21,13 @@ from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 
-from acvp_assay.models import DeclineReason, DigestValues, ResultStatus, TestCaseResult
+from acvp_assay.models import (
+    DeclineClaimant,
+    DeclineReason,
+    DigestValues,
+    ResultStatus,
+    TestCaseResult,
+)
 from acvp_assay.parser import (
     AcvpValidationError,
     hex_bytes,
@@ -32,7 +38,7 @@ from acvp_assay.parser import (
     string_field,
 )
 from acvp_assay.providers.digest import HASHLIB_ALGORITHMS, SHA3_ALGORITHMS, HashProvider
-from acvp_assay.providers.subprocess_harness import HarnessUnsupportedError
+from acvp_assay.providers.subprocess_harness import HarnessUnsupportedError, declined_result
 
 SUPPORTED_MCT_VERSIONS = ("standard", "alternate")
 SHA2_REVISIONS = frozenset({"1.0"})
@@ -213,6 +219,7 @@ def _unsupported(code: DeclineReason, tg_id: int, tc_id: int, reason: str) -> Te
         actual=None,
         diagnostic=reason,
         decline_reason=code,
+        declined_by=DeclineClaimant.RUNNER,
     )
 
 
@@ -350,15 +357,8 @@ def run_vector_set(
                         group.tg_id, case.tc_id, expected_case.digest, provider.digest(case.message)
                     )
                 )
-            except HarnessUnsupportedError:
-                results.append(
-                    _unsupported(
-                        DeclineReason.IMPLEMENTATION_LACKS,
-                        group.tg_id,
-                        case.tc_id,
-                        "the harness declined this case",
-                    )
-                )
+            except HarnessUnsupportedError as declined:
+                results.append(declined_result(group.tg_id, case.tc_id, declined))
     return results
 
 

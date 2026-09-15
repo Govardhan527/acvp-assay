@@ -21,6 +21,7 @@ from pathlib import Path
 
 from acvp_assay.models import (
     AesGcmValues,
+    DeclineClaimant,
     DeclineReason,
     DigestValues,
     ResultStatus,
@@ -37,7 +38,7 @@ from acvp_assay.parser import (
     string_field,
 )
 from acvp_assay.providers.aes_modes import AesModeProvider
-from acvp_assay.providers.subprocess_harness import HarnessUnsupportedError
+from acvp_assay.providers.subprocess_harness import HarnessUnsupportedError, declined_result
 
 ECB = "ACVP-AES-ECB"
 GMAC = "ACVP-AES-GMAC"
@@ -210,6 +211,7 @@ def _unsupported(code: DeclineReason, tg_id: int, tc_id: int, reason: str) -> Te
         actual=None,
         diagnostic=reason,
         decline_reason=code,
+        declined_by=DeclineClaimant.RUNNER,
     )
 
 
@@ -431,14 +433,14 @@ def run_vector_set(
     """Execute every case using the shape its family and direction require."""
     results: list[TestCaseResult] = []
     for group in vector_set.test_groups:
-        declined = None
+        kw_declined = None
         if vector_set.algorithm in (KW, KWP) and group.kw_cipher != STANDARD_KW_CIPHER:
-            declined = f"kwCipher {group.kw_cipher!r} is not supported"
+            kw_declined = f"kwCipher {group.kw_cipher!r} is not supported"
         for case in group.tests:
             expected_case = expected.cases.get((group.tg_id, case.tc_id))
-            if declined is not None:
+            if kw_declined is not None:
                 results.append(
-                    _unsupported(DeclineReason.RUNNER_LACKS, group.tg_id, case.tc_id, declined)
+                    _unsupported(DeclineReason.RUNNER_LACKS, group.tg_id, case.tc_id, kw_declined)
                 )
                 continue
             if expected_case is None:
@@ -455,15 +457,8 @@ def run_vector_set(
                 results.append(
                     _run_case(vector_set.algorithm, group, case, expected_case, provider)
                 )
-            except HarnessUnsupportedError:
-                results.append(
-                    _unsupported(
-                        DeclineReason.IMPLEMENTATION_LACKS,
-                        group.tg_id,
-                        case.tc_id,
-                        "the harness declined this case",
-                    )
-                )
+            except HarnessUnsupportedError as declined:
+                results.append(declined_result(group.tg_id, case.tc_id, declined))
     return results
 
 

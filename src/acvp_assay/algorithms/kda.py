@@ -21,6 +21,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from acvp_assay.models import (
+    DeclineClaimant,
     DeclineReason,
     ProviderMetadata,
     ResultStatus,
@@ -48,7 +49,7 @@ from acvp_assay.providers.kda import (
     SubprocessKda,
     fixed_info,
 )
-from acvp_assay.providers.subprocess_harness import HarnessUnsupportedError
+from acvp_assay.providers.subprocess_harness import HarnessUnsupportedError, declined_result
 
 REVISIONS = ("Sp800-56Cr1", "Sp800-56Cr2")
 AFT = "AFT"
@@ -195,6 +196,7 @@ def _unsupported(code: DeclineReason, tg_id: int, tc_id: int, reason: str) -> Te
         actual=None,
         diagnostic=reason,
         decline_reason=code,
+        declined_by=DeclineClaimant.RUNNER,
     )
 
 
@@ -252,12 +254,8 @@ def run_vector_set(
                     info=info,
                     output_bytes=case.output_bits // 8,
                 )
-            except HarnessUnsupportedError:
-                results.append(
-                    _unsupported(
-                        DeclineReason.IMPLEMENTATION_LACKS, *key, "the harness declined this case"
-                    )
-                )
+            except HarnessUnsupportedError as declined:
+                results.append(declined_result(*key, declined))
                 continue
 
             if group.test_type == VAL:

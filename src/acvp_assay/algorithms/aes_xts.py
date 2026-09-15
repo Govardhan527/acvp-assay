@@ -16,6 +16,7 @@ from pathlib import Path
 
 from acvp_assay.models import (
     AesGcmValues,
+    DeclineClaimant,
     DeclineReason,
     ProviderMetadata,
     ResultStatus,
@@ -42,7 +43,7 @@ from acvp_assay.providers.aes_xts import (
     SubprocessAesXts,
     tweak_for,
 )
-from acvp_assay.providers.subprocess_harness import HarnessUnsupportedError
+from acvp_assay.providers.subprocess_harness import HarnessUnsupportedError, declined_result
 
 REVISION = "2.0"
 
@@ -176,6 +177,7 @@ def _unsupported(code: DeclineReason, tg_id: int, tc_id: int, reason: str) -> Te
         actual=None,
         diagnostic=reason,
         decline_reason=code,
+        declined_by=DeclineClaimant.RUNNER,
     )
 
 
@@ -243,12 +245,8 @@ def run_vector_set(
                     data_unit_bytes=case.data_unit_bits // 8,
                     encrypt=encrypt,
                 )
-            except HarnessUnsupportedError:
-                results.append(
-                    _unsupported(
-                        DeclineReason.IMPLEMENTATION_LACKS, *key, "the harness declined this case"
-                    )
-                )
+            except HarnessUnsupportedError as declined:
+                results.append(declined_result(*key, declined))
                 continue
             except ValueError:
                 # XTS forbids the two key halves being equal, and a provider is

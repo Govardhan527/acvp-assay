@@ -8,7 +8,9 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
 from acvp_assay.models import (
+    HARNESS_CLAIMABLE_REASONS,
     CaseValues,
+    DeclineClaimant,
     DeclineReason,
     ProviderMetadata,
     ResultStatus,
@@ -42,6 +44,11 @@ class ReportSummary:
     ``unsupported_by_reason`` breaks ``unsupported`` down by ``DeclineReason``,
     because the total alone cannot say whose repair a gap needs. Every reason is
     present, zero or not, so the schema does not change with the run.
+
+    ``unsupported_by_claimant`` splits the same count by who declined: the
+    harness, under the two reasons it may claim, and this runner, under all four.
+    A module author reads the harness's ``implementation_lacks`` as their own
+    list and everything else as someone else's.
     """
 
     total: int
@@ -51,6 +58,7 @@ class ReportSummary:
     skipped: int
     unsupported: int
     unsupported_by_reason: Mapping[str, int]
+    unsupported_by_claimant: Mapping[str, Mapping[str, int]]
     concentration: Concentration
 
 
@@ -72,6 +80,7 @@ def summarize(results: Sequence[TestCaseResult]) -> ReportSummary:
     """Count every stable result classification, and every decline reason."""
     counts = Counter(result.status for result in results)
     reasons = Counter(result.decline_reason for result in results)
+    claims = Counter((result.declined_by, result.decline_reason) for result in results)
     return ReportSummary(
         total=len(results),
         passed=counts[ResultStatus.PASS],
@@ -80,6 +89,16 @@ def summarize(results: Sequence[TestCaseResult]) -> ReportSummary:
         skipped=counts[ResultStatus.SKIPPED],
         unsupported=counts[ResultStatus.UNSUPPORTED],
         unsupported_by_reason={reason.value: reasons[reason] for reason in DeclineReason},
+        unsupported_by_claimant={
+            DeclineClaimant.HARNESS.value: {
+                reason.value: claims[(DeclineClaimant.HARNESS, reason)]
+                for reason in DeclineReason
+                if reason in HARNESS_CLAIMABLE_REASONS
+            },
+            DeclineClaimant.RUNNER.value: {
+                reason.value: claims[(DeclineClaimant.RUNNER, reason)] for reason in DeclineReason
+            },
+        },
         concentration=concentration(results),
     )
 
@@ -93,6 +112,9 @@ def _summary_document(summary: ReportSummary) -> dict[str, object]:
         "skipped": summary.skipped,
         "unsupported": summary.unsupported,
         "unsupportedByReason": dict(summary.unsupported_by_reason),
+        "unsupportedByClaimant": {
+            claimant: dict(counts) for claimant, counts in summary.unsupported_by_claimant.items()
+        },
         "concentration": {
             "partition": summary.concentration.partition,
             "cardinality": summary.concentration.cardinality,
@@ -119,6 +141,8 @@ def _case_document(result: TestCaseResult) -> dict[str, object]:
         document["diagnostic"] = result.diagnostic
     if result.decline_reason is not None:
         document["declineReason"] = result.decline_reason.value
+    if result.declined_by is not None:
+        document["declinedBy"] = result.declined_by.value
     return document
 
 

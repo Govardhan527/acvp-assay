@@ -20,6 +20,7 @@ from cryptography.exceptions import InvalidTag
 
 from acvp_assay.models import (
     AesGcmValues,
+    DeclineClaimant,
     DeclineReason,
     ProviderMetadata,
     ResultStatus,
@@ -43,7 +44,7 @@ from acvp_assay.providers.aes_ccm import (
     CryptographyAesCcm,
     SubprocessAesCcm,
 )
-from acvp_assay.providers.subprocess_harness import HarnessUnsupportedError
+from acvp_assay.providers.subprocess_harness import HarnessUnsupportedError, declined_result
 
 REVISION = "1.0"
 
@@ -168,6 +169,7 @@ def _unsupported(code: DeclineReason, tg_id: int, tc_id: int, reason: str) -> Te
         actual=None,
         diagnostic=reason,
         decline_reason=code,
+        declined_by=DeclineClaimant.RUNNER,
     )
 
 
@@ -269,12 +271,8 @@ def run_vector_set(
                     aad=case.aad,
                     tag_bits=group.tag_bits,
                 )
-            except HarnessUnsupportedError:
-                results.append(
-                    _unsupported(
-                        DeclineReason.IMPLEMENTATION_LACKS, *key, "the harness declined this case"
-                    )
-                )
+            except HarnessUnsupportedError as declined:
+                results.append(declined_result(*key, declined))
                 continue
             if want.payload is None:
                 results.append(

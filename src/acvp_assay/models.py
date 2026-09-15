@@ -62,6 +62,21 @@ class DeclineReason(StrEnum):
     VECTOR_INCOMPLETE = "vector_incomplete"
 
 
+class DeclineClaimant(StrEnum):
+    """Who asserted a decline: the harness that answered, or this runner."""
+
+    HARNESS = "harness"
+    RUNNER = "runner"
+
+
+#: The reasons a harness may claim. ``runner_lacks`` and ``offline_undecidable``
+#: are properties of this runner and of its method, which a harness is never in a
+#: position to assert.
+HARNESS_CLAIMABLE_REASONS = frozenset(
+    {DeclineReason.IMPLEMENTATION_LACKS, DeclineReason.VECTOR_INCOMPLETE}
+)
+
+
 class SafeDiagnostic(StrEnum):
     """Non-secret diagnostics allowed in machine-readable ERROR output."""
 
@@ -272,6 +287,7 @@ class TestCaseResult:
     actual: CaseValues | None
     diagnostic: str | None = None
     decline_reason: DeclineReason | None = None
+    declined_by: DeclineClaimant | None = None
 
     def __post_init__(self) -> None:
         """Enforce both closed vocabularies on the model itself.
@@ -287,6 +303,10 @@ class TestCaseResult:
         Without one, four states with four different repairs print alike, and
         session 766220's keyGen defect sat behind exactly that: a limitation of
         the method, printed the same as every other gap.
+
+        UNSUPPORTED must also name who declined, ``harness`` or ``runner``, so a
+        module author can separate the gaps that are theirs from the runner's. A
+        harness may only claim ``implementation_lacks`` or ``vector_incomplete``.
         """
         if self.status is ResultStatus.ERROR and self.diagnostic not in _SAFE_DIAGNOSTIC_VALUES:
             raise ValueError(
@@ -298,6 +318,15 @@ class TestCaseResult:
             raise ValueError(f"UNSUPPORTED requires a DeclineReason, got {self.decline_reason!r}")
         if not declined and self.decline_reason is not None:
             raise ValueError(f"only UNSUPPORTED carries a decline reason, not {self.status.value}")
+        if declined and not isinstance(self.declined_by, DeclineClaimant):
+            raise ValueError(f"UNSUPPORTED must name who declined it, got {self.declined_by!r}")
+        if not declined and self.declined_by is not None:
+            raise ValueError(f"only UNSUPPORTED names who declined it, not {self.status.value}")
+        if (
+            self.declined_by is DeclineClaimant.HARNESS
+            and self.decline_reason not in HARNESS_CLAIMABLE_REASONS
+        ):
+            raise ValueError(f"a harness cannot claim {self.decline_reason}")
 
 
 __all__ = [
@@ -306,12 +335,14 @@ __all__ = [
     "AesGcmValues",
     "AesGcmVectorSet",
     "CaseValues",
+    "DeclineClaimant",
     "DeclineReason",
     "DigestValues",
     "Direction",
     "ExpectedResultCase",
     "ExpectedResultGroup",
     "ExpectedResultSet",
+    "HARNESS_CLAIMABLE_REASONS",
     "ProviderKind",
     "ProviderMetadata",
     "ResultStatus",

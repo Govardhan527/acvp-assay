@@ -20,7 +20,13 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-from acvp_assay.models import DeclineReason, DigestValues, ResultStatus, TestCaseResult
+from acvp_assay.models import (
+    DeclineClaimant,
+    DeclineReason,
+    DigestValues,
+    ResultStatus,
+    TestCaseResult,
+)
 from acvp_assay.parser import (
     AcvpValidationError,
     boolean,
@@ -41,7 +47,7 @@ from acvp_assay.providers.ctr_drbg import (
     run_drbg_case,
 )
 from acvp_assay.providers.hash_drbg import SEED_LENGTH_BITS, HashDrbg, HmacDrbg
-from acvp_assay.providers.subprocess_harness import HarnessUnsupportedError
+from acvp_assay.providers.subprocess_harness import HarnessUnsupportedError, declined_result
 
 ALGORITHM = "ctrDRBG"
 HASH_DRBG = "hashDRBG"
@@ -239,6 +245,7 @@ def _unsupported(code: DeclineReason, tg_id: int, tc_id: int, reason: str) -> Te
         actual=None,
         diagnostic=reason,
         decline_reason=code,
+        declined_by=DeclineClaimant.RUNNER,
     )
 
 
@@ -270,13 +277,8 @@ def _run_case(
         # conversation rather than about an answer.
         try:
             produced = provider.run_case(**arguments)  # type: ignore[arg-type]
-        except HarnessUnsupportedError:
-            return _unsupported(
-                DeclineReason.IMPLEMENTATION_LACKS,
-                group.tg_id,
-                case.tc_id,
-                "the harness declined this case",
-            )
+        except HarnessUnsupportedError as declined:
+            return declined_result(group.tg_id, case.tc_id, declined)
     else:
         produced = run_drbg_case(provider, **arguments)  # type: ignore[arg-type]
 

@@ -9,6 +9,7 @@ from acvp_assay.models import (
     AesGcmTestGroup,
     AesGcmValues,
     AesGcmVectorSet,
+    DeclineClaimant,
     DeclineReason,
     Direction,
     ProviderKind,
@@ -139,6 +140,7 @@ def test_enum_values_match_external_wire_values() -> None:
         "offline_undecidable",
         "vector_incomplete",
     ]
+    assert [claimant.value for claimant in DeclineClaimant] == ["harness", "runner"]
 
 
 def test_unsupported_without_a_decline_reason_is_rejected() -> None:
@@ -167,7 +169,16 @@ def test_only_unsupported_carries_a_decline_reason(status: ResultStatus) -> None
 def test_every_decline_reason_is_accepted_beside_its_sentence() -> None:
     """The code is for aggregation; the English stays, for a person reading one case."""
     for reason in DeclineReason:
-        result = CaseResult(1, 1, ResultStatus.UNSUPPORTED, None, None, "why, in words", reason)
+        result = CaseResult(
+            1,
+            1,
+            ResultStatus.UNSUPPORTED,
+            None,
+            None,
+            "why, in words",
+            reason,
+            DeclineClaimant.RUNNER,
+        )
         assert result.decline_reason is reason
         assert result.diagnostic == "why, in words"
 
@@ -184,3 +195,27 @@ def test_provider_metadata_states_its_kind_and_a_command_that_agrees() -> None:
     kind: object = "external"
     with pytest.raises(ValueError, match="must be a ProviderKind"):
         ProviderMetadata("h", "l", "1", "b", "2", kind, "./harness")  # type: ignore[arg-type]
+
+
+def test_unsupported_must_name_who_declined_it() -> None:
+    """A gap with no claimant cannot be sorted into the author's list or the runner's."""
+    with pytest.raises(ValueError, match="must name who declined it"):
+        CaseResult(1, 1, ResultStatus.UNSUPPORTED, None, None, "x", DeclineReason.RUNNER_LACKS)
+    with pytest.raises(ValueError, match="only UNSUPPORTED names who declined it"):
+        CaseResult(1, 1, ResultStatus.PASS, None, None, None, None, DeclineClaimant.RUNNER)
+
+
+@pytest.mark.parametrize("reason", [DeclineReason.RUNNER_LACKS, DeclineReason.OFFLINE_UNDECIDABLE])
+def test_a_harness_cannot_claim_what_only_the_runner_can_know(reason: DeclineReason) -> None:
+    """Whether a path is built, or a case decidable offline, is not the harness's to say."""
+    with pytest.raises(ValueError, match="a harness cannot claim"):
+        CaseResult(1, 1, ResultStatus.UNSUPPORTED, None, None, "x", reason, DeclineClaimant.HARNESS)
+
+
+def test_a_harness_may_claim_its_own_gap_or_the_vectors() -> None:
+    """The two codes a harness is in a position to know."""
+    for reason in (DeclineReason.IMPLEMENTATION_LACKS, DeclineReason.VECTOR_INCOMPLETE):
+        result = CaseResult(
+            1, 1, ResultStatus.UNSUPPORTED, None, None, "x", reason, DeclineClaimant.HARNESS
+        )
+        assert result.declined_by is DeclineClaimant.HARNESS
