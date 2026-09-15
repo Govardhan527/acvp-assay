@@ -5,6 +5,66 @@ All notable changes to this project are recorded here. The format follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Before 1.0.0 the
 provider protocols may change between minor versions.
 
+## [0.23.0] - 2026-09-15
+
+### Added
+
+- **`acvp-assay info --provider-command COMMAND`** asks a harness to identify
+  itself and reports what it declares, with the command beside it and without
+  the `cryptography` and OpenSSL versions, which describe a library that did not
+  answer.
+- **A harness can say why it declined.** `{"error": "unsupported"}` may carry
+  `declineReason` and a `detail` of at most 200 characters. A harness may claim
+  only `implementation_lacks` or `vector_incomplete`; a claim of `runner_lacks`,
+  `offline_undecidable` or anything else is a protocol error that names the code.
+  A decline without a reason still means `implementation_lacks`.
+- **Every declined case names who declined it**, `harness` or `runner`, as
+  `declinedBy`, and the run summary splits declines under
+  `unsupportedByClaimant`, so a module author can read what their harness said
+  about itself apart from what the runner decided.
+- **A harness names its build.** The `metadata` answer carries `buildId`, or
+  `null` with `buildIdAbsentReason`, which is `not_exposed` or `not_recorded`. A
+  harness that sends neither still runs: the report records `not_reported` and
+  the run says so on stderr. The Python reference harnesses send the SHA-256 of
+  their own source, and the PKCS#11 example sends `not_exposed`, because
+  `C_GetInfo` and `C_GetTokenInfo` carry no build identifier.
+- **`CONTRIBUTING.md`**, stating what a change is reviewed against before a pull
+  request rather than in it.
+- **An offline pilot** in `docs/harness-protocol.md`: run the pinned KW and KWP
+  sets through a new harness, and fix what the harness itself declined, before
+  registering a session.
+
+### Changed
+
+- **A report's provider block says what kind of provider answered.** `kind` is
+  `builtin` or `external`, and an external provider also records `command`,
+  `buildId` and `buildIdAbsentReason`. `info` carries `provider_kind`, and for a
+  harness the matching `provider_*` fields.
+- **The recorded command carries no secret.** The value after `--pin`,
+  `--so-pin`, `--user-pin`, `--password`, `--passphrase` or `--secret` is written
+  as `REDACTED`, and the PKCS#11 example takes its PIN from `PKCS11_PIN`, because
+  reports are shared as evidence.
+- **Breaking for code that builds the models directly.** `ProviderMetadata`
+  requires `kind`, with no default, and an external one requires `command` and
+  either a build or the reason it has none. `TestCaseResult` refuses UNSUPPORTED
+  without `declined_by`, and refuses a harness claiming `runner_lacks` or
+  `offline_undecidable`. `HarnessUnsupportedError` gains optional `reason` and
+  `detail`. Report and diff documents only gained fields, and a report written by
+  an earlier version still diffs against a new one.
+
+### Notes
+
+- **Checked on a real module.** Built against a SoftHSM 2.6.1 token, the PKCS#11
+  example reports its version as 2.6, because PKCS#11 versions have two parts,
+  and names no build. `info` reported it as external, and recorded `--pin 1234`
+  as `--pin REDACTED`.
+- Still open: run reports do not carry the runner's commit, and AES-KW still
+  reports a failed unwrap of a valid case as UNSUPPORTED rather than FAIL.
+
+This produces test evidence, not a certificate. It confers no validation status:
+only an accredited CST or 17ACVT laboratory performs CAVP or FIPS 140-3
+validation, and Demo is not the production ACVTS.
+
 ## [0.22.0] - 2026-09-11
 
 ### Added
