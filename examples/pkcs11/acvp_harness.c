@@ -408,9 +408,13 @@ static void op_metadata(void)
         snprintf(version, sizeof version, "%u.%u",
                  info.libraryVersion.major, info.libraryVersion.minor);
     }
+    /* C_GetInfo and C_GetTokenInfo name the module and give two-part versions,
+     * which two builds of one release share. Neither structure carries a build
+     * identifier, so say so rather than passing a version off as one. */
     emit("{\"name\": \"pkcs11-harness\", \"libraryName\": \"%s\", "
          "\"libraryVersion\": \"%s\", \"backendName\": \"PKCS#11\", "
-         "\"backendVersion\": \"%s\"}", library, version, module_path);
+         "\"backendVersion\": \"%s\", \"buildId\": null, "
+         "\"buildIdAbsentReason\": \"not_exposed\"}", library, version, module_path);
 }
 
 static void op_digest(const char *line)

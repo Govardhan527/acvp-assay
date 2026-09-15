@@ -24,6 +24,7 @@ Then::
 
 from __future__ import annotations
 
+import hashlib
 import json
 import sys
 from typing import Any
@@ -45,13 +46,19 @@ ML_DSA = {
 
 
 def metadata() -> dict[str, str]:
-    """Identify the reference implementations behind this harness."""
+    """Identify the reference implementations behind this harness.
+
+    ``buildId`` is the SHA-256 of this file, which is the whole of the harness.
+    """
+    with open(__file__, "rb") as source:
+        build = hashlib.sha256(source.read()).hexdigest()
     return {
         "name": "pqc-reference-harness",
         "libraryName": "kyber-py + dilithium-py",
         "libraryVersion": "reference",
         "backendName": "pure-python",
         "backendVersion": "not-constant-time",
+        "buildId": f"sha256:{build}",
     }
 
 

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import shutil
 import subprocess
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -21,7 +22,7 @@ from acvp_assay.metadata import (
     runtime_metadata,
     source_root,
 )
-from acvp_assay.models import ProviderKind, ProviderMetadata
+from acvp_assay.models import BuildIdAbsentReason, ProviderKind, ProviderMetadata
 
 needs_git = pytest.mark.skipif(shutil.which("git") is None, reason="git is not installed")
 
@@ -180,6 +181,7 @@ EXTERNAL = ProviderMetadata(
     backend_version="3.2",
     kind=ProviderKind.EXTERNAL,
     command="./harness --module libexample.so",
+    build_id="libexample-3.2.0-4f1c9a2",
 )
 
 
@@ -207,3 +209,17 @@ def test_an_external_provider_is_reported_by_its_own_identity() -> None:
     assert "cryptography_version" not in identity
     assert "openssl_version" not in identity
     assert identity["runner_version"] == __version__
+    assert identity["provider_build_id"] == "libexample-3.2.0-4f1c9a2"
+    assert identity["provider_build_id_absent_reason"] is None
+
+
+def test_a_harness_that_names_no_build_is_reported_with_the_reason() -> None:
+    """The absence sits beside the identity with its reason, never as a bare null."""
+    silent = replace(
+        EXTERNAL, build_id=None, build_id_absent_reason=BuildIdAbsentReason.NOT_REPORTED
+    )
+
+    identity = runtime_metadata(silent)
+
+    assert identity["provider_build_id"] is None
+    assert identity["provider_build_id_absent_reason"] == "not_reported"

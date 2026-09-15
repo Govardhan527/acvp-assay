@@ -11,7 +11,7 @@ from pathlib import Path
 from acvp_assay.algorithms import UnsupportedAlgorithmError, run_vector_file
 from acvp_assay.diff import compare, diff_json, load_report, summarize_text
 from acvp_assay.metadata import runtime_metadata
-from acvp_assay.models import ProviderMetadata
+from acvp_assay.models import BuildIdAbsentReason, ProviderMetadata
 from acvp_assay.parser import AcvpValidationError
 from acvp_assay.providers.subprocess_harness import DEFAULT_TIMEOUT_SECONDS, HarnessClient
 from acvp_assay.reporter import report_json, summarize
@@ -128,6 +128,16 @@ def _diff(baseline: Path, current: Path, output: Path | None) -> int:
     return EXIT_CASE_FAILURES if result.has_regressions else EXIT_SUCCESS
 
 
+def _note_unreported_build(provider: ProviderMetadata) -> None:
+    """Say on stderr, which never enters a report, that a harness named no build."""
+    if provider.build_id_absent_reason is BuildIdAbsentReason.NOT_REPORTED:
+        print(
+            "note: the harness sent no buildId, so its build is recorded as "
+            "not_reported; see docs/harness-protocol.md",
+            file=sys.stderr,
+        )
+
+
 def _info(provider_command: str | None, provider_timeout: float) -> int:
     """Print runner and provider metadata, asking an external harness when one is named.
 
@@ -140,6 +150,7 @@ def _info(provider_command: str | None, provider_timeout: float) -> int:
                 provider_command, timeout_seconds=provider_timeout
             ) as harness:
                 provider = harness.metadata()
+            _note_unreported_build(provider)
         except (ValueError, OSError) as error:
             print(f"error: {error}", file=sys.stderr)
             return EXIT_INPUT_ERROR
@@ -175,6 +186,7 @@ def _run(
             provider_command=provider_command,
             provider_timeout=provider_timeout,
         )
+        _note_unreported_build(provider_metadata)
         rendered = report_json(results, provider_metadata)
         if output is not None:
             output.write_text(rendered, encoding="utf-8")

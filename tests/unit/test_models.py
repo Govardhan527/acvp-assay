@@ -9,6 +9,7 @@ from acvp_assay.models import (
     AesGcmTestGroup,
     AesGcmValues,
     AesGcmVectorSet,
+    BuildIdAbsentReason,
     DeclineClaimant,
     DeclineReason,
     Direction,
@@ -185,7 +186,7 @@ def test_every_decline_reason_is_accepted_beside_its_sentence() -> None:
 
 def test_provider_metadata_states_its_kind_and_a_command_that_agrees() -> None:
     """No provider is read as built-in by omission, and a command must match the kind."""
-    external = ProviderMetadata("h", "l", "1", "b", "2", ProviderKind.EXTERNAL, "./harness")
+    external = ProviderMetadata("h", "l", "1", "b", "2", ProviderKind.EXTERNAL, "./harness", "b1")
     assert external.command == "./harness"
 
     with pytest.raises(ValueError, match="carries its command"):
@@ -219,3 +220,23 @@ def test_a_harness_may_claim_its_own_gap_or_the_vectors() -> None:
             1, 1, ResultStatus.UNSUPPORTED, None, None, "x", reason, DeclineClaimant.HARNESS
         )
         assert result.declined_by is DeclineClaimant.HARNESS
+
+
+def test_an_external_provider_names_its_build_or_why_it_has_none() -> None:
+    """Two builds a commit apart share a name and a version, so neither identifies one."""
+    external = ProviderKind.EXTERNAL
+    named = ProviderMetadata("h", "l", "1", "b", "2", external, "./h", "b1")
+    assert named.build_id == "b1"
+    unexposed = BuildIdAbsentReason.NOT_EXPOSED
+    assert (
+        ProviderMetadata("h", "l", "1", "b", "2", external, "./h", None, unexposed).build_id is None
+    )
+
+    with pytest.raises(ValueError, match="build id or the reason it has none"):
+        ProviderMetadata("h", "l", "1", "b", "2", external, "./h")
+    with pytest.raises(ValueError, match="build id or the reason it has none"):
+        ProviderMetadata("h", "l", "1", "b", "2", external, "./h", "b1", unexposed)
+    with pytest.raises(ValueError, match="never empty"):
+        ProviderMetadata("h", "l", "1", "b", "2", external, "./h", "")
+    with pytest.raises(ValueError, match="identified by the runner's commit"):
+        ProviderMetadata("h", "l", "1", "b", "2", ProviderKind.BUILTIN, None, "b1")

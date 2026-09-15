@@ -47,6 +47,8 @@ def test_info_names_an_external_harness_by_what_it_declares(
     assert payload["provider"] == "reference-harness"
     assert payload["provider_kind"] == "external"
     assert payload["provider_command"].endswith("examples/reference_harness.py")
+    assert payload["provider_build_id"].startswith("sha256:")
+    assert payload["provider_build_id_absent_reason"] is None
     assert "cryptography_version" not in payload
     assert "openssl_version" not in payload
 
@@ -75,6 +77,8 @@ def test_a_harness_run_reports_its_provider_as_external(tmp_path: Path) -> None:
     assert provider["kind"] == "external"
     assert provider["name"] == "reference-harness"
     assert provider["command"].endswith("examples/reference_harness.py")
+    assert provider["buildId"].startswith("sha256:")
+    assert provider["buildIdAbsentReason"] is None
     assert "openssl_version" not in provider
 
 
@@ -90,6 +94,27 @@ def test_a_built_in_run_reports_its_provider_as_built_in(tmp_path: Path) -> None
     assert provider["kind"] == "builtin"
     assert provider["name"] == "hashlib-sha2-256"
     assert "command" not in provider
+    assert "buildId" not in provider
+
+
+def test_a_harness_that_names_no_build_is_noted_on_stderr(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The output records not_reported and the operator is told; nothing is failed."""
+    script = tmp_path / "silent.py"
+    script.write_text(
+        "import json, sys\n"
+        "for _line in sys.stdin:\n"
+        '    print(json.dumps({"name": "silent", "libraryName": "l", "libraryVersion": "1", '
+        '"backendName": "b", "backendVersion": "2"}), flush=True)\n'
+    )
+
+    exit_code = main(["info", "--provider-command", f"{sys.executable} {script}"])
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert json.loads(captured.out)["provider_build_id_absent_reason"] == "not_reported"
+    assert "not_reported" in captured.err
 
 
 def test_parser_requires_a_subcommand() -> None:

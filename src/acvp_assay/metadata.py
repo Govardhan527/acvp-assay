@@ -135,4 +135,8 @@ def runtime_metadata(provider: ProviderMetadata | None = None) -> dict[str, obje
     }
     if provider.command is not None:
         identity["provider_command"] = provider.command
+    if provider.kind is ProviderKind.EXTERNAL:
+        absent = provider.build_id_absent_reason
+        identity["provider_build_id"] = provider.build_id
+        identity["provider_build_id_absent_reason"] = absent.value if absent else None
     return {**identity, **runner}

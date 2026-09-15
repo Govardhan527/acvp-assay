@@ -106,9 +106,26 @@ environment rather than on the command line. The value after `--pin`, `--so-pin`
 `--user-pin`, `--password`, `--passphrase` or `--secret` is recorded as `REDACTED`,
 which is a backstop for the common spellings and not a guarantee.
 
+`metadata` must also say which build answered, because a name and a version do not
+identify one: two builds a commit apart share both. Send `buildId`, a string that
+changes whenever the answering code does, such as a commit hash, a firmware build
+number, or a hash of the harness itself, which is what `examples/reference_harness.py`
+sends. If there is nothing of the kind to send, send `"buildId": null` with
+`buildIdAbsentReason`: `not_exposed` when the implementation has a build identity its
+interface does not expose, or `not_recorded` when it records none. A harness written
+before this field still works. The report records `not_reported`, and the run says so
+on stderr; `not_reported` is recorded by this runner and is not a harness's to claim.
+
+For a PKCS#11 harness, `C_GetInfo` and `C_GetTokenInfo` supply the rest of the identity
+at no cost: `manufacturerID` and `libraryDescription` for the library, `libraryVersion`,
+and the token's `label`, `model` and `serialNumber`. They do not supply a build. Their
+versions have two parts, so SoftHSM 2.6.1 reports itself as 2.6, and a serial number
+names a token rather than a build. Unless the vendor exposes a build string some other
+way, a PKCS#11 harness sends `not_exposed`, as `examples/pkcs11` does.
+
 | `operation` | Request fields | Response fields |
 | --- | --- | --- |
-| `metadata` | — | `name`, `libraryName`, `libraryVersion`, `backendName`, `backendVersion` |
+| `metadata` | — | `name`, `libraryName`, `libraryVersion`, `backendName`, `backendVersion`, and `buildId` or `null` with `buildIdAbsentReason` |
 | `encrypt` | `key`, `iv`, `pt`, `aad`, `tagLen` | `ct`, `tag` |
 | `decrypt` | `key`, `iv`, `ct`, `aad`, `tag` | `pt` |
 | `digest` | `algorithm`, `message` | `md` |

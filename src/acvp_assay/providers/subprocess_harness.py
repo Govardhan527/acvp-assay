@@ -20,7 +20,7 @@ Requests::
 Responses::
 
     {"name": ..., "libraryName": ..., "libraryVersion": ...,
-     "backendName": ..., "backendVersion": ...}
+     "backendName": ..., "backendVersion": ..., "buildId": ...}
     {"ct": HEX, "tag": HEX}
     {"pt": HEX}
     {"error": "authentication failed"}
@@ -67,8 +67,10 @@ from typing import Self
 from cryptography.exceptions import InvalidTag
 
 from acvp_assay.models import (
+    HARNESS_BUILD_ABSENCES,
     HARNESS_CLAIMABLE_REASONS,
     AesGcmValues,
+    BuildIdAbsentReason,
     DeclineClaimant,
     DeclineReason,
     ProviderKind,
@@ -199,6 +201,37 @@ def _claimed_decline(
             f"of at most {DETAIL_LIMIT} characters"
         )
     return DeclineReason(code), detail or None
+
+
+def _declared_build(
+    response: Mapping[str, object],
+) -> tuple[str | None, BuildIdAbsentReason | None]:
+    """Read the build a harness declares, or why it has none.
+
+    A name and a version do not identify an implementation: two builds a commit
+    apart share both. A harness written before ``buildId`` still works, and its
+    silence is recorded as ``not_reported`` rather than failing the run. A harness
+    that sends the field states a build, or ``null`` with the reason it has none;
+    ``not_reported`` is this runner's observation, not a harness's to claim.
+    """
+    if "buildId" not in response:
+        return None, BuildIdAbsentReason.NOT_REPORTED
+    build_id = response["buildId"]
+    reason = response.get("buildIdAbsentReason")
+    if build_id is not None:
+        if not isinstance(build_id, str) or not build_id or reason is not None:
+            raise HarnessProtocolError(
+                "harness metadata 'buildId' must be a non-empty string, "
+                "sent without 'buildIdAbsentReason'"
+            )
+        return build_id, None
+    allowed = sorted(absence.value for absence in HARNESS_BUILD_ABSENCES)
+    if not isinstance(reason, str) or reason not in allowed:
+        raise HarnessProtocolError(
+            f"harness metadata has a null 'buildId' with buildIdAbsentReason "
+            f"{repr(reason)[:40]}; a harness may state only {' or '.join(allowed)}"
+        )
+    return None, BuildIdAbsentReason(reason)
 
 
 def declined_result(
@@ -360,8 +393,13 @@ class HarnessClient:
             if not isinstance(value, str):
                 raise HarnessProtocolError(f"harness metadata is missing {wire_name!r}")
             values[field_name] = value
+        build_id, build_id_absent_reason = _declared_build(response)
         return ProviderMetadata(
-            **values, kind=ProviderKind.EXTERNAL, command=recorded_command(self._command)
+            **values,
+            kind=ProviderKind.EXTERNAL,
+            command=recorded_command(self._command),
+            build_id=build_id,
+            build_id_absent_reason=build_id_absent_reason,
         )
 
     def _start(self) -> subprocess.Popen[str]:

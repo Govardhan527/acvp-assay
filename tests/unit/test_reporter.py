@@ -7,6 +7,7 @@ from typing import cast
 
 from acvp_assay.models import (
     AesGcmValues,
+    BuildIdAbsentReason,
     DeclineClaimant,
     DeclineReason,
     ProviderKind,
@@ -235,3 +236,27 @@ def test_declines_are_split_by_who_claimed_them() -> None:
         },
     }
     assert summary.unsupported_by_reason["implementation_lacks"] == 3
+
+
+def test_an_external_provider_block_carries_its_command_and_build() -> None:
+    """Where it ran and which build answered, or the reason no build could be named."""
+    external = ProviderMetadata(
+        name="pkcs11-harness",
+        library_name="SoftHSM",
+        library_version="2.6",
+        backend_name="PKCS#11",
+        backend_version="/usr/lib/softhsm/libsofthsm2.so",
+        kind=ProviderKind.EXTERNAL,
+        command="./acvp_harness --module /usr/lib/softhsm/libsofthsm2.so",
+        build_id_absent_reason=BuildIdAbsentReason.NOT_EXPOSED,
+    )
+
+    assert build_report([], external)["provider"] == {
+        "name": "pkcs11-harness",
+        "kind": "external",
+        "command": "./acvp_harness --module /usr/lib/softhsm/libsofthsm2.so",
+        "library": {"name": "SoftHSM", "version": "2.6"},
+        "backend": {"name": "PKCS#11", "version": "/usr/lib/softhsm/libsofthsm2.so"},
+        "buildId": None,
+        "buildIdAbsentReason": "not_exposed",
+    }

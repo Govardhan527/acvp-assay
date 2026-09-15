@@ -87,13 +87,20 @@ HASHES = {
 
 
 def metadata() -> dict[str, str]:
-    """Identify this implementation so results can be attributed to it."""
+    """Identify this implementation so results can be attributed to it.
+
+    ``buildId`` is the SHA-256 of this file. A harness that is one script is built
+    from exactly its source, so the hash names the code that answered.
+    """
+    with open(__file__, "rb") as source:
+        build = hashlib.sha256(source.read()).hexdigest()
     return {
         "name": "reference-harness",
         "libraryName": "cryptography",
         "libraryVersion": cryptography.__version__,
         "backendName": "OpenSSL",
         "backendVersion": backend.openssl_version_text(),
+        "buildId": f"sha256:{build}",
     }
 
 

@@ -244,6 +244,27 @@ class ProviderKind(StrEnum):
     EXTERNAL = "external"
 
 
+class BuildIdAbsentReason(StrEnum):
+    """Why an external provider names no build. Each member has a different remedy."""
+
+    #: The harness sent no ``buildId`` at all, so it predates the field; its author
+    #: adds one. Only this runner records this, and a harness may not claim it.
+    NOT_REPORTED = "not_reported"
+    #: The implementation has a build identity its interface does not expose, as
+    #: with PKCS#11, whose two-part versions two builds of one release share. The
+    #: vendor exposes it.
+    NOT_EXPOSED = "not_exposed"
+    #: The implementation records no build identity at all. Its build process
+    #: starts recording one.
+    NOT_RECORDED = "not_recorded"
+
+
+#: The absences a harness may declare about itself.
+HARNESS_BUILD_ABSENCES = frozenset(
+    {BuildIdAbsentReason.NOT_EXPOSED, BuildIdAbsentReason.NOT_RECORDED}
+)
+
+
 @dataclass(frozen=True, slots=True)
 class ProviderMetadata:
     """Identity and versions for one cryptographic provider implementation.
@@ -251,6 +272,11 @@ class ProviderMetadata:
     ``kind`` has no default, so no provider can be read as the built-in one by
     omission. An external provider also carries ``command``, because its identity
     is what ran and its command is where it ran; a built-in one has no command.
+
+    An external provider carries its build as well: ``build_id``, or ``None`` with
+    ``build_id_absent_reason``. A name and a version do not identify a build, since
+    two builds a commit apart share both. A built-in provider has neither, because
+    this runner's own commit identifies the code that answered.
     """
 
     name: str
@@ -260,15 +286,27 @@ class ProviderMetadata:
     backend_version: str
     kind: ProviderKind
     command: str | None = None
+    build_id: str | None = None
+    build_id_absent_reason: BuildIdAbsentReason | None = None
 
     def __post_init__(self) -> None:
-        """Refuse a kind outside the closed set, and a command that contradicts it."""
+        """Refuse a kind outside the closed set, and a command or build that contradicts it."""
         if not isinstance(self.kind, ProviderKind):
             raise ValueError(f"provider kind must be a ProviderKind, got {self.kind!r}")
         if (self.kind is ProviderKind.EXTERNAL) != (self.command is not None):
             raise ValueError(
                 "an external provider carries its command, and a built-in one does not"
             )
+        absent = self.build_id_absent_reason
+        if absent is not None and not isinstance(absent, BuildIdAbsentReason):
+            raise ValueError(f"a build absence must be a BuildIdAbsentReason, got {absent!r}")
+        if self.kind is ProviderKind.BUILTIN:
+            if self.build_id is not None or absent is not None:
+                raise ValueError("a built-in provider is identified by the runner's commit")
+        elif (self.build_id is None) == (absent is None):
+            raise ValueError("an external provider carries a build id or the reason it has none")
+        if self.build_id == "":
+            raise ValueError("a build id is never empty")
 
 
 @dataclass(frozen=True, slots=True)
@@ -334,6 +372,7 @@ __all__ = [
     "AesGcmTestGroup",
     "AesGcmValues",
     "AesGcmVectorSet",
+    "BuildIdAbsentReason",
     "CaseValues",
     "DeclineClaimant",
     "DeclineReason",
@@ -342,6 +381,7 @@ __all__ = [
     "ExpectedResultCase",
     "ExpectedResultGroup",
     "ExpectedResultSet",
+    "HARNESS_BUILD_ABSENCES",
     "HARNESS_CLAIMABLE_REASONS",
     "ProviderKind",
     "ProviderMetadata",

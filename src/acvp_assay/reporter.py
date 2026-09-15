@@ -12,6 +12,7 @@ from acvp_assay.models import (
     CaseValues,
     DeclineClaimant,
     DeclineReason,
+    ProviderKind,
     ProviderMetadata,
     ResultStatus,
     TestCaseResult,
@@ -163,7 +164,8 @@ def _provider_document(provider: ProviderMetadata) -> dict[str, object]:
     """Name the implementation that answered, and say which kind it was.
 
     ``kind`` makes a run through an external harness impossible to read as a
-    built-in one; an external provider also records the command it ran from.
+    built-in one. An external provider also records the command it ran from, and
+    its build, or ``null`` with the reason it has none.
     """
     document: dict[str, object] = {
         "name": provider.name,
@@ -179,6 +181,10 @@ def _provider_document(provider: ProviderMetadata) -> dict[str, object]:
     }
     if provider.command is not None:
         document["command"] = provider.command
+    if provider.kind is ProviderKind.EXTERNAL:
+        absent = provider.build_id_absent_reason
+        document["buildId"] = provider.build_id
+        document["buildIdAbsentReason"] = absent.value if absent else None
     return document
 
 

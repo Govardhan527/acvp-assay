@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import shlex
@@ -11,7 +12,7 @@ from pathlib import Path
 import pytest
 from cryptography.exceptions import InvalidTag
 
-from acvp_assay.models import DeclineReason, ProviderKind
+from acvp_assay.models import BuildIdAbsentReason, DeclineReason, ProviderKind
 from acvp_assay.providers.subprocess_harness import (
     HarnessProtocolError,
     HarnessUnsupportedError,
@@ -489,3 +490,60 @@ def test_a_decline_detail_is_a_short_string(tmp_path: Path, detail: object) -> N
 
     with pytest.raises(HarnessProtocolError, match="at most 200 characters"):
         provider.decrypt(key=KEY, iv=IV, ciphertext=b"", aad=b"", tag=b"")
+
+
+IDENTITY = (
+    '"name": "h", "libraryName": "l", "libraryVersion": "1", '
+    '"backendName": "b", "backendVersion": "2"'
+)
+
+
+def test_the_reference_harness_names_its_build_by_its_own_hash() -> None:
+    """A one-file harness is built from exactly its source, so its hash names it."""
+    example = Path(__file__).resolve().parents[2] / "examples/reference_harness.py"
+
+    metadata = SubprocessAesGcmProvider(
+        [sys.executable, str(example)], timeout_seconds=5
+    ).metadata()
+
+    assert metadata.build_id == "sha256:" + hashlib.sha256(example.read_bytes()).hexdigest()
+    assert metadata.build_id_absent_reason is None
+
+
+def test_a_harness_written_before_build_ids_still_runs(tmp_path: Path) -> None:
+    """Its silence is recorded as not_reported rather than failing the run."""
+    metadata = responding(tmp_path, "{" + IDENTITY + "}").metadata()
+
+    assert metadata.build_id is None
+    assert metadata.build_id_absent_reason is BuildIdAbsentReason.NOT_REPORTED
+
+
+@pytest.mark.parametrize("reason", ["not_exposed", "not_recorded"])
+def test_a_harness_may_say_why_it_names_no_build(tmp_path: Path, reason: str) -> None:
+    """A harness that knows it has no build to name says which absence it is."""
+    literal = "{" + IDENTITY + f', "buildId": null, "buildIdAbsentReason": "{reason}"' + "}"
+
+    metadata = responding(tmp_path, literal).metadata()
+
+    assert metadata.build_id is None
+    assert metadata.build_id_absent_reason == reason
+
+
+@pytest.mark.parametrize(
+    ("fields", "message"),
+    [
+        (', "buildId": null, "buildIdAbsentReason": "not_reported"', "not_reported"),
+        (', "buildId": null', "None"),
+        (', "buildId": ""', "non-empty string"),
+        (', "buildId": "b1", "buildIdAbsentReason": "not_exposed"', "non-empty string"),
+        (', "buildId": 7', "non-empty string"),
+    ],
+)
+def test_a_build_claim_that_does_not_add_up_is_refused(
+    tmp_path: Path, fields: str, message: str
+) -> None:
+    """not_reported is the runner's to record, and a null never stands without its reason."""
+    provider = responding(tmp_path, "{" + IDENTITY + fields + "}")
+
+    with pytest.raises(HarnessProtocolError, match=message):
+        provider.metadata()
