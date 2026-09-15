@@ -532,3 +532,10 @@
 - Commit/link/path: `CONTRIBUTING.md`.
 - Blocker, if any: none.
 - Next unchecked ID: an offline pilot a new harness author runs before registering a session.
+- **A new harness author had no stated sequence to run before registering.** `docs/harness-protocol.md` now gives one on `ACVP-AES-KW` and `ACVP-AES-KWP`, which this runner already answers and which session 765342 judged `passed`: fetch and hash-verify the pinned sets, run both through the harness, read the decline breakdown and fix what the harness itself claimed, and only then register. A session that fails on something the pinned set would have caught costs a registration, and registrations are not free.
+- The sequence was run, not written from memory, including its `jq` commands. Through `examples/reference_harness.py`, each pinned set is 7,200 cases and ran in under two seconds: 3,600 passed, and the other 3,600 are `runner_lacks` from `kwCipher: inverse` groups. The doc warns an author that half of each set will be declined by the runner and is not theirs. That is the case the claimant split was built for: without it, those 3,600 lines a set would read as the author's to-do list.
+- `acvts-capabilities/broad.json`, which registered both for session 765342, declares `kwCipher` `cipher` only, and the doc points at it as the registration to copy. `CONTRIBUTING.md` now sends a harness author to the pilot.
+- Tests run and result: `scripts/dev.py test` - format, lint, strict mypy, 1,052 passed and 9 skipped; documentation only, so the count is unchanged.
+- Commit/link/path: `docs/harness-protocol.md`, `CONTRIBUTING.md`.
+- Blocker, if any: none.
+- Next unchecked ID: carry `runner_commit` into run reports, so a built-in run names the code that answered.

@@ -66,3 +66,5 @@ never in a position to assert, so claiming either is a protocol error.
   the full suite.
 - Each commit is one logical change, with a message that names what it fixes and
   why.
+- A new harness has been through the offline pilot in `docs/harness-protocol.md`
+  before anything is registered with ACVTS.

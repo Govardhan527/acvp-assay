@@ -212,6 +212,48 @@ tag becoming `authentication failed` rather than a crash, and `CK_RV` values suc
 `CKR_KEY_SIZE_RANGE` mapping to `unsupported`, since a token refusing a key length is
 declaring capability rather than failing.
 
+### Before registering: an offline pilot on KW and KWP
+
+Run a new harness against the pinned vectors before anything is registered with
+ACVTS. A session that fails on something the pinned set would have caught costs a
+registration, and registrations are not free. `ACVP-AES-KW` and `ACVP-AES-KWP` are a
+good first pair: this runner already answers both, session 765342 carries NIST's
+`passed` verdict on each, and the only operation involved is `key-wrap`.
+
+1. Fetch and hash-verify the pinned vectors. `scripts/fetch_vectors.py` downloads
+   every pinned set, KW and KWP among them, and refuses any file whose SHA-256 does
+   not match its pin. `--check` verifies files already on disk without the network.
+
+   ```bash
+   python3 scripts/fetch_vectors.py
+   ```
+
+2. Run both sets through the harness. The expected results sit beside each prompt,
+   so every case the harness answers is compared with the answer NIST recorded.
+
+   ```bash
+   acvp-assay run vectors/ACVP-AES-KW-1.0/prompt.json --provider-command "./my-harness" --output kw.json
+   acvp-assay run vectors/ACVP-AES-KWP-1.0/prompt.json --provider-command "./my-harness" --output kwp.json
+   ```
+
+3. Read the decline breakdown and fix what is yours. The `harness` counts under
+   `unsupportedByClaimant` are what your harness said about itself; the `runner`
+   counts are not yours.
+
+   ```bash
+   jq '.summary.unsupportedByClaimant' kw.json kwp.json
+   jq -c '.cases[] | select(.declinedBy == "harness") | {tgId, tcId, declineReason, diagnostic}' kw.json
+   ```
+
+   Expect half of each pinned set under `runner`. Through
+   `examples/reference_harness.py`, each set is 7,200 cases: 3,600 pass, and the other
+   3,600 are `runner_lacks`, because their groups use `kwCipher: inverse`, which this
+   runner does not answer. None of those is a gap in your harness.
+
+4. Only then register a session, declaring what the pilot answered and nothing more:
+   `kwCipher` `cipher` only, as `acvts-capabilities/broad.json` did for session
+   765342. See [Answering a live session](#answering-a-live-session).
+
 ### Answering a live session
 
 `acvts_client.py submit --provider-command ...` builds the document NIST scores
