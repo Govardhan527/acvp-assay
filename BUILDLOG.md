@@ -527,3 +527,8 @@
 - Commit/link/path: `src/acvp_assay/models.py`, `src/acvp_assay/providers/subprocess_harness.py`, `src/acvp_assay/metadata.py`, `src/acvp_assay/reporter.py`, `src/acvp_assay/cli.py`, `examples/`, `docs/harness-protocol.md`, `README.md`.
 - Blocker, if any: none.
 - Next unchecked ID: there is no CONTRIBUTING file, and a pull request has been offered.
+- **There was no CONTRIBUTING file, and a pull request has been offered.** Giving the standards in review is worse for both sides than stating them first. `CONTRIBUTING.md` is short and says what a change is reviewed against. The harness protocol is a public contract, widening it for one implementation is a cost paid by everyone who integrated before, and `buildId` is the worked example of widening it without breaking anyone. A claim in documentation carries its method in the same sentence. Numbers are computed and guarded, with `tests/unit/test_readme_arithmetic.py` as the reason why. A regression test nobody has watched fail has not been tested, with this week's `aes_modes` defect as the case. The suite is green and each commit is one change. A new decline carries a `DeclineReason`, and a harness may claim two of the four.
+- Tests run and result: `scripts/dev.py test` - format, lint, strict mypy, 1,052 passed and 9 skipped; documentation only, so the count is unchanged.
+- Commit/link/path: `CONTRIBUTING.md`.
+- Blocker, if any: none.
+- Next unchecked ID: an offline pilot a new harness author runs before registering a session.

@@ -667,6 +667,7 @@ python3.12 scripts/dev.py demo
 - `docs/decisions/`: committed design decisions
 - `docs/backlog.md`: what is built and what is next
 - `SERVICES.md`: paid engagements — readiness assessment, harness build, regression retainer
+- `CONTRIBUTING.md`: what a change is reviewed against, stated before a pull request rather than in it
 - `CHANGELOG.md`: release history
 - `BUILDLOG.md`: running record of how each family was built and verified
 
