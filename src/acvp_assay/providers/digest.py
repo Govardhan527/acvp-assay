@@ -9,7 +9,7 @@ import sys
 from collections.abc import Callable, Sequence
 from typing import Protocol, runtime_checkable
 
-from acvp_assay.models import ProviderMetadata
+from acvp_assay.models import ProviderKind, ProviderMetadata
 from acvp_assay.providers.subprocess_harness import (
     HarnessClient,
     HarnessProtocolError,
@@ -173,6 +173,7 @@ def monte_carlo(
 
 def _python_metadata(name: str) -> ProviderMetadata:
     return ProviderMetadata(
+        kind=ProviderKind.BUILTIN,
         name=name,
         library_name="hashlib",
         library_version=platform.python_version(),

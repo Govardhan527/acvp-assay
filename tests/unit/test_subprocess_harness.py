@@ -2,15 +2,18 @@
 
 from __future__ import annotations
 
+import shlex
 import sys
 from pathlib import Path
 
 import pytest
 from cryptography.exceptions import InvalidTag
 
+from acvp_assay.models import ProviderKind
 from acvp_assay.providers.subprocess_harness import (
     HarnessProtocolError,
     SubprocessAesGcmProvider,
+    recorded_command,
 )
 
 KEY = bytes.fromhex("000102030405060708090A0B0C0D0E0F")
@@ -408,3 +411,31 @@ def test_blank_lines_from_a_harness_are_ignored(tmp_path: Path) -> None:
 
     assert client.metadata().name == "c"
     client.close()
+
+
+def test_harness_metadata_is_marked_external_with_where_it_ran() -> None:
+    """Every harness passes through here, so none can be reported as built-in."""
+    example = Path(__file__).resolve().parents[2] / "examples/reference_harness.py"
+    command = [sys.executable, str(example)]
+
+    metadata = SubprocessAesGcmProvider(command, timeout_seconds=5).metadata()
+
+    assert metadata.kind is ProviderKind.EXTERNAL
+    assert metadata.command == shlex.join(command)
+
+
+@pytest.mark.parametrize(
+    ("command", "recorded"),
+    [
+        (
+            ["./acvp_harness", "--module", "/lib/p11.so", "--pin", "1234"],
+            "./acvp_harness --module /lib/p11.so --pin REDACTED",
+        ),
+        (["./harness", "--PASSWORD=hunter2"], "./harness --PASSWORD=REDACTED"),
+        (["./harness", "--so-pin", "0000", "--slot", "0"], "./harness --so-pin REDACTED --slot 0"),
+        (["./harness", "--pinned-cert", "ca.pem"], "./harness --pinned-cert ca.pem"),
+    ],
+)
+def test_the_recorded_command_carries_no_secret(command: list[str], recorded: str) -> None:
+    """Reports are shared as evidence, so a PIN on the command line must not travel with one."""
+    assert recorded_command(command) == recorded

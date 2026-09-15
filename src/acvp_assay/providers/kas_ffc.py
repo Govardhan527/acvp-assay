@@ -22,7 +22,7 @@ import platform
 import secrets
 from typing import Protocol, runtime_checkable
 
-from acvp_assay.models import ProviderMetadata
+from acvp_assay.models import ProviderKind, ProviderMetadata
 from acvp_assay.providers.digest import ssl_version_text
 from acvp_assay.providers.safe_primes import GENERATOR, SAFE_PRIME_GROUPS
 from acvp_assay.providers.subprocess_harness import HarnessClient, decode_hex
@@ -66,6 +66,7 @@ class PythonKasFfc:
     def metadata(self) -> ProviderMetadata:
         """Identify the interpreter and the OpenSSL build behind it."""
         return ProviderMetadata(
+            kind=ProviderKind.BUILTIN,
             name="python-kas-ffc-ssc",
             library_name="python",
             library_version=platform.python_version(),

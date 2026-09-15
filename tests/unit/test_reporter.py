@@ -8,6 +8,7 @@ from typing import cast
 from acvp_assay.models import (
     AesGcmValues,
     DeclineReason,
+    ProviderKind,
     ProviderMetadata,
     ResultStatus,
 )
@@ -32,6 +33,7 @@ def provider_metadata() -> ProviderMetadata:
         library_version="50.0.1",
         backend_name="OpenSSL",
         backend_version="OpenSSL test-version",
+        kind=ProviderKind.BUILTIN,
     )
 
 
@@ -121,6 +123,7 @@ def test_report_contains_provider_versions_summary_and_case_values() -> None:
 
     assert report["provider"] == {
         "name": "cryptography-aes-gcm",
+        "kind": "builtin",
         "library": {"name": "cryptography", "version": "50.0.1"},
         "backend": {"name": "OpenSSL", "version": "OpenSSL test-version"},
     }

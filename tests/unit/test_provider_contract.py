@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from acvp_assay.models import AesGcmValues, ProviderMetadata
+from acvp_assay.models import AesGcmValues, ProviderKind, ProviderMetadata
 from acvp_assay.providers import AesGcmProvider
 
 
@@ -19,6 +19,7 @@ class StubProvider:
             library_version="1.0",
             backend_name="test-backend",
             backend_version="2.0",
+            kind=ProviderKind.BUILTIN,
         )
 
     def encrypt(

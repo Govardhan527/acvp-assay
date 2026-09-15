@@ -23,7 +23,7 @@ import hmac
 import cryptography
 from cryptography.hazmat.backends.openssl.backend import backend
 
-from acvp_assay.models import ProviderMetadata
+from acvp_assay.models import ProviderKind, ProviderMetadata
 from acvp_assay.providers.digest import HASHLIB_ALGORITHMS
 
 #: SP 800-90A seed lengths, in bits. The wider hashes get the wider seed.
@@ -48,6 +48,7 @@ def _digest_name(mode: str) -> str:
 
 def _metadata(name: str) -> ProviderMetadata:
     return ProviderMetadata(
+        kind=ProviderKind.BUILTIN,
         name=name,
         library_name="cryptography",
         library_version=cryptography.__version__,

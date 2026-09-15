@@ -13,6 +13,7 @@ from pathlib import Path
 
 import pytest
 
+from acvp_assay import __version__
 from acvp_assay.metadata import (
     FULL_COMMIT,
     CommitAbsentReason,
@@ -20,6 +21,7 @@ from acvp_assay.metadata import (
     runtime_metadata,
     source_root,
 )
+from acvp_assay.models import ProviderKind, ProviderMetadata
 
 needs_git = pytest.mark.skipif(shutil.which("git") is None, reason="git is not installed")
 
@@ -58,6 +60,7 @@ def test_runtime_metadata_has_stable_schema() -> None:
         "cryptography_version",
         "openssl_version",
         "provider",
+        "provider_kind",
         "python_version",
         "runner_commit",
         "runner_commit_absent_reason",
@@ -167,3 +170,40 @@ def test_a_copy_inside_an_unrelated_repository_is_not_given_its_commit(tmp_path:
     package = _tree(tmp_path / "copied")
 
     assert runner_identity(package) == _absent(CommitAbsentReason.NOT_A_REPOSITORY)
+
+
+EXTERNAL = ProviderMetadata(
+    name="example-harness",
+    library_name="libexample",
+    library_version="3.2.0",
+    backend_name="PKCS#11",
+    backend_version="3.2",
+    kind=ProviderKind.EXTERNAL,
+    command="./harness --module libexample.so",
+)
+
+
+def test_the_built_in_description_is_unchanged_when_no_provider_is_named() -> None:
+    """With nothing named, the built-in toolkit is described as before, now with its kind."""
+    identity = runtime_metadata()
+
+    assert identity["provider"] == "OpenSSL (via cryptography)"
+    assert identity["provider_kind"] == "builtin"
+    assert identity["cryptography_version"]
+    assert identity["openssl_version"]
+    assert "provider_command" not in identity
+
+
+def test_an_external_provider_is_reported_by_its_own_identity() -> None:
+    """The harness's declaration, where it ran, and nothing about a library that did not answer."""
+    identity = runtime_metadata(EXTERNAL)
+
+    assert identity["provider"] == "example-harness"
+    assert identity["provider_kind"] == "external"
+    assert identity["provider_command"] == "./harness --module libexample.so"
+    assert identity["provider_library"] == {"name": "libexample", "version": "3.2.0"}
+    assert identity["provider_backend"] == {"name": "PKCS#11", "version": "3.2"}
+    # Omitted, not null: a null would read as a harness that failed to report one.
+    assert "cryptography_version" not in identity
+    assert "openssl_version" not in identity
+    assert identity["runner_version"] == __version__

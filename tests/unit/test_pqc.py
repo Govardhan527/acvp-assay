@@ -75,9 +75,9 @@ class ReplayingKemProvider:
 
     @staticmethod
     def metadata() -> Any:
-        from acvp_assay.models import ProviderMetadata
+        from acvp_assay.models import ProviderKind, ProviderMetadata
 
-        return ProviderMetadata("stub", "stub", "0", "stub", "0")
+        return ProviderMetadata("stub", "stub", "0", "stub", "0", ProviderKind.BUILTIN)
 
     def _spoil(self, value: bytes) -> bytes:
         return bytes([value[0] ^ 0xFF]) + value[1:] if self._corrupt else value
@@ -102,9 +102,9 @@ class UnusedKemProvider:
     """KEM stub for paths that must decline before any operation is attempted."""
 
     def metadata(self) -> Any:
-        from acvp_assay.models import ProviderMetadata
+        from acvp_assay.models import ProviderKind, ProviderMetadata
 
-        return ProviderMetadata("stub", "stub", "0", "stub", "0")
+        return ProviderMetadata("stub", "stub", "0", "stub", "0", ProviderKind.BUILTIN)
 
     def encapsulate(
         self, *, parameter_set: str, encapsulation_key: bytes, seed: bytes
@@ -127,9 +127,9 @@ class FixedDsaProvider:
         self._verdict = verdict
 
     def metadata(self) -> Any:
-        from acvp_assay.models import ProviderMetadata
+        from acvp_assay.models import ProviderKind, ProviderMetadata
 
-        return ProviderMetadata("stub", "stub", "0", "stub", "0")
+        return ProviderMetadata("stub", "stub", "0", "stub", "0", ProviderKind.BUILTIN)
 
     def verify(
         self,

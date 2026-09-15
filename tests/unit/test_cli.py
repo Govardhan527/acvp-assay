@@ -13,6 +13,9 @@ from acvp_assay import __version__
 from acvp_assay.cli import build_parser, main
 
 FIXTURES = Path(__file__).resolve().parents[2] / "fixtures"
+REFERENCE = (
+    f"{sys.executable} {Path(__file__).resolve().parents[2] / 'examples/reference_harness.py'}"
+)
 
 
 def test_info_prints_metadata(capsys: pytest.CaptureFixture[str]) -> None:
@@ -24,12 +27,69 @@ def test_info_prints_metadata(capsys: pytest.CaptureFixture[str]) -> None:
 
     assert exit_code == 0
     assert payload["provider"] == "OpenSSL (via cryptography)"
+    assert payload["provider_kind"] == "builtin"
     # Against the package, not a literal: a hard-coded version turns every
     # release into a test failure that says nothing about behaviour.
     assert payload["runner_version"] == __version__
     assert payload["cryptography_version"]
     assert payload["openssl_version"].startswith("OpenSSL ")
     assert payload["python_version"].startswith("3.12")
+
+
+def test_info_names_an_external_harness_by_what_it_declares(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """The harness identifies itself, and the built-in library versions are absent."""
+    exit_code = main(["info", "--provider-command", REFERENCE])
+
+    payload = json.loads(capsys.readouterr().out)
+    assert exit_code == 0
+    assert payload["provider"] == "reference-harness"
+    assert payload["provider_kind"] == "external"
+    assert payload["provider_command"].endswith("examples/reference_harness.py")
+    assert "cryptography_version" not in payload
+    assert "openssl_version" not in payload
+
+
+def test_info_reports_a_harness_that_cannot_identify_itself(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A named harness that does not answer is an input error, not a built-in description."""
+    exit_code = main(["info", "--provider-command", "definitely-not-a-real-command-xyz"])
+
+    captured = capsys.readouterr()
+    assert exit_code == 2
+    assert captured.out == ""
+    assert "not found" in captured.err
+
+
+def test_a_harness_run_reports_its_provider_as_external(tmp_path: Path) -> None:
+    """A run answered by a harness cannot be read as a built-in run."""
+    output = tmp_path / "report.json"
+    prompt = FIXTURES / "sha2-256-known-answers/prompt.json"
+
+    exit_code = main(["run", str(prompt), "--provider-command", REFERENCE, "--output", str(output)])
+
+    provider = json.loads(output.read_text(encoding="utf-8"))["provider"]
+    assert exit_code == 0
+    assert provider["kind"] == "external"
+    assert provider["name"] == "reference-harness"
+    assert provider["command"].endswith("examples/reference_harness.py")
+    assert "openssl_version" not in provider
+
+
+def test_a_built_in_run_reports_its_provider_as_built_in(tmp_path: Path) -> None:
+    """The built-in path is unchanged apart from saying what it is."""
+    output = tmp_path / "report.json"
+    prompt = FIXTURES / "sha2-256-known-answers/prompt.json"
+
+    exit_code = main(["run", str(prompt), "--output", str(output)])
+
+    provider = json.loads(output.read_text(encoding="utf-8"))["provider"]
+    assert exit_code == 0
+    assert provider["kind"] == "builtin"
+    assert provider["name"] == "hashlib-sha2-256"
+    assert "command" not in provider
 
 
 def test_parser_requires_a_subcommand() -> None:

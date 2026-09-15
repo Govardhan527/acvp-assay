@@ -22,7 +22,7 @@ from cryptography.hazmat.backends.openssl.backend import backend
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 
-from acvp_assay.models import ProviderMetadata
+from acvp_assay.models import ProviderKind, ProviderMetadata
 from acvp_assay.providers.subprocess_harness import HarnessClient, decode_hex
 
 ALGORITHM = "KDA"
@@ -92,6 +92,7 @@ class CryptographyKda:
     def metadata(self) -> ProviderMetadata:
         """Record the binding and the OpenSSL behind it."""
         return ProviderMetadata(
+            kind=ProviderKind.BUILTIN,
             name="cryptography-kda",
             library_name="cryptography",
             library_version=cryptography.__version__,

@@ -66,7 +66,7 @@ from typing import Self
 
 from cryptography.exceptions import InvalidTag
 
-from acvp_assay.models import AesGcmValues, ProviderMetadata
+from acvp_assay.models import AesGcmValues, ProviderKind, ProviderMetadata
 
 _POLL_SECONDS = 0.2
 _PROBE_SECONDS = 5.0
@@ -81,6 +81,36 @@ _METADATA_FIELDS = (
     ("backendName", "backend_name"),
     ("backendVersion", "backend_version"),
 )
+
+#: Options whose value is a secret, such as a PKCS#11 PIN. The command is written
+#: into reports, which are shared as evidence, so the value after one of these is
+#: replaced rather than recorded. This is a backstop for the common spellings, not
+#: a guarantee: pass secrets through the environment instead.
+SECRET_OPTIONS = frozenset(
+    {"--pin", "--so-pin", "--user-pin", "--password", "--passphrase", "--secret"}
+)
+REDACTED = "REDACTED"
+
+
+def recorded_command(command: Sequence[str]) -> str:
+    """The command as a report records it: where the harness ran, without its secrets."""
+    recorded: list[str] = []
+    secret_follows = False
+    for argument in command:
+        if secret_follows:
+            recorded.append(REDACTED)
+            secret_follows = False
+            continue
+        option, equals, _ = argument.partition("=")
+        if option.lower() in SECRET_OPTIONS:
+            if equals:
+                recorded.append(f"{option}={REDACTED}")
+            else:
+                recorded.append(argument)
+                secret_follows = True
+            continue
+        recorded.append(argument)
+    return shlex.join(recorded)
 
 
 class HarnessUnsupportedError(Exception):
@@ -240,7 +270,12 @@ class HarnessClient:
         return list(self._command)
 
     def metadata(self) -> ProviderMetadata:
-        """Ask the harness to identify its implementation and versions."""
+        """Ask the harness to identify its implementation and versions.
+
+        The identity is the harness's own declaration, never the command string,
+        and it is marked external here, at the one place every harness passes
+        through, so no external run can be reported as built-in.
+        """
         response = self.invoke({"operation": "metadata"})
         values: dict[str, str] = {}
         for wire_name, field_name in _METADATA_FIELDS:
@@ -248,7 +283,9 @@ class HarnessClient:
             if not isinstance(value, str):
                 raise HarnessProtocolError(f"harness metadata is missing {wire_name!r}")
             values[field_name] = value
-        return ProviderMetadata(**values)
+        return ProviderMetadata(
+            **values, kind=ProviderKind.EXTERNAL, command=recorded_command(self._command)
+        )
 
     def _start(self) -> subprocess.Popen[str]:
         """Start the harness, or return the one already running."""
@@ -448,8 +485,11 @@ __all__ = [
     "HarnessClient",
     "HarnessProtocolError",
     "HarnessUnsupportedError",
+    "REDACTED",
+    "SECRET_OPTIONS",
     "SubprocessAesGcmProvider",
     "decode_hex",
+    "recorded_command",
 ]
 
 decode_hex = _decode

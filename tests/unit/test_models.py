@@ -11,6 +11,8 @@ from acvp_assay.models import (
     AesGcmVectorSet,
     DeclineReason,
     Direction,
+    ProviderKind,
+    ProviderMetadata,
     ResultStatus,
     SafeDiagnostic,
 )
@@ -168,3 +170,17 @@ def test_every_decline_reason_is_accepted_beside_its_sentence() -> None:
         result = CaseResult(1, 1, ResultStatus.UNSUPPORTED, None, None, "why, in words", reason)
         assert result.decline_reason is reason
         assert result.diagnostic == "why, in words"
+
+
+def test_provider_metadata_states_its_kind_and_a_command_that_agrees() -> None:
+    """No provider is read as built-in by omission, and a command must match the kind."""
+    external = ProviderMetadata("h", "l", "1", "b", "2", ProviderKind.EXTERNAL, "./harness")
+    assert external.command == "./harness"
+
+    with pytest.raises(ValueError, match="carries its command"):
+        ProviderMetadata("h", "l", "1", "b", "2", ProviderKind.EXTERNAL)
+    with pytest.raises(ValueError, match="carries its command"):
+        ProviderMetadata("h", "l", "1", "b", "2", ProviderKind.BUILTIN, "./harness")
+    kind: object = "external"
+    with pytest.raises(ValueError, match="must be a ProviderKind"):
+        ProviderMetadata("h", "l", "1", "b", "2", kind, "./harness")  # type: ignore[arg-type]

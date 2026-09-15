@@ -21,11 +21,14 @@ the file, so there is nothing to vendor and no license to reconcile — copy
 ## Run
 
 ```sh
-acvp-assay run prompt.json --provider-command \
-    "./acvp_harness --module /usr/lib/softhsm/libsofthsm2.so --pin 1234"
+PKCS11_PIN=1234 acvp-assay run prompt.json --provider-command \
+    "./acvp_harness --module /usr/lib/softhsm/libsofthsm2.so"
 ```
 
-`--module` may also come from `PKCS11_MODULE`, and `--pin` from `PKCS11_PIN`.
+`--module` may also come from `PKCS11_MODULE`, and `--pin` from `PKCS11_PIN`. Prefer the
+environment for the PIN: a report records the command its harness ran from, and reports are
+shared as evidence. A `--pin` value is recorded as `REDACTED`, but that is a backstop rather
+than the place to keep one.
 `--slot ID` picks a slot; without it the first slot holding a token is used.
 
 ## What it answers

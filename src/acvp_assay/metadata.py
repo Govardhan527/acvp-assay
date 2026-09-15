@@ -20,6 +20,7 @@ import cryptography
 from cryptography.hazmat.backends.openssl.backend import backend
 
 from acvp_assay import __version__
+from acvp_assay.models import ProviderKind, ProviderMetadata
 
 PACKAGE = Path(__file__).resolve().parent
 
@@ -103,13 +104,35 @@ def runner_identity(package: Path = PACKAGE) -> dict[str, str | bool | None]:
     }
 
 
-def runtime_metadata() -> dict[str, str | bool | None]:
-    """Return the versions and commit that identify this runner and its provider."""
-    return {
-        "cryptography_version": cryptography.__version__,
-        "openssl_version": backend.openssl_version_text(),
-        "provider": "OpenSSL (via cryptography)",
+def runtime_metadata(provider: ProviderMetadata | None = None) -> dict[str, object]:
+    """Return what identifies this runner, and the provider that answers.
+
+    With no provider, the built-in toolkit is described as it always has been.
+    With one, that provider's own declared identity is reported instead. For an
+    external provider the ``cryptography`` and OpenSSL versions are omitted, not
+    set to null: they describe a library that answered nothing, and a null would
+    read as a harness that failed to report one. The command is reported beside
+    the identity, because the identity is what ran and the command is where.
+    """
+    runner: dict[str, object] = {
         "python_version": platform.python_version(),
         "runner_version": __version__,
         **runner_identity(),
     }
+    if provider is None:
+        return {
+            "cryptography_version": cryptography.__version__,
+            "openssl_version": backend.openssl_version_text(),
+            "provider": "OpenSSL (via cryptography)",
+            "provider_kind": ProviderKind.BUILTIN.value,
+            **runner,
+        }
+    identity: dict[str, object] = {
+        "provider": provider.name,
+        "provider_kind": provider.kind.value,
+        "provider_library": {"name": provider.library_name, "version": provider.library_version},
+        "provider_backend": {"name": provider.backend_name, "version": provider.backend_version},
+    }
+    if provider.command is not None:
+        identity["provider_command"] = provider.command
+    return {**identity, **runner}

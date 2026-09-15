@@ -26,7 +26,7 @@ from __future__ import annotations
 import secrets
 from typing import Protocol, runtime_checkable
 
-from acvp_assay.models import ProviderMetadata
+from acvp_assay.models import ProviderKind, ProviderMetadata
 from acvp_assay.providers.digest import ssl_version_text
 from acvp_assay.providers.subprocess_harness import HarnessClient, decode_hex
 
@@ -175,6 +175,7 @@ class PythonSafePrimes:
         import platform
 
         return ProviderMetadata(
+            kind=ProviderKind.BUILTIN,
             name="python-safe-primes",
             library_name="python",
             library_version=platform.python_version(),

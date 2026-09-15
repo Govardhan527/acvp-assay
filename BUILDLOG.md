@@ -495,3 +495,17 @@
 - Commit/link/path: `README.md`, `tests/unit/test_readme_arithmetic.py`.
 - Blocker, if any: none.
 - Next unchecked ID: M26 continues - KMAC-128/256 (22%) and KAS-ECC non-SSC (22%).
+
+## 2026-09-15 - Ready for an implementation this project did not write
+
+- Project and task ID: ACVP Assay - five changes, one commit each, before the first external harness arrives as a pull request.
+- Done condition: a run through someone else's harness names that harness and says it was external, lets the harness say why it declined a case, pins the harness's build, and states the review standards before the pull request rather than in it.
+- **Checked before building, and the assumption was half right.** The assumption going in was that a report names OpenSSL via `cryptography` when an external harness answered. Running the SHA2-256 fixture through `examples/reference_harness.py` showed otherwise: the report's provider block already carried the harness's own `metadata` answer, `reference-harness`. What was wrong was narrower, and still real. `acvp-assay info` printed the built-in values unconditionally and had no way to ask a harness. And nothing in a report said built-in or external, so a harness that declares `cryptography` 50.0.1 on OpenSSL 4.0.2, as the reference harness does, reads exactly like a built-in run.
+- **`ProviderKind` has no default.** `ProviderMetadata` now requires `kind`, `builtin` or `external`, and an external provider must carry its command while a built-in one must not. The 19 built-in providers state `builtin`, and `HarnessClient.metadata()`, which every harness passes through, states `external`. No path can report a harness as built-in by omission. The report's provider block carries `kind`, and for a harness `command`.
+- `acvp-assay info --provider-command COMMAND` reports what a harness declares about itself. `cryptography_version` and `openssl_version` are omitted rather than set to null: they describe a library that answered nothing, and a null would read as a harness that failed to report one. Without a provider, `info` is unchanged apart from `provider_kind`.
+- **The command is recorded with its secrets removed.** `examples/pkcs11` passed its PIN as `--pin 1234`, so recording `--provider-command` verbatim would have written a token PIN into reports that are shared as evidence, which is the same leak the harness's stderr is already kept out of reports to prevent. The value after `--pin`, `--so-pin`, `--user-pin`, `--password`, `--passphrase` and `--secret` is recorded as `REDACTED`, the PKCS#11 example now passes the PIN as `PKCS11_PIN`, and `docs/harness-protocol.md` says to keep secrets in the environment, because redaction by option name is a backstop and not a guarantee.
+- Left as it was: `info` without a provider still says `OpenSSL (via cryptography)`, but the built-in hash families answer through `hashlib`, which on this machine links OpenSSL 3.5.8 while `cryptography` carries 4.0.2. A run report names the right library; the provider-less `info` line does not, and it stays because the built-in path was to stay unchanged.
+- Tests run and result: `scripts/dev.py test` - format, lint, strict mypy, 1,024 passed and 9 skipped.
+- Commit/link/path: `src/acvp_assay/models.py`, `src/acvp_assay/metadata.py`, `src/acvp_assay/cli.py`, `src/acvp_assay/reporter.py`, `src/acvp_assay/providers/`, `docs/harness-protocol.md`, `examples/pkcs11/`, `README.md`.
+- Blocker, if any: none.
+- Next unchecked ID: an external harness cannot say why it declined a case.

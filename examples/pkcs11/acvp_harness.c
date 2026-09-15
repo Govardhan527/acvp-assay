@@ -16,8 +16,8 @@
  *        -I/usr/include/p11-kit-1
  *
  * Run:
- *     acvp-assay run prompt.json --provider-command \
- *         "./acvp_harness --module /usr/lib/softhsm/libsofthsm2.so --pin 1234"
+ *     PKCS11_PIN=1234 acvp-assay run prompt.json --provider-command \
+ *         "./acvp_harness --module /usr/lib/softhsm/libsofthsm2.so"
  *
  * Operations answered here: metadata, digest, digest-mct, mac,
  * block-transform (AES-ECB/CBC), encrypt and decrypt (AES-GCM). Everything

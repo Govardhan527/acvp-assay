@@ -129,20 +129,33 @@ def build_report(
     """Build the complete machine-readable report document."""
     summary = summarize(results)
     return {
-        "provider": {
-            "name": provider.name,
-            "library": {
-                "name": provider.library_name,
-                "version": provider.library_version,
-            },
-            "backend": {
-                "name": provider.backend_name,
-                "version": provider.backend_version,
-            },
-        },
+        "provider": _provider_document(provider),
         "summary": _summary_document(summary),
         "cases": [_case_document(result) for result in results],
     }
+
+
+def _provider_document(provider: ProviderMetadata) -> dict[str, object]:
+    """Name the implementation that answered, and say which kind it was.
+
+    ``kind`` makes a run through an external harness impossible to read as a
+    built-in one; an external provider also records the command it ran from.
+    """
+    document: dict[str, object] = {
+        "name": provider.name,
+        "kind": provider.kind.value,
+        "library": {
+            "name": provider.library_name,
+            "version": provider.library_version,
+        },
+        "backend": {
+            "name": provider.backend_name,
+            "version": provider.backend_version,
+        },
+    }
+    if provider.command is not None:
+        document["command"] = provider.command
+    return document
 
 
 def report_json(

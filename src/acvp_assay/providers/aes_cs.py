@@ -27,7 +27,7 @@ import cryptography
 from cryptography.hazmat.backends.openssl.backend import backend
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 
-from acvp_assay.models import ProviderMetadata
+from acvp_assay.models import ProviderKind, ProviderMetadata
 from acvp_assay.providers.subprocess_harness import HarnessClient, decode_hex
 
 CS1 = "ACVP-AES-CBC-CS1"
@@ -78,6 +78,7 @@ class CryptographyAesCs:
     def metadata(self) -> ProviderMetadata:
         """Identify both the Python binding and the OpenSSL backend."""
         return ProviderMetadata(
+            kind=ProviderKind.BUILTIN,
             name="cryptography-aes-cbc-cs",
             library_name="cryptography",
             library_version=cryptography.__version__,

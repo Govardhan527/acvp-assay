@@ -97,6 +97,15 @@ read, and later requests simply start a fresh process each time.
 Every harness must implement `metadata`. Implement only the others you need —
 declining is a first-class answer, see below.
 
+`metadata` is how a run names your implementation. The report's provider block
+carries what it returns, marked `"kind": "external"`, with the command beside it:
+the identity is what ran, and the command is where it ran. Check what a run will
+record before starting one with `acvp-assay info --provider-command COMMAND`.
+Reports are shared as evidence, so pass secrets such as a PIN through the
+environment rather than on the command line. The value after `--pin`, `--so-pin`,
+`--user-pin`, `--password`, `--passphrase` or `--secret` is recorded as `REDACTED`,
+which is a backstop for the common spellings and not a guarantee.
+
 | `operation` | Request fields | Response fields |
 | --- | --- | --- |
 | `metadata` | — | `name`, `libraryName`, `libraryVersion`, `backendName`, `backendVersion` |

@@ -30,7 +30,7 @@ import platform
 from dataclasses import dataclass
 from typing import Protocol, runtime_checkable
 
-from acvp_assay.models import ProviderMetadata
+from acvp_assay.models import ProviderKind, ProviderMetadata
 from acvp_assay.providers.digest import HASHLIB_ALGORITHMS, ssl_version_text
 from acvp_assay.providers.subprocess_harness import HarnessClient, decode_hex
 
@@ -149,6 +149,7 @@ class HashlibProtocolKdf:
     def metadata(self) -> ProviderMetadata:
         """Identify hashlib and the OpenSSL build behind it."""
         return ProviderMetadata(
+            kind=ProviderKind.BUILTIN,
             name="hashlib-protocol-kdf",
             library_name="hashlib",
             library_version=platform.python_version(),

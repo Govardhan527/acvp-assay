@@ -6,7 +6,7 @@ import cryptography
 from cryptography.hazmat.backends.openssl.backend import backend
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 
-from acvp_assay.models import AesGcmValues, ProviderMetadata
+from acvp_assay.models import AesGcmValues, ProviderKind, ProviderMetadata
 
 MINIMUM_TAG_LENGTH_BITS = 32
 MAXIMUM_TAG_LENGTH_BITS = 128
@@ -29,6 +29,7 @@ class CryptographyAesGcmProvider:
     def metadata(self) -> ProviderMetadata:
         """Identify both the Python binding and OpenSSL backend versions."""
         return ProviderMetadata(
+            kind=ProviderKind.BUILTIN,
             name="cryptography-aes-gcm",
             library_name="cryptography",
             library_version=cryptography.__version__,

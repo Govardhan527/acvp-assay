@@ -20,7 +20,7 @@ import cryptography
 from cryptography.hazmat.backends.openssl.backend import backend
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 
-from acvp_assay.models import ProviderMetadata
+from acvp_assay.models import ProviderKind, ProviderMetadata
 from acvp_assay.providers.aes_modes import (
     MCT_INNER_ITERATIONS,
     MCT_OUTER_ITERATIONS,
@@ -161,6 +161,7 @@ class CryptographyAesBlockProvider:
     def metadata(self) -> ProviderMetadata:
         """Identify both the Python binding and the OpenSSL backend."""
         return ProviderMetadata(
+            kind=ProviderKind.BUILTIN,
             name="cryptography-aes-block",
             library_name="cryptography",
             library_version=cryptography.__version__,

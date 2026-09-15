@@ -33,7 +33,7 @@ from cryptography.hazmat.backends.openssl.backend import backend
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import padding, rsa
 
-from acvp_assay.models import ProviderMetadata
+from acvp_assay.models import ProviderKind, ProviderMetadata
 from acvp_assay.providers.subprocess_harness import (
     HarnessClient,
     HarnessProtocolError,
@@ -153,6 +153,7 @@ class CryptographyRsaProvider:
     def metadata(self) -> ProviderMetadata:
         """Identify both the Python binding and the OpenSSL backend."""
         return ProviderMetadata(
+            kind=ProviderKind.BUILTIN,
             name="cryptography-rsa",
             library_name="cryptography",
             library_version=cryptography.__version__,

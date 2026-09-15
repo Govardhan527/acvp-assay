@@ -16,7 +16,7 @@ from cryptography.hazmat.backends.openssl.backend import backend
 from cryptography.hazmat.primitives import cmac, keywrap
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 
-from acvp_assay.models import ProviderMetadata
+from acvp_assay.models import ProviderKind, ProviderMetadata
 from acvp_assay.providers.subprocess_harness import (
     HarnessClient,
     decode_hex,
@@ -83,6 +83,7 @@ class CryptographyAesModeProvider:
     def metadata(self) -> ProviderMetadata:
         """Identify both the Python binding and OpenSSL backend versions."""
         return ProviderMetadata(
+            kind=ProviderKind.BUILTIN,
             name="cryptography-aes-modes",
             library_name="cryptography",
             library_version=cryptography.__version__,

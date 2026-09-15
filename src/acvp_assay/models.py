@@ -222,15 +222,38 @@ class ExpectedResultSet:
     groups: tuple[ExpectedResultGroup, ...]
 
 
+class ProviderKind(StrEnum):
+    """Whether this runner's own code answered, or an implementation it was pointed at."""
+
+    BUILTIN = "builtin"
+    EXTERNAL = "external"
+
+
 @dataclass(frozen=True, slots=True)
 class ProviderMetadata:
-    """Identity and versions for one cryptographic provider implementation."""
+    """Identity and versions for one cryptographic provider implementation.
+
+    ``kind`` has no default, so no provider can be read as the built-in one by
+    omission. An external provider also carries ``command``, because its identity
+    is what ran and its command is where it ran; a built-in one has no command.
+    """
 
     name: str
     library_name: str
     library_version: str
     backend_name: str
     backend_version: str
+    kind: ProviderKind
+    command: str | None = None
+
+    def __post_init__(self) -> None:
+        """Refuse a kind outside the closed set, and a command that contradicts it."""
+        if not isinstance(self.kind, ProviderKind):
+            raise ValueError(f"provider kind must be a ProviderKind, got {self.kind!r}")
+        if (self.kind is ProviderKind.EXTERNAL) != (self.command is not None):
+            raise ValueError(
+                "an external provider carries its command, and a built-in one does not"
+            )
 
 
 @dataclass(frozen=True, slots=True)
@@ -289,6 +312,7 @@ __all__ = [
     "ExpectedResultCase",
     "ExpectedResultGroup",
     "ExpectedResultSet",
+    "ProviderKind",
     "ProviderMetadata",
     "ResultStatus",
     "SignatureValues",

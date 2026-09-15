@@ -23,7 +23,7 @@ from cryptography.hazmat.backends.openssl.backend import backend
 from cryptography.hazmat.primitives import cmac
 from cryptography.hazmat.primitives.ciphers import algorithms
 
-from acvp_assay.models import ProviderMetadata
+from acvp_assay.models import ProviderKind, ProviderMetadata
 from acvp_assay.providers.subprocess_harness import HarnessClient, decode_hex
 
 #: ACVP ``macMode`` to the hashlib name backing its HMAC.
@@ -116,6 +116,7 @@ class CryptographyKdf:
     def metadata(self) -> ProviderMetadata:
         """Identify both the Python binding and the OpenSSL backend."""
         return ProviderMetadata(
+            kind=ProviderKind.BUILTIN,
             name="cryptography-kdf-sp800-108",
             library_name="cryptography",
             library_version=cryptography.__version__,

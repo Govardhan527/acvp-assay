@@ -11,14 +11,33 @@ from pathlib import Path
 from acvp_assay.algorithms import UnsupportedAlgorithmError, run_vector_file
 from acvp_assay.diff import compare, diff_json, load_report, summarize_text
 from acvp_assay.metadata import runtime_metadata
+from acvp_assay.models import ProviderMetadata
 from acvp_assay.parser import AcvpValidationError
-from acvp_assay.providers.subprocess_harness import DEFAULT_TIMEOUT_SECONDS
+from acvp_assay.providers.subprocess_harness import DEFAULT_TIMEOUT_SECONDS, HarnessClient
 from acvp_assay.reporter import report_json, summarize
 from acvp_assay.runner import ExpectedResultsMismatchError
 
 EXIT_SUCCESS = 0
 EXIT_CASE_FAILURES = 1
 EXIT_INPUT_ERROR = 2
+
+
+def _add_provider_arguments(parser: argparse.ArgumentParser, *, purpose: str) -> None:
+    parser.add_argument(
+        "--provider-command",
+        default=None,
+        metavar="COMMAND",
+        help=f"{purpose}; see examples/reference_harness.py",
+    )
+    parser.add_argument(
+        "--provider-timeout",
+        type=float,
+        default=DEFAULT_TIMEOUT_SECONDS,
+        metavar="SECONDS",
+        help=(
+            f"per-operation timeout for an external harness (default: {DEFAULT_TIMEOUT_SECONDS:g})"
+        ),
+    )
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -28,9 +47,15 @@ def build_parser() -> argparse.ArgumentParser:
         description="Run offline ACVP vectors through a cryptographic provider.",
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
-    subparsers.add_parser(
+    info_parser = subparsers.add_parser(
         "info",
-        help="print Python, cryptography, and OpenSSL provider metadata as JSON",
+        help="print runner and provider metadata as JSON",
+    )
+    _add_provider_arguments(
+        info_parser,
+        purpose=(
+            "report what an external harness declares about itself instead of the built-in provider"
+        ),
     )
     run_parser = subparsers.add_parser(
         "run",
@@ -56,22 +81,11 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="also fail the run if any case is SKIPPED or UNSUPPORTED",
     )
-    run_parser.add_argument(
-        "--provider-command",
-        default=None,
-        metavar="COMMAND",
-        help=(
+    _add_provider_arguments(
+        run_parser,
+        purpose=(
             "run every case through an external harness command instead of the "
-            "built-in OpenSSL-backed provider; see examples/reference_harness.py"
-        ),
-    )
-    run_parser.add_argument(
-        "--provider-timeout",
-        type=float,
-        default=DEFAULT_TIMEOUT_SECONDS,
-        metavar="SECONDS",
-        help=(
-            f"per-operation timeout for an external harness (default: {DEFAULT_TIMEOUT_SECONDS:g})"
+            "built-in OpenSSL-backed provider"
         ),
     )
     diff_parser = subparsers.add_parser(
@@ -112,6 +126,25 @@ def _diff(baseline: Path, current: Path, output: Path | None) -> int:
 
     print(summarize_text(result), end="")
     return EXIT_CASE_FAILURES if result.has_regressions else EXIT_SUCCESS
+
+
+def _info(provider_command: str | None, provider_timeout: float) -> int:
+    """Print runner and provider metadata, asking an external harness when one is named.
+
+    Exit codes: 0, or 2 when a named harness cannot identify itself.
+    """
+    provider: ProviderMetadata | None = None
+    if provider_command is not None:
+        try:
+            with HarnessClient.from_command_string(
+                provider_command, timeout_seconds=provider_timeout
+            ) as harness:
+                provider = harness.metadata()
+        except (ValueError, OSError) as error:
+            print(f"error: {error}", file=sys.stderr)
+            return EXIT_INPUT_ERROR
+    print(json.dumps(runtime_metadata(provider), indent=2, sort_keys=True))
+    return EXIT_SUCCESS
 
 
 def _run(
@@ -179,5 +212,4 @@ def main(argv: Sequence[str] | None = None) -> int:
             args.provider_command,
             args.provider_timeout,
         )
-    print(json.dumps(runtime_metadata(), indent=2, sort_keys=True))
-    return EXIT_SUCCESS
+    return _info(args.provider_command, args.provider_timeout)

@@ -34,7 +34,7 @@ from typing import Protocol, runtime_checkable
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import padding, rsa
 
-from acvp_assay.models import ProviderMetadata
+from acvp_assay.models import ProviderKind, ProviderMetadata
 from acvp_assay.providers.digest import ssl_version_text
 from acvp_assay.providers.subprocess_harness import HarnessClient, decode_hex
 
@@ -120,6 +120,7 @@ class CryptographyKasIfc:
     def metadata(self) -> ProviderMetadata:
         """Identify the library and the OpenSSL build behind it."""
         return ProviderMetadata(
+            kind=ProviderKind.BUILTIN,
             name="cryptography-kas-ifc",
             library_name="cryptography",
             library_version=platform.python_version(),

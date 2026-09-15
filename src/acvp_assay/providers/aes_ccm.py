@@ -24,7 +24,7 @@ import cryptography
 from cryptography.hazmat.backends.openssl.backend import backend
 from cryptography.hazmat.primitives.ciphers.aead import AESCCM
 
-from acvp_assay.models import ProviderMetadata
+from acvp_assay.models import ProviderKind, ProviderMetadata
 from acvp_assay.providers.subprocess_harness import HarnessClient, decode_hex
 
 ALGORITHM = "ACVP-AES-CCM"
@@ -63,6 +63,7 @@ class CryptographyAesCcm:
     def metadata(self) -> ProviderMetadata:
         """Record the binding and the OpenSSL behind it."""
         return ProviderMetadata(
+            kind=ProviderKind.BUILTIN,
             name="cryptography-aes-ccm",
             library_name="cryptography",
             library_version=cryptography.__version__,
