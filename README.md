@@ -107,7 +107,7 @@ python3.12 scripts/dev.py demo
 .venv/bin/python -m acvp_assay run fixtures/aes-gcm-valid-encrypt/prompt.json
 ```
 
-The demo prints machine-readable runtime metadata: the `cryptography` and OpenSSL versions that identify the provider, and the full commit the runner was built from, with whether the working tree matched it. A version alone does not identify the runner, since two runs a commit apart report the same one. Where there is no commit, `runner_commit` is null and `runner_commit_absent_reason` says why: `no_checkout` for an installed wheel, `not_a_repository` for a source tree outside version control, and `vcs_unavailable` when git could not be run. `provider_kind` says whether the provider is built in or an external harness. `acvp-assay info --provider-command COMMAND` asks a harness to identify itself and reports what it declares instead, with the command beside it and without the `cryptography` and OpenSSL versions, which describe a library that did not answer. A run report's provider block carries the same `kind`, so a run through a harness cannot be read as a built-in one, and for a harness its `buildId`, or `null` with a `buildIdAbsentReason`, because a name and a version do not identify a build. The last command executes a tiny local fixture end to end and prints a JSON report.
+The demo prints machine-readable runtime metadata: the `cryptography` and OpenSSL versions that identify the provider, and the full commit the runner was built from, with whether the working tree matched it. A version alone does not identify the runner, since two runs a commit apart report the same one. Where there is no commit, `runner_commit` is null and `runner_commit_absent_reason` says why: `no_checkout` for an installed wheel, `not_a_repository` for a source tree outside version control, and `vcs_unavailable` when git could not be run. `provider_kind` says whether the provider is built in or an external harness. `acvp-assay info --provider-command COMMAND` asks a harness to identify itself and reports what it declares instead, with the command beside it and without the `cryptography` and OpenSSL versions, which describe a library that did not answer. A run report's provider block carries the same `kind`, so a run through a harness cannot be read as a built-in one, and for a harness its `buildId`, or `null` with a `buildIdAbsentReason`, because a name and a version do not identify a build. A report also carries a `runner` block with the same commit and tree state, so a result set names the instrument that produced it and not only the implementation that answered: two runs a commit apart are otherwise indistinguishable. The last command executes a tiny local fixture end to end and prints a JSON report.
 
 New to the project? **[`docs/design.md`](docs/design.md) has the diagrams** — what the
 system is for, how the two paths differ, and the end-to-end sequence for a run, a live
@@ -397,6 +397,7 @@ $ acvp-assay run fixtures/aes-gcm-valid-encrypt/prompt.json; echo "exit: $?"
     }
   ],
   "provider": { "name": "cryptography-aes-gcm", "...": "..." },
+  "runner": { "version": "...", "commit": "...", "commitAbsentReason": null, "treeClean": true },
   "summary": { "total": 1, "passed": 1, "failed": 0, "errored": 0, "skipped": 0, "unsupported": 0,
                "unsupportedByReason": { "implementation_lacks": 0, "offline_undecidable": 0, "runner_lacks": 0, "vector_incomplete": 0 },
                "unsupportedByClaimant": { "harness": { "implementation_lacks": 0, "vector_incomplete": 0 }, "runner": { "implementation_lacks": 0, "offline_undecidable": 0, "runner_lacks": 0, "vector_incomplete": 0 } },
@@ -426,6 +427,7 @@ $ acvp-assay run fixtures/aes-gcm-invalid-decrypt-tag/prompt.json; echo "exit: $
     }
   ],
   "provider": { "name": "cryptography-aes-gcm", "...": "..." },
+  "runner": { "version": "...", "commit": "...", "commitAbsentReason": null, "treeClean": true },
   "summary": { "total": 1, "passed": 0, "failed": 0, "errored": 1, "skipped": 0, "unsupported": 0,
                "unsupportedByReason": { "implementation_lacks": 0, "offline_undecidable": 0, "runner_lacks": 0, "vector_incomplete": 0 },
                "unsupportedByClaimant": { "harness": { "implementation_lacks": 0, "vector_incomplete": 0 }, "runner": { "implementation_lacks": 0, "offline_undecidable": 0, "runner_lacks": 0, "vector_incomplete": 0 } },

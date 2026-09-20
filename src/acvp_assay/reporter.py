@@ -7,6 +7,7 @@ from collections import Counter
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
+from acvp_assay.metadata import runner_document
 from acvp_assay.models import (
     HARNESS_CLAIMABLE_REASONS,
     CaseValues,
@@ -150,10 +151,18 @@ def _case_document(result: TestCaseResult) -> dict[str, object]:
 def build_report(
     results: Sequence[TestCaseResult],
     provider: ProviderMetadata,
+    *,
+    runner: Mapping[str, object] | None = None,
 ) -> dict[str, object]:
-    """Build the complete machine-readable report document."""
+    """Build the complete machine-readable report document.
+
+    ``runner`` identifies the instrument, and is measured from this checkout when
+    it is not supplied. A caller passes it to keep a report deterministic, which
+    is what the tests do.
+    """
     summary = summarize(results)
     return {
+        "runner": dict(runner) if runner is not None else runner_document(),
         "provider": _provider_document(provider),
         "summary": _summary_document(summary),
         "cases": [_case_document(result) for result in results],
@@ -191,9 +200,12 @@ def _provider_document(provider: ProviderMetadata) -> dict[str, object]:
 def report_json(
     results: Sequence[TestCaseResult],
     provider: ProviderMetadata,
+    *,
+    runner: Mapping[str, object] | None = None,
 ) -> str:
     """Serialize a report deterministically with a trailing newline."""
-    return json.dumps(build_report(results, provider), indent=2, sort_keys=True) + "\n"
+    document = build_report(results, provider, runner=runner)
+    return json.dumps(document, indent=2, sort_keys=True) + "\n"
 
 
 __all__ = [

@@ -104,6 +104,22 @@ def runner_identity(package: Path = PACKAGE) -> dict[str, str | bool | None]:
     }
 
 
+def runner_document() -> dict[str, object]:
+    """The runner's identity as a report records it.
+
+    A report already names the implementation that answered. Without this it does
+    not name the instrument that ran it, so two result sets a commit apart look
+    identical, which is the defect 0.22.0 fixed for ``info`` and left in reports.
+    """
+    identity = runner_identity()
+    return {
+        "version": __version__,
+        "commit": identity["runner_commit"],
+        "commitAbsentReason": identity["runner_commit_absent_reason"],
+        "treeClean": identity["runner_tree_clean"],
+    }
+
+
 def runtime_metadata(provider: ProviderMetadata | None = None) -> dict[str, object]:
     """Return what identifies this runner, and the provider that answers.
 

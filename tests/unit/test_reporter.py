@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from typing import cast
 
+from acvp_assay import __version__
 from acvp_assay.models import (
     AesGcmValues,
     BuildIdAbsentReason,
@@ -24,6 +25,13 @@ from acvp_assay.reporter import (
 )
 
 NO_DECLINES = {reason.value: 0 for reason in DeclineReason}
+#: A fixed instrument identity, so a report assertion does not depend on the checkout.
+RUNNER: dict[str, object] = {
+    "version": "0.0.0-test",
+    "commit": "a" * 40,
+    "commitAbsentReason": None,
+    "treeClean": True,
+}
 NO_CLAIMS = {
     "harness": {"implementation_lacks": 0, "vector_incomplete": 0},
     "runner": dict(NO_DECLINES),
@@ -136,8 +144,9 @@ def test_the_concentration_carries_its_partition_and_cardinality() -> None:
 
 def test_report_contains_provider_versions_summary_and_case_values() -> None:
     """Report fields retain IDs, uppercase hex values, and safe diagnostics."""
-    report = build_report(all_status_results(), provider_metadata())
+    report = build_report(all_status_results(), provider_metadata(), runner=RUNNER)
 
+    assert report["runner"] == RUNNER
     assert report["provider"] == {
         "name": "cryptography-aes-gcm",
         "kind": "builtin",
@@ -179,7 +188,7 @@ def test_values_report_all_direction_specific_fields() -> None:
 
     cases = cast(
         list[dict[str, object]],
-        build_report([result], provider_metadata())["cases"],
+        build_report([result], provider_metadata(), runner=RUNNER)["cases"],
     )
     case = cases[0]
 
@@ -194,7 +203,7 @@ def test_values_document_omits_absent_fields_independently() -> None:
 
     cases = cast(
         list[dict[str, object]],
-        build_report([result], provider_metadata())["cases"],
+        build_report([result], provider_metadata(), runner=RUNNER)["cases"],
     )
     case = cases[0]
 
@@ -204,11 +213,13 @@ def test_values_document_omits_absent_fields_independently() -> None:
 
 def test_json_is_deterministic_valid_and_newline_terminated() -> None:
     """Serialized reports are stable JSON suitable for files and pipelines."""
-    rendered = report_json(all_status_results(), provider_metadata())
+    rendered = report_json(all_status_results(), provider_metadata(), runner=RUNNER)
 
     assert rendered.endswith("\n")
-    assert json.loads(rendered) == build_report(all_status_results(), provider_metadata())
-    assert rendered == report_json(all_status_results(), provider_metadata())
+    assert json.loads(rendered) == build_report(
+        all_status_results(), provider_metadata(), runner=RUNNER
+    )
+    assert rendered == report_json(all_status_results(), provider_metadata(), runner=RUNNER)
 
 
 def test_declines_are_split_by_who_claimed_them() -> None:
@@ -251,7 +262,7 @@ def test_an_external_provider_block_carries_its_command_and_build() -> None:
         build_id_absent_reason=BuildIdAbsentReason.NOT_EXPOSED,
     )
 
-    assert build_report([], external)["provider"] == {
+    assert build_report([], external, runner=RUNNER)["provider"] == {
         "name": "pkcs11-harness",
         "kind": "external",
         "command": "./acvp_harness --module /usr/lib/softhsm/libsofthsm2.so",
@@ -260,3 +271,16 @@ def test_an_external_provider_block_carries_its_command_and_build() -> None:
         "buildId": None,
         "buildIdAbsentReason": "not_exposed",
     }
+
+
+def test_a_report_measures_the_runner_when_none_is_supplied() -> None:
+    """Left alone, a report pins the instrument that produced it from this checkout."""
+    runner = build_report([], provider_metadata())["runner"]
+
+    assert isinstance(runner, dict)
+    assert set(runner) == {"version", "commit", "commitAbsentReason", "treeClean"}
+    assert runner["version"] == __version__
+    if runner["commit"] is None:
+        assert runner["commitAbsentReason"] is not None
+    else:
+        assert runner["commitAbsentReason"] is None
