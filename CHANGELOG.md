@@ -5,6 +5,68 @@ All notable changes to this project are recorded here. The format follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Before 1.0.0 the
 provider protocols may change between minor versions.
 
+## [0.24.0] - 2026-09-20
+
+### Fixed
+
+- **A failed AES-KW or AES-KWP wrapping of a case NIST recorded an answer for is
+  a FAIL, not an UNSUPPORTED.** A refusal came back as a decline, so a defect in
+  the implementation arrived as coverage that stopped being counted, and
+  `implementation_lacks` blamed the vendor for what the answer key held. It now
+  splits three ways on what the expected results carry: a recorded verdict is
+  judged as before, a recorded plaintext or ciphertext makes a refusal a failure
+  against that value, and only with neither is it a decline, then
+  `offline_undecidable`, because nothing local can decide it. The pinned KW and
+  KWP sets still pass 3,600 cases each through the built-in provider.
+- **`--pin-fd` works through `--provider-command` without a shell wrapper.**
+  Python's `subprocess` closes every descriptor above 2, so a PIN the caller
+  opened never reached the harness and `examples/pkcs11` failed with `Bad file
+  descriptor`; the only route was `sh -c 'exec ... --pin-fd 3 3<FILE'`. The new
+  `--provider-pass-fd N` names a descriptor the harness inherits, and it is
+  repeatable. A descriptor below 3 is refused, because 0, 1 and 2 carry the
+  protocol and a harness given 0 would read its PIN from the request stream, and
+  one that is not open is refused before any case runs rather than failing inside
+  the vendor's process partway through. The wrapper form still works and remains
+  documented for older runners. Verified against a SoftHSM 2.6.1 token both ways,
+  with the PIN absent from `/proc/PID/cmdline` throughout.
+
+### Added
+
+- **Run reports carry a `runner` block.** A report named the implementation that
+  answered and the runner's version alone, so two result sets a commit apart read
+  identically, which is exactly what a regression hunt is trying to tell apart. It
+  now carries `version`, `commit`, `commitAbsentReason` and `treeClean`: the four
+  fields 0.22.0 gave `info` and left out of reports, with the same closed
+  absent-reason set. `build_report` and `report_json` take a keyword-only
+  `runner`, measured from the checkout when it is not supplied.
+
+### Changed
+
+- **Breaking: provider-less `info` no longer claims `OpenSSL (via
+  cryptography)`.** Digests, HMAC, PBKDF, the protocol KDFs and both hash DRBGs
+  answer through `hashlib`, which uses the interpreter's OpenSSL, while
+  `cryptography` links its own: 3.5.8 and 4.0.2 on the machine this was found on.
+  One `openssl_version` could not be right about both. `provider` is now
+  `built-in (cryptography and hashlib)` and `provider_libraries` lists each
+  library with its own version and backend. The `cryptography_version` and
+  `openssl_version` keys are removed rather than kept beside the list, because a
+  reader who finds them will use them.
+- **Breaking: the hash DRBGs report the library they actually use.**
+  `providers/hash_drbg.py` declared `cryptography` and reported that library's
+  OpenSSL while computing every digest with `hashlib` and every update with
+  `hmac`, touching no `cryptography` primitive, so every HMAC-DRBG and Hash-DRBG
+  run report named a library that answered nothing and a build that did no work.
+  Both now declare `hashlib` with the interpreter's OpenSSL. CTR-DRBG genuinely
+  does use `cryptography` and is unchanged.
+
+### Notes
+
+- `providers/kdf.py` takes HMAC from the standard library and CMAC-AES from
+  `cryptography`, and declares only the latter. `ProviderMetadata` carries one
+  library name and which one answers is decided per test group, so reporting it
+  truthfully is a design change rather than a relabel. It is recorded here rather
+  than half-fixed.
+
 ## [0.23.1] - 2026-09-20
 
 ### Fixed
@@ -919,6 +981,13 @@ Initial release: an offline AES-GCM vector runner.
 - Clean-checkout Linux CI, and a pinned, hash-verified upstream vector source
   that is referenced rather than redistributed.
 
+[0.24.0]: https://github.com/Govardhan527/acvp-assay/releases/tag/v0.24.0
+[0.23.1]: https://github.com/Govardhan527/acvp-assay/releases/tag/v0.23.1
+[0.23.0]: https://github.com/Govardhan527/acvp-assay/releases/tag/v0.23.0
+[0.22.0]: https://github.com/Govardhan527/acvp-assay/releases/tag/v0.22.0
+[0.21.0]: https://github.com/Govardhan527/acvp-assay/releases/tag/v0.21.0
+[0.20.0]: https://github.com/Govardhan527/acvp-assay/releases/tag/v0.20.0
+[0.19.0]: https://github.com/Govardhan527/acvp-assay/releases/tag/v0.19.0
 [0.18.0]: https://github.com/Govardhan527/acvp-assay/releases/tag/v0.18.0
 [0.17.0]: https://github.com/Govardhan527/acvp-assay/releases/tag/v0.17.0
 [0.16.0]: https://github.com/Govardhan527/acvp-assay/releases/tag/v0.16.0
