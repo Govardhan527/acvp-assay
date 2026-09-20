@@ -252,10 +252,17 @@ class BuildIdAbsentReason(StrEnum):
     NOT_REPORTED = "not_reported"
     #: The implementation has a build identity its interface does not expose, as
     #: with PKCS#11, whose two-part versions two builds of one release share. The
-    #: vendor exposes it.
+    #: harness establishes it some other way: by hashing the module file, or by
+    #: reading what the vendor records in the artefact. PKCS#11 will never carry
+    #: it, so waiting for a vendor to expose it is waiting for nothing. This is
+    #: the honest answer only where the harness genuinely cannot establish one.
     NOT_EXPOSED = "not_exposed"
-    #: The implementation records no build identity at all. Its build process
-    #: starts recording one.
+    #: The implementation records no build identity, and the harness cannot
+    #: establish one either: nothing it can reach distinguishes this build from
+    #: another. Hashing the artefact is the usual way out, so this fits mainly
+    #: where there is no artefact to hash, such as a module reached over a wire.
+    #: Where there is one, the repair is the vendor's build process recording an
+    #: identity, or the harness hashing what it loaded.
     NOT_RECORDED = "not_recorded"
 
 

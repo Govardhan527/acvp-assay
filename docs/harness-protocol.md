@@ -116,6 +116,8 @@ sends. If there is nothing of the kind to send, send `"buildId": null` with
 interface does not expose, or `not_recorded` when it records none. A harness written
 before this field still works. The report records `not_reported`, and the run says so
 on stderr; `not_reported` is recorded by this runner and is not a harness's to claim.
+A `buildId` need not come from the implementation's own API; see
+[Where a `buildId` can come from](#where-a-buildid-can-come-from).
 
 For a PKCS#11 harness, `C_GetInfo` and `C_GetTokenInfo` supply the rest of the identity
 at no cost: `manufacturerID` and `libraryDescription` for the library, `libraryVersion`,
@@ -199,6 +201,30 @@ own and does not care whether the keys differ. Only a live submission needs
 `ecdsa-sign-group`; implement it if you intend to submit ECDSA sigGen.
 
 The exchange is drawn as a sequence diagram in [`design.md`](design.md#the-harness-contract).
+
+### Where a `buildId` can come from
+
+It does not have to come from the implementation's own API, and assuming it does is
+how `not_exposed` came to name a repair that cannot happen. A harness runs on the
+same host as the module, holds the path it loaded, and anything it can establish
+about that module by honest means is a legitimate answer to `metadata`: hash the
+module file, read an identifier the vendor records in the artefact, ask a vendor
+tool, or report the commit the harness was built from when the harness ships with
+the module.
+
+What a harness must not do is invent one, or send a version in its place. A version
+that every build of a release shares is the thing `buildId` exists to distinguish,
+so sending one as a build identifier is worse than sending `buildIdAbsentReason`.
+
+FreeHSM is the worked example, and the point is Afchine Madjlessi's, its
+maintainer. He reports that FreeHSM's signing step patches a 48-byte digest into a
+dedicated `.fhsm_digest` ELF section, which the module verifies itself against at
+load, so a build identity exists. `libfreehsm.so` exports 63 symbols and every one
+of them is `C_*`, so PKCS#11 cannot carry that digest and never will. A harness can
+read it anyway, out of the file whose path it already holds. An identity that
+exists, is unreachable through the interface by design, and is reachable by the
+harness regardless: `not_exposed` would be the wrong answer there, and the digest
+is the right one.
 
 ### Starting points
 
