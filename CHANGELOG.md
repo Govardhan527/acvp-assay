@@ -5,6 +5,51 @@ All notable changes to this project are recorded here. The format follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Before 1.0.0 the
 provider protocols may change between minor versions.
 
+## [0.23.1] - 2026-09-20
+
+### Fixed
+
+- **`examples/pkcs11` no longer takes a PIN on the command line.** `argv` is
+  readable by every local user through `/proc/PID/cmdline`, and the runner keeps a
+  harness alive for the whole run rather than spawning it per case, so a PIN there
+  was exposed for the length of the measurement. 0.23.0 redacted `--pin` from the
+  *recorded command*, which protects the report and does nothing for the
+  invocation: two separate exposures, and only one of them was closed. `--pin` is
+  removed rather than deprecated. `--pin-fd N` reads the PIN from a descriptor the
+  caller already opened, and `--pin-file PATH` reads it from a file, refusing one
+  that is readable or writable beyond its owner and naming the mode it found.
+  `PKCS11_PIN` still works, and the buffer is zeroed once `C_Login` returns, on
+  the failure path too. Reported by Afchine Madjlessi, maintainer of FreeHSM.
+
+### Changed
+
+- **`buildIdAbsentReason: not_exposed` named a repair that cannot happen.** Its
+  text said the vendor exposes the build identity, but `CK_INFO` carries a major
+  and a minor shared by every build of a release, so no amount of vendor effort
+  makes PKCS#11 carry a build. It now names the harness as the actor: a harness
+  runs on the same host and holds the path it loaded, so it can hash the module
+  file or read what the vendor records in the artefact. `not_recorded` had a
+  milder form of the same defect, since a harness can usually hash the artefact,
+  and now says where it genuinely fits. Also reported by Afchine Madjlessi.
+- `docs/harness-protocol.md` gained two subsections: where a `buildId` may come
+  from, with FreeHSM as the worked example, and how to keep a secret out of
+  `/proc/PID/cmdline`, `/proc/PID/environ` and a harness's children, with a table
+  of what each method closes.
+
+### Notes
+
+- **A descriptor does not survive `--provider-command`.** The runner starts a
+  harness through Python's `subprocess`, which closes descriptors above 2, so
+  `--pin-fd` needs the child to open it, as in `sh -c 'exec ./acvp_harness
+  --module MODULE --pin-fd 3 3<FILE'`. Both forms were run against a SoftHSM 2.6.1
+  token, along with a wrong PIN, which fails at `C_Login` with `CKR_PIN_INCORRECT`
+  and is what proves the PIN reaches the module.
+- No library behaviour changed. The removed option is in example code.
+
+This produces test evidence, not a certificate. It confers no validation status:
+only an accredited CST or 17ACVT laboratory performs CAVP or FIPS 140-3
+validation, and Demo is not the production ACVTS.
+
 ## [0.23.0] - 2026-09-15
 
 ### Added
