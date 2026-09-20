@@ -11,6 +11,7 @@ from typing import Protocol, runtime_checkable
 
 from acvp_assay.models import ProviderKind, ProviderMetadata
 from acvp_assay.providers.subprocess_harness import (
+    DEFAULT_TIMEOUT_SECONDS,
     HarnessClient,
     HarnessProtocolError,
     decode_hex,
@@ -305,8 +306,15 @@ class SubprocessHashProvider(HarnessClient):
     Running the chain is what a real implementation under test does anyway.
     """
 
-    def __init__(self, algorithm: str, command: Sequence[str], **kwargs: float) -> None:
-        super().__init__(command, **kwargs)
+    def __init__(
+        self,
+        algorithm: str,
+        command: Sequence[str],
+        *,
+        timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS,
+        pass_fds: Sequence[int] = (),
+    ) -> None:
+        super().__init__(command, timeout_seconds=timeout_seconds, pass_fds=pass_fds)
         self._algorithm = algorithm
 
     def digest(self, message: bytes) -> bytes:
@@ -349,8 +357,15 @@ class SubprocessHashProvider(HarnessClient):
 class SubprocessMacProvider(HarnessClient):
     """Keyed MACs computed by an external harness."""
 
-    def __init__(self, algorithm: str, command: Sequence[str], **kwargs: float) -> None:
-        super().__init__(command, **kwargs)
+    def __init__(
+        self,
+        algorithm: str,
+        command: Sequence[str],
+        *,
+        timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS,
+        pass_fds: Sequence[int] = (),
+    ) -> None:
+        super().__init__(command, timeout_seconds=timeout_seconds, pass_fds=pass_fds)
         self._algorithm = algorithm
 
     def mac(self, *, key: bytes, message: bytes, mac_length_bits: int) -> bytes:

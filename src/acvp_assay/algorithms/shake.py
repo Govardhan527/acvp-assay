@@ -18,6 +18,7 @@ attempted.
 from __future__ import annotations
 
 import json
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -157,12 +158,16 @@ def _unsupported(code: DeclineReason, tg_id: int, tc_id: int, reason: str) -> Te
     )
 
 
-def provider_for(provider_command: str | None, timeout_seconds: float) -> XofProvider:
+def provider_for(
+    provider_command: str | None,
+    timeout_seconds: float,
+    pass_fds: Sequence[int] = (),
+) -> XofProvider:
     """The built-in provider, or a harness when one is named."""
     if provider_command is None:
         return HashlibXofProvider()
     return SubprocessXofProvider.from_command_string(
-        provider_command, timeout_seconds=timeout_seconds
+        provider_command, timeout_seconds=timeout_seconds, pass_fds=pass_fds
     )
 
 

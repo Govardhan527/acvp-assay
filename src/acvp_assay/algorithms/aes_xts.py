@@ -11,6 +11,7 @@ the reasoning; this module parses and compares.
 from __future__ import annotations
 
 import json
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -181,11 +182,17 @@ def _unsupported(code: DeclineReason, tg_id: int, tc_id: int, reason: str) -> Te
     )
 
 
-def provider_for(provider_command: str | None, timeout_seconds: float) -> AesXtsProvider:
+def provider_for(
+    provider_command: str | None,
+    timeout_seconds: float,
+    pass_fds: Sequence[int] = (),
+) -> AesXtsProvider:
     """The built-in provider, or a harness when one is named."""
     if provider_command is None:
         return CryptographyAesXts()
-    return SubprocessAesXts.from_command_string(provider_command, timeout_seconds=timeout_seconds)
+    return SubprocessAesXts.from_command_string(
+        provider_command, timeout_seconds=timeout_seconds, pass_fds=pass_fds
+    )
 
 
 def run_vector_set(

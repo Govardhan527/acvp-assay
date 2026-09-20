@@ -526,7 +526,7 @@ closed separately:
 | --- | --- | --- | --- |
 | a PIN on argv | exposed to every local user | not used | no |
 | `PKCS11_PIN` | closed | owner-only | yes |
-| `--pin-fd N` | closed | closed | no |
+| `--pin-fd N` | closed | closed | only with `--provider-pass-fd` |
 | `--pin-file PATH` | closed | closed | no, if the mode is checked |
 
 argv is the one to avoid. `/proc/PID/cmdline` is readable by every local user on a
@@ -536,10 +536,22 @@ than an instant. `examples/pkcs11` therefore has no `--pin` option at all: an
 option that exists gets used, and it gets used in CI, where the process table is
 the least private place on the machine.
 
-A descriptor is the strongest of the three, and it needs one thing to work through
-`--provider-command`. The runner starts a harness through Python's `subprocess`,
-which closes descriptors above 2, so a descriptor opened by whoever invoked
-`acvp-assay` does not reach the harness. Have the child open it instead:
+A descriptor is the strongest of the three. Python's `subprocess` closes every
+descriptor above 2, so one the caller opened reaches the harness only if the runner
+is told to keep it. `--provider-pass-fd N` does that, and it is repeatable:
+
+```bash
+acvp-assay run prompt.json --provider-pass-fd 3 --provider-command \
+    "./acvp_harness --module /usr/lib/softhsm/libsofthsm2.so --pin-fd 3"
+```
+
+The descriptor must be 3 or higher, because 0, 1 and 2 carry the protocol and a
+harness handed descriptor 0 would read its PIN from the request stream. One that is
+not open is refused before any case runs, rather than reaching the vendor's process
+as an unexplained failure partway through.
+
+Without that option the child has to open the file itself, which still works and is
+the only way on a runner older than this:
 
 ```bash
 acvp-assay run prompt.json --provider-command \

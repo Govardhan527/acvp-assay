@@ -20,7 +20,11 @@ from cryptography.hazmat.backends.openssl.backend import backend
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 
 from acvp_assay.models import ProviderKind, ProviderMetadata
-from acvp_assay.providers.subprocess_harness import HarnessClient, decode_hex
+from acvp_assay.providers.subprocess_harness import (
+    DEFAULT_TIMEOUT_SECONDS,
+    HarnessClient,
+    decode_hex,
+)
 
 #: Key and block length in bytes for each supported ``mode``.
 BLOCK_CIPHERS: dict[str, tuple[int, int]] = {
@@ -279,8 +283,15 @@ class SubprocessDrbg(HarnessClient):
     it came from. One request, one answer, state entirely on the far side.
     """
 
-    def __init__(self, mechanism: str, command: Sequence[str], **kwargs: float) -> None:
-        super().__init__(command, **kwargs)
+    def __init__(
+        self,
+        mechanism: str,
+        command: Sequence[str],
+        *,
+        timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS,
+        pass_fds: Sequence[int] = (),
+    ) -> None:
+        super().__init__(command, timeout_seconds=timeout_seconds, pass_fds=pass_fds)
         self._mechanism = mechanism
 
     def run_case(

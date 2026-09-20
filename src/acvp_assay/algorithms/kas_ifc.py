@@ -27,6 +27,7 @@ yet generated.
 from __future__ import annotations
 
 import json
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -215,11 +216,17 @@ def load_expected_results(path: str | Path) -> dict[tuple[int, int], dict[str, o
     return parse_expected_results(_load_json(path))
 
 
-def provider_for(provider_command: str | None, timeout_seconds: float) -> KasIfcProvider:
+def provider_for(
+    provider_command: str | None,
+    timeout_seconds: float,
+    pass_fds: Sequence[int] = (),
+) -> KasIfcProvider:
     """The built-in provider, or a harness when one is named."""
     if provider_command is None:
         return CryptographyKasIfc()
-    return SubprocessKasIfc.from_command_string(provider_command, timeout_seconds=timeout_seconds)
+    return SubprocessKasIfc.from_command_string(
+        provider_command, timeout_seconds=timeout_seconds, pass_fds=pass_fds
+    )
 
 
 def metadata_for(provider: KasIfcProvider) -> ProviderMetadata:

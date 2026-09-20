@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import json
 import shlex
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from pathlib import Path
 
 from acvp_assay import parser as aes_parser
@@ -128,12 +128,13 @@ def _run_aes_gcm(
     expected_file: Path,
     provider_command: str | None,
     provider_timeout: float,
+    provider_pass_fds: Sequence[int] = (),
 ) -> tuple[list[TestCaseResult], ProviderMetadata]:
     provider = (
         CryptographyAesGcmProvider()
         if provider_command is None
         else SubprocessAesGcmProvider.from_command_string(
-            provider_command, timeout_seconds=provider_timeout
+            provider_command, timeout_seconds=provider_timeout, pass_fds=provider_pass_fds
         )
     )
     metadata = provider.metadata()
@@ -148,6 +149,7 @@ def _run_sha2(
     expected_file: Path,
     provider_command: str | None,
     provider_timeout: float,
+    provider_pass_fds: Sequence[int] = (),
 ) -> tuple[list[TestCaseResult], ProviderMetadata]:
     provider: HashProviderProtocol = (
         HashlibHashProvider(algorithm)
@@ -170,6 +172,7 @@ def _run_hmac(
     expected_file: Path,
     provider_command: str | None,
     provider_timeout: float,
+    provider_pass_fds: Sequence[int] = (),
 ) -> tuple[list[TestCaseResult], ProviderMetadata]:
     provider: MacProviderProtocol = (
         HashlibMacProvider(algorithm)
@@ -191,12 +194,13 @@ def _run_ecdsa(
     expected_file: Path,
     provider_command: str | None,
     provider_timeout: float,
+    provider_pass_fds: Sequence[int] = (),
 ) -> tuple[list[TestCaseResult], ProviderMetadata]:
     provider: EcdsaProviderProtocol = (
         CryptographyEcdsaProvider()
         if provider_command is None
         else SubprocessEcdsaProvider.from_command_string(
-            provider_command, timeout_seconds=provider_timeout
+            provider_command, timeout_seconds=provider_timeout, pass_fds=provider_pass_fds
         )
     )
     metadata = provider.metadata()
@@ -211,6 +215,7 @@ def _run_pqc(
     expected_file: Path,
     provider_command: str | None,
     provider_timeout: float,
+    provider_pass_fds: Sequence[int] = (),
 ) -> tuple[list[TestCaseResult], ProviderMetadata]:
     """Run ML-KEM or ML-DSA, which have no built-in provider by design.
 
@@ -228,11 +233,11 @@ def _run_pqc(
     expected = pqc.load_expected_results(expected_file)
     if algorithm == "ML-KEM":
         kem = SubprocessMlKemProvider.from_command_string(
-            provider_command, timeout_seconds=provider_timeout
+            provider_command, timeout_seconds=provider_timeout, pass_fds=provider_pass_fds
         )
         return pqc.run_ml_kem(vector_set, expected, kem), kem.metadata()
     dsa = SubprocessMlDsaProvider.from_command_string(
-        provider_command, timeout_seconds=provider_timeout
+        provider_command, timeout_seconds=provider_timeout, pass_fds=provider_pass_fds
     )
     return pqc.run_ml_dsa(vector_set, expected, dsa), dsa.metadata()
 
@@ -242,10 +247,11 @@ def _run_aes_modes(
     expected_file: Path,
     provider_command: str | None,
     provider_timeout: float,
+    provider_pass_fds: Sequence[int] = (),
 ) -> tuple[list[TestCaseResult], ProviderMetadata]:
     provider: AesModeProviderProtocol = (
         SubprocessAesModeProvider.from_command_string(
-            provider_command, timeout_seconds=provider_timeout
+            provider_command, timeout_seconds=provider_timeout, pass_fds=provider_pass_fds
         )
         if provider_command is not None
         else CryptographyAesModeProvider()
@@ -261,11 +267,15 @@ def _run_ctr_drbg(
     expected_file: Path,
     provider_command: str | None,
     provider_timeout: float,
+    provider_pass_fds: Sequence[int] = (),
 ) -> tuple[list[TestCaseResult], ProviderMetadata]:
     algorithm, _ = peek_algorithm(vector_file)
     provider: ctr_drbg.DrbgRunner = (
         ctr_drbg.subprocess_provider_for(
-            algorithm, provider_command, timeout_seconds=provider_timeout
+            algorithm,
+            provider_command,
+            timeout_seconds=provider_timeout,
+            pass_fds=provider_pass_fds,
         )
         if provider_command is not None
         else ctr_drbg.provider_for(algorithm)
@@ -281,10 +291,11 @@ def _run_kdf(
     expected_file: Path,
     provider_command: str | None,
     provider_timeout: float,
+    provider_pass_fds: Sequence[int] = (),
 ) -> tuple[list[TestCaseResult], ProviderMetadata]:
     provider: KdfProviderProtocol = (
         SubprocessKdfProvider.from_command_string(
-            provider_command, timeout_seconds=provider_timeout
+            provider_command, timeout_seconds=provider_timeout, pass_fds=provider_pass_fds
         )
         if provider_command is not None
         else CryptographyKdf()
@@ -300,10 +311,11 @@ def _run_aes_block(
     expected_file: Path,
     provider_command: str | None,
     provider_timeout: float,
+    provider_pass_fds: Sequence[int] = (),
 ) -> tuple[list[TestCaseResult], ProviderMetadata]:
     provider: AesBlockProviderProtocol = (
         SubprocessAesBlockProvider.from_command_string(
-            provider_command, timeout_seconds=provider_timeout
+            provider_command, timeout_seconds=provider_timeout, pass_fds=provider_pass_fds
         )
         if provider_command is not None
         else CryptographyAesBlockProvider()
@@ -319,10 +331,11 @@ def _run_rsa(
     expected_file: Path,
     provider_command: str | None,
     provider_timeout: float,
+    provider_pass_fds: Sequence[int] = (),
 ) -> tuple[list[TestCaseResult], ProviderMetadata]:
     provider: RsaProviderProtocol = (
         SubprocessRsaProvider.from_command_string(
-            provider_command, timeout_seconds=provider_timeout
+            provider_command, timeout_seconds=provider_timeout, pass_fds=provider_pass_fds
         )
         if provider_command is not None
         else CryptographyRsaProvider()
@@ -338,8 +351,9 @@ def _run_kas_ecc(
     expected_file: Path,
     provider_command: str | None,
     provider_timeout: float,
+    provider_pass_fds: Sequence[int] = (),
 ) -> tuple[list[TestCaseResult], ProviderMetadata]:
-    provider = kas_ecc.provider_for(provider_command, provider_timeout)
+    provider = kas_ecc.provider_for(provider_command, provider_timeout, provider_pass_fds)
     metadata = provider.metadata()
     vector_set = kas_ecc.load_vector_set(vector_file)
     expected = kas_ecc.load_expected_results(expected_file)
@@ -351,8 +365,9 @@ def _run_kas_ifc(
     expected_file: Path,
     provider_command: str | None,
     provider_timeout: float,
+    provider_pass_fds: Sequence[int] = (),
 ) -> tuple[list[TestCaseResult], ProviderMetadata]:
-    provider = kas_ifc.provider_for(provider_command, provider_timeout)
+    provider = kas_ifc.provider_for(provider_command, provider_timeout, provider_pass_fds)
     metadata = kas_ifc.metadata_for(provider)
     vector_set = kas_ifc.load_vector_set(vector_file)
     expected = kas_ifc.load_expected_results(expected_file)
@@ -364,8 +379,9 @@ def _run_kdf_tls(
     expected_file: Path,
     provider_command: str | None,
     provider_timeout: float,
+    provider_pass_fds: Sequence[int] = (),
 ) -> tuple[list[TestCaseResult], ProviderMetadata]:
-    provider = kdf_tls.provider_for(provider_command, provider_timeout)
+    provider = kdf_tls.provider_for(provider_command, provider_timeout, provider_pass_fds)
     metadata = kdf_tls.metadata_for(provider)
     vector_set = kdf_tls.load_vector_set(vector_file)
     expected = kdf_tls.load_expected_results(expected_file)
@@ -377,8 +393,9 @@ def _run_safe_primes(
     expected_file: Path,
     provider_command: str | None,
     provider_timeout: float,
+    provider_pass_fds: Sequence[int] = (),
 ) -> tuple[list[TestCaseResult], ProviderMetadata]:
-    provider = safe_primes.provider_for(provider_command, provider_timeout)
+    provider = safe_primes.provider_for(provider_command, provider_timeout, provider_pass_fds)
     metadata = safe_primes.metadata_for(provider)
     vector_set = safe_primes.load_vector_set(vector_file)
     expected = safe_primes.load_expected_results(expected_file)
@@ -390,8 +407,9 @@ def _run_kas_ffc(
     expected_file: Path,
     provider_command: str | None,
     provider_timeout: float,
+    provider_pass_fds: Sequence[int] = (),
 ) -> tuple[list[TestCaseResult], ProviderMetadata]:
-    provider = kas_ffc.provider_for(provider_command, provider_timeout)
+    provider = kas_ffc.provider_for(provider_command, provider_timeout, provider_pass_fds)
     metadata = kas_ffc.metadata_for(provider)
     vector_set = kas_ffc.load_vector_set(vector_file)
     expected = kas_ffc.load_expected_results(expected_file)
@@ -403,8 +421,9 @@ def _run_pbkdf(
     expected_file: Path,
     provider_command: str | None,
     provider_timeout: float,
+    provider_pass_fds: Sequence[int] = (),
 ) -> tuple[list[TestCaseResult], ProviderMetadata]:
-    provider = pbkdf.provider_for(provider_command, provider_timeout)
+    provider = pbkdf.provider_for(provider_command, provider_timeout, provider_pass_fds)
     metadata = provider.metadata()
     vector_set = pbkdf.load_vector_set(vector_file)
     expected = pbkdf.load_expected_results(expected_file)
@@ -416,8 +435,9 @@ def _run_aes_cs(
     expected_file: Path,
     provider_command: str | None,
     provider_timeout: float,
+    provider_pass_fds: Sequence[int] = (),
 ) -> tuple[list[TestCaseResult], ProviderMetadata]:
-    provider = aes_cs.provider_for(provider_command, provider_timeout)
+    provider = aes_cs.provider_for(provider_command, provider_timeout, provider_pass_fds)
     metadata = provider.metadata()
     vector_set = aes_cs.load_vector_set(vector_file)
     expected = aes_cs.load_expected_results(expected_file)
@@ -429,8 +449,9 @@ def _run_aes_xts(
     expected_file: Path,
     provider_command: str | None,
     provider_timeout: float,
+    provider_pass_fds: Sequence[int] = (),
 ) -> tuple[list[TestCaseResult], ProviderMetadata]:
-    provider = aes_xts.provider_for(provider_command, provider_timeout)
+    provider = aes_xts.provider_for(provider_command, provider_timeout, provider_pass_fds)
     metadata = provider.metadata()
     vector_set = aes_xts.load_vector_set(vector_file)
     expected = aes_xts.load_expected_results(expected_file)
@@ -442,8 +463,9 @@ def _run_aes_ccm(
     expected_file: Path,
     provider_command: str | None,
     provider_timeout: float,
+    provider_pass_fds: Sequence[int] = (),
 ) -> tuple[list[TestCaseResult], ProviderMetadata]:
-    provider = aes_ccm.provider_for(provider_command, provider_timeout)
+    provider = aes_ccm.provider_for(provider_command, provider_timeout, provider_pass_fds)
     metadata = provider.metadata()
     vector_set = aes_ccm.load_vector_set(vector_file)
     expected = aes_ccm.load_expected_results(expected_file)
@@ -455,8 +477,9 @@ def _run_shake(
     expected_file: Path,
     provider_command: str | None,
     provider_timeout: float,
+    provider_pass_fds: Sequence[int] = (),
 ) -> tuple[list[TestCaseResult], ProviderMetadata]:
-    provider = shake.provider_for(provider_command, provider_timeout)
+    provider = shake.provider_for(provider_command, provider_timeout, provider_pass_fds)
     metadata = provider.metadata()
     vector_set = shake.load_vector_set(vector_file)
     expected = shake.load_expected_results(expected_file)
@@ -468,8 +491,9 @@ def _run_kda(
     expected_file: Path,
     provider_command: str | None,
     provider_timeout: float,
+    provider_pass_fds: Sequence[int] = (),
 ) -> tuple[list[TestCaseResult], ProviderMetadata]:
-    provider = kda.provider_for(provider_command, provider_timeout)
+    provider = kda.provider_for(provider_command, provider_timeout, provider_pass_fds)
     metadata = provider.metadata()
     vector_set = kda.load_vector_set(vector_file)
     expected = kda.load_expected_results(expected_file)
@@ -482,6 +506,7 @@ def run_vector_file(
     *,
     provider_command: str | None = None,
     provider_timeout: float = 30.0,
+    provider_pass_fds: Sequence[int] = (),
 ) -> tuple[list[TestCaseResult], ProviderMetadata]:
     """Parse, execute, and classify one vector file, whatever its algorithm."""
     algorithm, _revision = peek_algorithm(vector_file)
@@ -489,87 +514,102 @@ def run_vector_file(
     runners: dict[str, Callable[[], tuple[list[TestCaseResult], ProviderMetadata]]] = {}
     if algorithm == "ACVP-AES-GCM":
         runners[algorithm] = lambda: _run_aes_gcm(
-            vector_file, expected_file, provider_command, provider_timeout
+            vector_file, expected_file, provider_command, provider_timeout, provider_pass_fds
         )
     elif algorithm in HASHLIB_ALGORITHMS:
         runners[algorithm] = lambda: _run_sha2(
-            algorithm, vector_file, expected_file, provider_command, provider_timeout
+            algorithm,
+            vector_file,
+            expected_file,
+            provider_command,
+            provider_timeout,
+            provider_pass_fds,
         )
     elif algorithm in ("ML-KEM", "ML-DSA"):
         runners[algorithm] = lambda: _run_pqc(
-            algorithm, vector_file, expected_file, provider_command, provider_timeout
+            algorithm,
+            vector_file,
+            expected_file,
+            provider_command,
+            provider_timeout,
+            provider_pass_fds,
         )
     elif algorithm == kdf.ALGORITHM:
         runners[algorithm] = lambda: _run_kdf(
-            vector_file, expected_file, provider_command, provider_timeout
+            vector_file, expected_file, provider_command, provider_timeout, provider_pass_fds
         )
     elif algorithm in ctr_drbg.SUPPORTED:
         runners[algorithm] = lambda: _run_ctr_drbg(
-            vector_file, expected_file, provider_command, provider_timeout
+            vector_file, expected_file, provider_command, provider_timeout, provider_pass_fds
         )
     elif algorithm in aes_block.SUPPORTED:
         runners[algorithm] = lambda: _run_aes_block(
-            vector_file, expected_file, provider_command, provider_timeout
+            vector_file, expected_file, provider_command, provider_timeout, provider_pass_fds
         )
     elif algorithm in aes_modes.SUPPORTED:
         runners[algorithm] = lambda: _run_aes_modes(
-            vector_file, expected_file, provider_command, provider_timeout
+            vector_file, expected_file, provider_command, provider_timeout, provider_pass_fds
         )
     elif algorithm == rsa.ALGORITHM:
         runners[algorithm] = lambda: _run_rsa(
-            vector_file, expected_file, provider_command, provider_timeout
+            vector_file, expected_file, provider_command, provider_timeout, provider_pass_fds
         )
     elif algorithm == "ECDSA":
         runners[algorithm] = lambda: _run_ecdsa(
-            vector_file, expected_file, provider_command, provider_timeout
+            vector_file, expected_file, provider_command, provider_timeout, provider_pass_fds
         )
     elif algorithm == kda.ALGORITHM:
         runners[algorithm] = lambda: _run_kda(
-            vector_file, expected_file, provider_command, provider_timeout
+            vector_file, expected_file, provider_command, provider_timeout, provider_pass_fds
         )
     elif algorithm in shake.SUPPORTED:
         runners[algorithm] = lambda: _run_shake(
-            vector_file, expected_file, provider_command, provider_timeout
+            vector_file, expected_file, provider_command, provider_timeout, provider_pass_fds
         )
     elif algorithm == aes_ccm.ALGORITHM:
         runners[algorithm] = lambda: _run_aes_ccm(
-            vector_file, expected_file, provider_command, provider_timeout
+            vector_file, expected_file, provider_command, provider_timeout, provider_pass_fds
         )
     elif algorithm in kas_ifc.SUPPORTED:
         runners[algorithm] = lambda: _run_kas_ifc(
-            vector_file, expected_file, provider_command, provider_timeout
+            vector_file, expected_file, provider_command, provider_timeout, provider_pass_fds
         )
     elif algorithm in kdf_tls.SUPPORTED:
         runners[algorithm] = lambda: _run_kdf_tls(
-            vector_file, expected_file, provider_command, provider_timeout
+            vector_file, expected_file, provider_command, provider_timeout, provider_pass_fds
         )
     elif algorithm == safe_primes.ALGORITHM:
         runners[algorithm] = lambda: _run_safe_primes(
-            vector_file, expected_file, provider_command, provider_timeout
+            vector_file, expected_file, provider_command, provider_timeout, provider_pass_fds
         )
     elif algorithm == kas_ffc.ALGORITHM:
         runners[algorithm] = lambda: _run_kas_ffc(
-            vector_file, expected_file, provider_command, provider_timeout
+            vector_file, expected_file, provider_command, provider_timeout, provider_pass_fds
         )
     elif algorithm == pbkdf.ALGORITHM:
         runners[algorithm] = lambda: _run_pbkdf(
-            vector_file, expected_file, provider_command, provider_timeout
+            vector_file, expected_file, provider_command, provider_timeout, provider_pass_fds
         )
     elif algorithm in aes_cs.SUPPORTED:
         runners[algorithm] = lambda: _run_aes_cs(
-            vector_file, expected_file, provider_command, provider_timeout
+            vector_file, expected_file, provider_command, provider_timeout, provider_pass_fds
         )
     elif algorithm == aes_xts.ALGORITHM:
         runners[algorithm] = lambda: _run_aes_xts(
-            vector_file, expected_file, provider_command, provider_timeout
+            vector_file, expected_file, provider_command, provider_timeout, provider_pass_fds
         )
     elif algorithm == kas_ecc.ALGORITHM:
         runners[algorithm] = lambda: _run_kas_ecc(
-            vector_file, expected_file, provider_command, provider_timeout
+            vector_file, expected_file, provider_command, provider_timeout, provider_pass_fds
         )
     elif algorithm.removeprefix("HMAC-") in HASHLIB_ALGORITHMS:
         runners[algorithm] = lambda: _run_hmac(
-            algorithm, vector_file, expected_file, provider_command, provider_timeout
+            algorithm,
+            vector_file,
+            expected_file,
+            provider_command,
+            provider_timeout,
+            provider_pass_fds,
         )
 
     if algorithm not in runners:

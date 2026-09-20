@@ -282,3 +282,17 @@ def test_module_entry_point(
 
     assert error.value.code == 0
     assert json.loads(capsys.readouterr().out)["provider"] == "built-in (cryptography and hashlib)"
+
+
+@pytest.mark.parametrize(
+    ("descriptor", "message"),
+    [(2, "reserved"), (77, "not an open descriptor")],
+)
+def test_a_bad_provider_descriptor_is_refused_before_anything_runs(
+    descriptor: int, message: str, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Checked in the runner, not in the child, where it would surface mid-run."""
+    exit_code = main(["info", "--provider-command", "true", "--provider-pass-fd", str(descriptor)])
+
+    assert exit_code == 2
+    assert message in capsys.readouterr().err

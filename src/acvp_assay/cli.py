@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from collections.abc import Sequence
 from pathlib import Path
@@ -28,6 +29,18 @@ def _add_provider_arguments(parser: argparse.ArgumentParser, *, purpose: str) ->
         default=None,
         metavar="COMMAND",
         help=f"{purpose}; see examples/reference_harness.py",
+    )
+    parser.add_argument(
+        "--provider-pass-fd",
+        type=int,
+        action="append",
+        default=None,
+        metavar="N",
+        dest="provider_pass_fds",
+        help=(
+            "let the harness inherit this already-open descriptor, for a PIN read with "
+            "--pin-fd; repeatable, and must be 3 or higher because 0, 1 and 2 carry the protocol"
+        ),
     )
     parser.add_argument(
         "--provider-timeout",
@@ -138,7 +151,29 @@ def _note_unreported_build(provider: ProviderMetadata) -> None:
         )
 
 
-def _info(provider_command: str | None, provider_timeout: float) -> int:
+def _require_open_descriptors(pass_fds: Sequence[int]) -> None:
+    """Refuse a descriptor that is reserved or not open, before anything runs.
+
+    A harness inherits these to read a secret the caller opened. One that is not
+    open would reach the vendor's process as EBADF partway through a run, and one
+    below 3 would have it read its PIN from the protocol stream.
+    """
+    for fd in pass_fds:
+        if fd < 3:
+            raise ValueError(
+                f"--provider-pass-fd {fd} is reserved: 0, 1 and 2 carry the harness protocol"
+            )
+        try:
+            os.fstat(fd)
+        except OSError:
+            raise ValueError(f"--provider-pass-fd {fd} is not an open descriptor") from None
+
+
+def _info(
+    provider_command: str | None,
+    provider_timeout: float,
+    provider_pass_fds: Sequence[int] = (),
+) -> int:
     """Print runner and provider metadata, asking an external harness when one is named.
 
     Exit codes: 0, or 2 when a named harness cannot identify itself.
@@ -147,7 +182,9 @@ def _info(provider_command: str | None, provider_timeout: float) -> int:
     if provider_command is not None:
         try:
             with HarnessClient.from_command_string(
-                provider_command, timeout_seconds=provider_timeout
+                provider_command,
+                timeout_seconds=provider_timeout,
+                pass_fds=provider_pass_fds,
             ) as harness:
                 provider = harness.metadata()
             _note_unreported_build(provider)
@@ -164,6 +201,7 @@ def _run(
     strict: bool,
     provider_command: str | None = None,
     provider_timeout: float = DEFAULT_TIMEOUT_SECONDS,
+    provider_pass_fds: Sequence[int] = (),
 ) -> int:
     """Execute the ``run`` subcommand and return its process exit code.
 
@@ -185,6 +223,7 @@ def _run(
             expected_file,
             provider_command=provider_command,
             provider_timeout=provider_timeout,
+            provider_pass_fds=provider_pass_fds,
         )
         _note_unreported_build(provider_metadata)
         rendered = report_json(results, provider_metadata)
@@ -214,6 +253,15 @@ def _run(
 def main(argv: Sequence[str] | None = None) -> int:
     """Run the command-line interface and return a process exit code."""
     args = build_parser().parse_args(argv)
+    pass_fds = tuple(getattr(args, "provider_pass_fds", None) or ())
+    if pass_fds:
+        # Checked here rather than in the child, where a bad descriptor surfaces
+        # as an unexplained harness failure after the run has already started.
+        try:
+            _require_open_descriptors(pass_fds)
+        except ValueError as error:
+            print(f"error: {error}", file=sys.stderr)
+            return EXIT_INPUT_ERROR
     if args.command == "diff":
         return _diff(args.baseline, args.current, args.output)
     if args.command == "run":
@@ -223,5 +271,6 @@ def main(argv: Sequence[str] | None = None) -> int:
             args.strict,
             args.provider_command,
             args.provider_timeout,
+            pass_fds,
         )
-    return _info(args.provider_command, args.provider_timeout)
+    return _info(args.provider_command, args.provider_timeout, pass_fds)

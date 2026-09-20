@@ -172,6 +172,8 @@ class Harness:
 
     command: str
     timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS
+    #: Descriptors the vendor's harness inherits, for a PIN the caller opened.
+    pass_fds: tuple[int, ...] = ()
 
     def __post_init__(self) -> None:
         self._clients: list[HarnessClient] = []
@@ -215,6 +217,7 @@ def _sha2_groups(
                 vector_set.algorithm,
                 shlex.split(harness.command),
                 timeout_seconds=harness.timeout_seconds,
+                pass_fds=harness.pass_fds,
             )
         )
     )
@@ -257,7 +260,10 @@ def _hmac_groups(
         if harness is None
         else harness.open(
             SubprocessMacProvider(
-                underlying, shlex.split(harness.command), timeout_seconds=harness.timeout_seconds
+                underlying,
+                shlex.split(harness.command),
+                timeout_seconds=harness.timeout_seconds,
+                pass_fds=harness.pass_fds,
             )
         )
     )
@@ -295,7 +301,7 @@ def _aes_gcm_groups(
         if harness is None
         else harness.open(
             SubprocessAesGcmProvider.from_command_string(
-                harness.command, timeout_seconds=harness.timeout_seconds
+                harness.command, timeout_seconds=harness.timeout_seconds, pass_fds=harness.pass_fds
             )
         )
     )
@@ -413,7 +419,7 @@ def _aes_modes_groups(
         if harness is None
         else harness.open(
             SubprocessAesModeProvider.from_command_string(
-                harness.command, timeout_seconds=harness.timeout_seconds
+                harness.command, timeout_seconds=harness.timeout_seconds, pass_fds=harness.pass_fds
             )
         )
     )
@@ -468,7 +474,7 @@ def _aes_block_groups(
         if harness is None
         else harness.open(
             SubprocessAesBlockProvider.from_command_string(
-                harness.command, timeout_seconds=harness.timeout_seconds
+                harness.command, timeout_seconds=harness.timeout_seconds, pass_fds=harness.pass_fds
             )
         )
     )
@@ -545,6 +551,7 @@ def _ctr_drbg_groups(
                 vector_set.algorithm,
                 shlex.split(harness.command),
                 timeout_seconds=harness.timeout_seconds,
+                pass_fds=harness.pass_fds,
             )
         )
     elif vector_set.algorithm == ctr_drbg.ALGORITHM:
@@ -613,7 +620,7 @@ def _kdf_groups(
         if harness is None
         else harness.open(
             SubprocessKdfProvider.from_command_string(
-                harness.command, timeout_seconds=harness.timeout_seconds
+                harness.command, timeout_seconds=harness.timeout_seconds, pass_fds=harness.pass_fds
             )
         )
     )
@@ -672,7 +679,7 @@ def _ecdsa_groups(
         if harness is None
         else harness.open(
             SubprocessEcdsaProvider.from_command_string(
-                harness.command, timeout_seconds=harness.timeout_seconds
+                harness.command, timeout_seconds=harness.timeout_seconds, pass_fds=harness.pass_fds
             )
         )
     )
@@ -743,7 +750,7 @@ def _rsa_groups(
         if harness is None
         else harness.open(
             SubprocessRsaProvider.from_command_string(
-                harness.command, timeout_seconds=harness.timeout_seconds
+                harness.command, timeout_seconds=harness.timeout_seconds, pass_fds=harness.pass_fds
             )
         )
     )
@@ -855,7 +862,7 @@ def _kda_groups(
         if harness is None
         else harness.open(
             SubprocessKda.from_command_string(
-                harness.command, timeout_seconds=harness.timeout_seconds
+                harness.command, timeout_seconds=harness.timeout_seconds, pass_fds=harness.pass_fds
             )
         )
     )
@@ -902,7 +909,7 @@ def _shake_groups(
         if harness is None
         else harness.open(
             SubprocessXofProvider.from_command_string(
-                harness.command, timeout_seconds=harness.timeout_seconds
+                harness.command, timeout_seconds=harness.timeout_seconds, pass_fds=harness.pass_fds
             )
         )
     )
@@ -949,7 +956,7 @@ def _aes_ccm_groups(
         if harness is None
         else harness.open(
             SubprocessAesCcm.from_command_string(
-                harness.command, timeout_seconds=harness.timeout_seconds
+                harness.command, timeout_seconds=harness.timeout_seconds, pass_fds=harness.pass_fds
             )
         )
     )
@@ -1014,7 +1021,7 @@ def _kas_ifc_groups(
         if harness is None
         else harness.open(
             SubprocessKasIfc.from_command_string(
-                harness.command, timeout_seconds=harness.timeout_seconds
+                harness.command, timeout_seconds=harness.timeout_seconds, pass_fds=harness.pass_fds
             )
         )
     )
@@ -1105,7 +1112,7 @@ def _kdf_tls_groups(
         if harness is None
         else harness.open(
             SubprocessProtocolKdf.from_command_string(
-                harness.command, timeout_seconds=harness.timeout_seconds
+                harness.command, timeout_seconds=harness.timeout_seconds, pass_fds=harness.pass_fds
             )
         )
     )
@@ -1140,7 +1147,7 @@ def _safe_primes_groups(
         if harness is None
         else harness.open(
             SubprocessSafePrimes.from_command_string(
-                harness.command, timeout_seconds=harness.timeout_seconds
+                harness.command, timeout_seconds=harness.timeout_seconds, pass_fds=harness.pass_fds
             )
         )
     )
@@ -1178,7 +1185,7 @@ def _kas_ffc_groups(
         if harness is None
         else harness.open(
             SubprocessKasFfc.from_command_string(
-                harness.command, timeout_seconds=harness.timeout_seconds
+                harness.command, timeout_seconds=harness.timeout_seconds, pass_fds=harness.pass_fds
             )
         )
     )
@@ -1237,7 +1244,7 @@ def _pbkdf_groups(
         if harness is None
         else harness.open(
             SubprocessPbkdf.from_command_string(
-                harness.command, timeout_seconds=harness.timeout_seconds
+                harness.command, timeout_seconds=harness.timeout_seconds, pass_fds=harness.pass_fds
             )
         )
     )
@@ -1275,7 +1282,7 @@ def _aes_cs_groups(
         if harness is None
         else harness.open(
             SubprocessAesCs.from_command_string(
-                harness.command, timeout_seconds=harness.timeout_seconds
+                harness.command, timeout_seconds=harness.timeout_seconds, pass_fds=harness.pass_fds
             )
         )
     )
@@ -1315,7 +1322,7 @@ def _aes_xts_groups(
         if harness is None
         else harness.open(
             SubprocessAesXts.from_command_string(
-                harness.command, timeout_seconds=harness.timeout_seconds
+                harness.command, timeout_seconds=harness.timeout_seconds, pass_fds=harness.pass_fds
             )
         )
     )
@@ -1369,7 +1376,7 @@ def _kas_ecc_groups(
         if harness is None
         else harness.open(
             SubprocessKasEcc.from_command_string(
-                harness.command, timeout_seconds=harness.timeout_seconds
+                harness.command, timeout_seconds=harness.timeout_seconds, pass_fds=harness.pass_fds
             )
         )
     )
@@ -1445,6 +1452,7 @@ def _ml_kem_groups(
         SubprocessMlKemProvider.from_command_string(
             harness.command,  # type: ignore[union-attr]
             timeout_seconds=harness.timeout_seconds,  # type: ignore[union-attr]
+            pass_fds=harness.pass_fds,  # type: ignore[union-attr]
         )
     )
     groups: list[dict[str, object]] = []
@@ -1514,6 +1522,7 @@ def _ml_dsa_groups(
         SubprocessMlDsaProvider.from_command_string(
             harness.command,  # type: ignore[union-attr]
             timeout_seconds=harness.timeout_seconds,  # type: ignore[union-attr]
+            pass_fds=harness.pass_fds,  # type: ignore[union-attr]
         )
     )
     groups: list[dict[str, object]] = []

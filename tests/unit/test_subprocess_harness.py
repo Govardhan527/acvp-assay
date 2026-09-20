@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
 import shlex
 import sys
@@ -14,6 +15,7 @@ from cryptography.exceptions import InvalidTag
 
 from acvp_assay.models import BuildIdAbsentReason, DeclineReason, ProviderKind
 from acvp_assay.providers.subprocess_harness import (
+    HarnessClient,
     HarnessProtocolError,
     HarnessUnsupportedError,
     SubprocessAesGcmProvider,
@@ -547,3 +549,67 @@ def test_a_build_claim_that_does_not_add_up_is_refused(
 
     with pytest.raises(HarnessProtocolError, match=message):
         provider.metadata()
+
+
+def _descriptor_harness(tmp_path: Path) -> Path:
+    """A harness that can only answer if it inherited the descriptor in SECRET_FD."""
+    script = tmp_path / "fd_harness.py"
+    script.write_text(
+        "import json, os, sys\n"
+        "with os.fdopen(int(os.environ['SECRET_FD'])) as handle:\n"
+        "    secret = handle.read().strip()\n"
+        "for _line in sys.stdin:\n"
+        "    sys.stdout.write(json.dumps({\n"
+        "        'name': 'fd-harness-' + secret,\n"
+        "        'libraryName': 'none', 'libraryVersion': '0',\n"
+        "        'backendName': 'descriptor', 'backendVersion': '1',\n"
+        "    }) + '\\n')\n"
+        "    sys.stdout.flush()\n"
+    )
+    return script
+
+
+def test_a_descriptor_reaches_the_harness_when_it_is_passed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A secret the caller opened arrives without a shell wrapper reopening the file."""
+    secret = tmp_path / "secret"
+    secret.write_text("hunter2", encoding="utf-8")
+    script = _descriptor_harness(tmp_path)
+    fd = os.open(secret, os.O_RDONLY)
+    os.set_inheritable(fd, True)
+    monkeypatch.setenv("SECRET_FD", str(fd))
+    try:
+        with HarnessClient(
+            [sys.executable, str(script)], timeout_seconds=10, pass_fds=(fd,)
+        ) as client:
+            assert client.metadata().name == "fd-harness-hunter2"
+    finally:
+        os.close(fd)
+
+
+def test_a_harness_needing_a_descriptor_fails_without_one(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The defect this closed: subprocess closes descriptors above 2, so it never arrived."""
+    secret = tmp_path / "secret"
+    secret.write_text("hunter2", encoding="utf-8")
+    script = _descriptor_harness(tmp_path)
+    fd = os.open(secret, os.O_RDONLY)
+    os.set_inheritable(fd, True)
+    monkeypatch.setenv("SECRET_FD", str(fd))
+    try:
+        with (
+            HarnessClient([sys.executable, str(script)], timeout_seconds=10) as client,
+            pytest.raises(HarnessProtocolError),
+        ):
+            client.metadata()
+    finally:
+        os.close(fd)
+
+
+@pytest.mark.parametrize("fd", [0, 1, 2])
+def test_a_reserved_descriptor_is_refused(fd: int) -> None:
+    """0, 1 and 2 carry the protocol, so a harness given one would read a PIN from it."""
+    with pytest.raises(ValueError, match="carry the protocol"):
+        HarnessClient(["true"], pass_fds=(fd,))

@@ -67,11 +67,22 @@ SUPPORTED: dict[str, frozenset[str]] = {
 DrbgRunner = CtrDrbgProvider | SubprocessDrbg
 
 
-def subprocess_provider_for(algorithm: str, command: str, *, timeout_seconds: float) -> DrbgRunner:
+def subprocess_provider_for(
+    algorithm: str,
+    command: str,
+    *,
+    timeout_seconds: float,
+    pass_fds: Sequence[int] = (),
+) -> DrbgRunner:
     """A harness-backed provider for one DRBG mechanism."""
     import shlex
 
-    return SubprocessDrbg(algorithm, shlex.split(command), timeout_seconds=timeout_seconds)
+    return SubprocessDrbg(
+        algorithm,
+        shlex.split(command),
+        timeout_seconds=timeout_seconds,
+        pass_fds=pass_fds,
+    )
 
 
 def provider_for(algorithm: str) -> DrbgRunner:

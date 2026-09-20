@@ -356,11 +356,18 @@ class HarnessClient:
         command: Sequence[str],
         *,
         timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS,
+        pass_fds: Sequence[int] = (),
     ) -> None:
         if not command:
             raise ValueError("harness command must not be empty")
+        for fd in pass_fds:
+            if fd < 3:
+                raise ValueError(
+                    f"descriptor {fd} cannot be passed to a harness: 0, 1 and 2 carry the protocol"
+                )
         self._command = list(command)
         self._timeout_seconds = timeout_seconds
+        self._pass_fds = tuple(pass_fds)
         self._process: subprocess.Popen[str] | None = None
         self._one_shot_mode: bool | None = None
 
@@ -370,9 +377,10 @@ class HarnessClient:
         command: str,
         *,
         timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS,
+        pass_fds: Sequence[int] = (),
     ) -> Self:
         """Build a client from a shell-style command string."""
-        return cls(shlex.split(command), timeout_seconds=timeout_seconds)
+        return cls(shlex.split(command), timeout_seconds=timeout_seconds, pass_fds=pass_fds)
 
     @property
     def command(self) -> list[str]:
@@ -407,12 +415,19 @@ class HarnessClient:
         if self._process is not None and self._process.poll() is None:
             return self._process
         try:
+            # Popen closes every descriptor above 2 unless it is named here, so a
+            # PIN the caller opened on one would never reach the harness: the
+            # child saw EBADF and the only way through was a shell wrapper that
+            # reopened the file itself. Naming them leaves that closure in place
+            # for everything else, which is what keeps an unrelated descriptor
+            # from leaking into a vendor's process.
             self._process = subprocess.Popen(  # noqa: S603 - the command is the user's own
                 self._command,
                 stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE,
                 text=True,
                 bufsize=1,
+                pass_fds=self._pass_fds,
             )
         except FileNotFoundError:
             raise HarnessProtocolError(f"harness command not found: {self._command[0]!r}") from None

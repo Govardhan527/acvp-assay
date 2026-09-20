@@ -31,8 +31,9 @@ spawning it per case, so a PIN there is exposed for the length of the measuremen
 ways to supply one, in the order this harness looks for them:
 
 - `--pin-fd N` reads it from a descriptor the caller already opened, which keeps it out of
-  the filesystem as well. Through `--provider-command` the child has to open it, because the
-  runner closes descriptors above 2:
+  the filesystem as well. Name it with `acvp-assay --provider-pass-fd N` so the runner keeps
+  it open across the spawn, since Python's `subprocess` closes descriptors above 2. Without
+  that option the child must open it itself, which still works:
   `"sh -c 'exec ./acvp_harness --module MODULE --pin-fd 3 3</run/user/1000/acvp.pin'"`.
 - `--pin-file PATH` reads it from a file, and refuses one that is readable or writable
   beyond its owner, naming the mode it found. `chmod 600` it.
