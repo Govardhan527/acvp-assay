@@ -18,4 +18,4 @@ def test_module_info_command() -> None:
 
     payload = json.loads(completed.stdout)
     assert completed.stderr == ""
-    assert payload["provider"] == "OpenSSL (via cryptography)"
+    assert payload["provider"] == "built-in (cryptography and hashlib)"

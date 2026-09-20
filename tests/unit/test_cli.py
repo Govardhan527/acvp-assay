@@ -26,13 +26,16 @@ def test_info_prints_metadata(capsys: pytest.CaptureFixture[str]) -> None:
     payload = json.loads(captured.out)
 
     assert exit_code == 0
-    assert payload["provider"] == "OpenSSL (via cryptography)"
+    assert payload["provider"] == "built-in (cryptography and hashlib)"
     assert payload["provider_kind"] == "builtin"
     # Against the package, not a literal: a hard-coded version turns every
     # release into a test failure that says nothing about behaviour.
     assert payload["runner_version"] == __version__
-    assert payload["cryptography_version"]
-    assert payload["openssl_version"].startswith("OpenSSL ")
+    libraries = {entry["name"]: entry for entry in payload["provider_libraries"]}
+    assert set(libraries) == {"cryptography", "hashlib"}
+    for entry in libraries.values():
+        assert entry["version"]
+        assert entry["backend_version"].startswith("OpenSSL ")
     assert payload["python_version"].startswith("3.12")
 
 
@@ -49,8 +52,7 @@ def test_info_names_an_external_harness_by_what_it_declares(
     assert payload["provider_command"].endswith("examples/reference_harness.py")
     assert payload["provider_build_id"].startswith("sha256:")
     assert payload["provider_build_id_absent_reason"] is None
-    assert "cryptography_version" not in payload
-    assert "openssl_version" not in payload
+    assert "provider_libraries" not in payload
 
 
 def test_info_reports_a_harness_that_cannot_identify_itself(
@@ -279,4 +281,4 @@ def test_module_entry_point(
         runpy.run_module("acvp_assay", run_name="__main__")
 
     assert error.value.code == 0
-    assert json.loads(capsys.readouterr().out)["provider"] == "OpenSSL (via cryptography)"
+    assert json.loads(capsys.readouterr().out)["provider"] == "built-in (cryptography and hashlib)"

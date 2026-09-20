@@ -19,12 +19,10 @@ from __future__ import annotations
 
 import hashlib
 import hmac
-
-import cryptography
-from cryptography.hazmat.backends.openssl.backend import backend
+import platform
 
 from acvp_assay.models import ProviderKind, ProviderMetadata
-from acvp_assay.providers.digest import HASHLIB_ALGORITHMS
+from acvp_assay.providers.digest import HASHLIB_ALGORITHMS, ssl_version_text
 
 #: SP 800-90A seed lengths, in bits. The wider hashes get the wider seed.
 SEED_LENGTH_BITS: dict[str, int] = {
@@ -47,13 +45,20 @@ def _digest_name(mode: str) -> str:
 
 
 def _metadata(name: str) -> ProviderMetadata:
+    """Both mechanisms here compute in the standard library, so they say so.
+
+    Neither reaches a ``cryptography`` primitive: the digests come from ``hashlib``
+    and the update routine from ``hmac``. Declaring ``cryptography`` named a
+    library that answered nothing, and reported its OpenSSL rather than the one
+    that did the work, which on this machine is a different build.
+    """
     return ProviderMetadata(
         kind=ProviderKind.BUILTIN,
         name=name,
-        library_name="cryptography",
-        library_version=cryptography.__version__,
+        library_name="hashlib",
+        library_version=platform.python_version(),
         backend_name="OpenSSL",
-        backend_version=backend.openssl_version_text(),
+        backend_version=ssl_version_text(),
     )
 
 

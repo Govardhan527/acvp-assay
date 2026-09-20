@@ -21,6 +21,7 @@ from cryptography.hazmat.backends.openssl.backend import backend
 
 from acvp_assay import __version__
 from acvp_assay.models import ProviderKind, ProviderMetadata
+from acvp_assay.providers.digest import ssl_version_text
 
 PACKAGE = Path(__file__).resolve().parent
 
@@ -120,14 +121,45 @@ def runner_document() -> dict[str, object]:
     }
 
 
+#: What answers when no harness is named. Two libraries, not one: naming only
+#: ``cryptography`` described the digests, HMAC, PBKDF, the protocol KDFs and the
+#: hash DRBGs as something they never touched.
+BUILTIN_PROVIDER = "built-in (cryptography and hashlib)"
+
+
+def builtin_libraries() -> list[dict[str, object]]:
+    """Both libraries the built-in providers answer through, each with its own backend.
+
+    They are two builds, not one name for one thing: on this machine ``cryptography``
+    carries its own statically linked OpenSSL while ``hashlib`` uses the interpreter's,
+    and a single ``openssl_version`` had to be wrong about one of them. Which family
+    uses which is the provider's own metadata, reported per run; this says what is
+    present, which is all ``info`` can honestly claim before anything has run.
+    """
+    return [
+        {
+            "name": "cryptography",
+            "version": cryptography.__version__,
+            "backend_name": "OpenSSL",
+            "backend_version": backend.openssl_version_text(),
+        },
+        {
+            "name": "hashlib",
+            "version": platform.python_version(),
+            "backend_name": "OpenSSL",
+            "backend_version": ssl_version_text(),
+        },
+    ]
+
+
 def runtime_metadata(provider: ProviderMetadata | None = None) -> dict[str, object]:
     """Return what identifies this runner, and the provider that answers.
 
-    With no provider, the built-in toolkit is described as it always has been.
-    With one, that provider's own declared identity is reported instead. For an
-    external provider the ``cryptography`` and OpenSSL versions are omitted, not
-    set to null: they describe a library that answered nothing, and a null would
-    read as a harness that failed to report one. The command is reported beside
+    With no provider, the built-in toolkit is described by every library it
+    answers through. With one, that provider's own declared identity is reported
+    instead. For an external provider the built-in libraries are omitted, not set
+    to null: they describe libraries that answered nothing, and a null would read
+    as a harness that failed to report one. The command is reported beside
     the identity, because the identity is what ran and the command is where.
     """
     runner: dict[str, object] = {
@@ -137,10 +169,9 @@ def runtime_metadata(provider: ProviderMetadata | None = None) -> dict[str, obje
     }
     if provider is None:
         return {
-            "cryptography_version": cryptography.__version__,
-            "openssl_version": backend.openssl_version_text(),
-            "provider": "OpenSSL (via cryptography)",
+            "provider": BUILTIN_PROVIDER,
             "provider_kind": ProviderKind.BUILTIN.value,
+            "provider_libraries": builtin_libraries(),
             **runner,
         }
     identity: dict[str, object] = {

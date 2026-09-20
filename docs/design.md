@@ -30,7 +30,7 @@ flowchart LR
     assay["<b>acvp-assay</b>"]
 
     subgraph under["What is being tested"]
-        builtin["Built-in provider<br/><i>OpenSSL via cryptography</i>"]
+        builtin["Built-in provider<br/><i>OpenSSL via cryptography and hashlib</i>"]
         vendor["Your implementation<br/><i>HSM, smartcard, embedded,<br/>any language</i>"]
     end
 
@@ -99,7 +99,7 @@ flowchart TB
     end
 
     subgraph boundary["Provider boundary — providers/"]
-        p1["Built-in<br/><i>cryptography / OpenSSL</i>"]
+        p1["Built-in<br/><i>cryptography and hashlib / OpenSSL</i>"]
         p2["HarnessClient<br/><i>subprocess over JSON</i>"]
     end
 

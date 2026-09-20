@@ -107,7 +107,7 @@ python3.12 scripts/dev.py demo
 .venv/bin/python -m acvp_assay run fixtures/aes-gcm-valid-encrypt/prompt.json
 ```
 
-The demo prints machine-readable runtime metadata: the `cryptography` and OpenSSL versions that identify the provider, and the full commit the runner was built from, with whether the working tree matched it. A version alone does not identify the runner, since two runs a commit apart report the same one. Where there is no commit, `runner_commit` is null and `runner_commit_absent_reason` says why: `no_checkout` for an installed wheel, `not_a_repository` for a source tree outside version control, and `vcs_unavailable` when git could not be run. `provider_kind` says whether the provider is built in or an external harness. `acvp-assay info --provider-command COMMAND` asks a harness to identify itself and reports what it declares instead, with the command beside it and without the `cryptography` and OpenSSL versions, which describe a library that did not answer. A run report's provider block carries the same `kind`, so a run through a harness cannot be read as a built-in one, and for a harness its `buildId`, or `null` with a `buildIdAbsentReason`, because a name and a version do not identify a build. A report also carries a `runner` block with the same commit and tree state, so a result set names the instrument that produced it and not only the implementation that answered: two runs a commit apart are otherwise indistinguishable. The last command executes a tiny local fixture end to end and prints a JSON report.
+The demo prints machine-readable runtime metadata: every library the built-in provider answers through, each with the OpenSSL build behind it, and the full commit the runner was built from, with whether the working tree matched it. A version alone does not identify the runner, since two runs a commit apart report the same one. Where there is no commit, `runner_commit` is null and `runner_commit_absent_reason` says why: `no_checkout` for an installed wheel, `not_a_repository` for a source tree outside version control, and `vcs_unavailable` when git could not be run. `provider_kind` says whether the provider is built in or an external harness. `acvp-assay info --provider-command COMMAND` asks a harness to identify itself and reports what it declares instead, with the command beside it and without the built-in libraries, which describe libraries that did not answer. A run report's provider block carries the same `kind`, so a run through a harness cannot be read as a built-in one, and for a harness its `buildId`, or `null` with a `buildIdAbsentReason`, because a name and a version do not identify a build. A report also carries a `runner` block with the same commit and tree state, so a result set names the instrument that produced it and not only the implementation that answered: two runs a commit apart are otherwise indistinguishable. The last command executes a tiny local fixture end to end and prints a JSON report.
 
 New to the project? **[`docs/design.md`](docs/design.md) has the diagrams** — what the
 system is for, how the two paths differ, and the end-to-end sequence for a run, a live
@@ -261,8 +261,8 @@ active certificate at all.
 
 ## How vendors use this
 
-The built-in provider exercises OpenSSL through Python's `cryptography`, which is only useful
-for checking the runner itself. **Testing *your* product means supplying it as a harness.**
+The built-in provider exercises OpenSSL through Python's `cryptography` and `hashlib`, which
+is only useful for checking the runner itself. **Testing *your* product means supplying it as a harness.**
 Four stages, each independently useful — most vendors stop after stage 2:
 
 ### Stage 1 — see it work, no integration (5 minutes)

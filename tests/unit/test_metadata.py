@@ -58,9 +58,8 @@ def _absent(reason: CommitAbsentReason) -> dict[str, object]:
 def test_runtime_metadata_has_stable_schema() -> None:
     """Runtime metadata exposes the fields required by later result reports."""
     assert set(runtime_metadata()) == {
-        "cryptography_version",
-        "openssl_version",
         "provider",
+        "provider_libraries",
         "provider_kind",
         "python_version",
         "runner_commit",
@@ -185,15 +184,21 @@ EXTERNAL = ProviderMetadata(
 )
 
 
-def test_the_built_in_description_is_unchanged_when_no_provider_is_named() -> None:
-    """With nothing named, the built-in toolkit is described as before, now with its kind."""
+def test_the_built_in_description_names_every_library_that_answers() -> None:
+    """With nothing named, both libraries are reported, each with its own backend."""
     identity = runtime_metadata()
 
-    assert identity["provider"] == "OpenSSL (via cryptography)"
+    assert identity["provider"] == "built-in (cryptography and hashlib)"
     assert identity["provider_kind"] == "builtin"
-    assert identity["cryptography_version"]
-    assert identity["openssl_version"]
     assert "provider_command" not in identity
+
+    libraries = identity["provider_libraries"]
+    assert isinstance(libraries, list)
+    assert [entry["name"] for entry in libraries] == ["cryptography", "hashlib"]
+    for entry in libraries:
+        assert entry["version"]
+        assert entry["backend_name"] == "OpenSSL"
+        assert entry["backend_version"].startswith("OpenSSL ")
 
 
 def test_an_external_provider_is_reported_by_its_own_identity() -> None:
@@ -206,8 +211,7 @@ def test_an_external_provider_is_reported_by_its_own_identity() -> None:
     assert identity["provider_library"] == {"name": "libexample", "version": "3.2.0"}
     assert identity["provider_backend"] == {"name": "PKCS#11", "version": "3.2"}
     # Omitted, not null: a null would read as a harness that failed to report one.
-    assert "cryptography_version" not in identity
-    assert "openssl_version" not in identity
+    assert "provider_libraries" not in identity
     assert identity["runner_version"] == __version__
     assert identity["provider_build_id"] == "libexample-3.2.0-4f1c9a2"
     assert identity["provider_build_id_absent_reason"] is None

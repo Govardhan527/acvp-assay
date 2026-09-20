@@ -21,8 +21,9 @@ production-ready, or otherwise compliant.
 
 ## The built-in provider is a reference, not a subject
 
-Without `--provider-command`, the runner exercises the OpenSSL backend exposed by Python's
-`cryptography`. That checks the *runner*, not your product, and it does not validate OpenSSL
+Without `--provider-command`, the runner exercises the OpenSSL backends exposed by Python's
+`cryptography` and by `hashlib`, which need not be the same build. That checks the *runner*,
+not your product, and it does not validate OpenSSL
 either. Any result meant to say something about a vendor's implementation must come from a
 harness.
 
