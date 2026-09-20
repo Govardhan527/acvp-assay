@@ -215,16 +215,19 @@ def _unsupported(code: DeclineReason, tg_id: int, tc_id: int, reason: str) -> Te
     )
 
 
+def _values(name: str, data: bytes) -> AesGcmValues | DigestValues:
+    """The reportable value for one field, under the ACVP name it arrived as."""
+    if name == "pt":
+        return AesGcmValues(plaintext=data)
+    if name == "ct":
+        return AesGcmValues(ciphertext=data)
+    if name == "mac":
+        return DigestValues(mac=data)
+    return AesGcmValues(tag=data)
+
+
 def _compare(tg_id: int, tc_id: int, name: str, expected: bytes, actual: bytes) -> TestCaseResult:
-    values = (
-        (AesGcmValues(plaintext=expected), AesGcmValues(plaintext=actual))
-        if name == "pt"
-        else (AesGcmValues(ciphertext=expected), AesGcmValues(ciphertext=actual))
-        if name == "ct"
-        else (DigestValues(mac=expected), DigestValues(mac=actual))
-        if name == "mac"
-        else (AesGcmValues(tag=expected), AesGcmValues(tag=actual))
-    )
+    values = (_values(name, expected), _values(name, actual))
     passed = expected == actual
     return TestCaseResult(
         tg_id=tg_id,
@@ -405,13 +408,27 @@ def _run_case(
             wrap=wrap,
         )
     except ValueError:
+        action = "wrapping" if wrap else "unwrapping"
         if expected.test_passed is not None:
             return _verdict(group.tg_id, case.tc_id, expected.test_passed, False, "a wrapping")
+        if name in expected.values:
+            # NIST recorded an answer, so this case was meant to succeed and
+            # refusing it is a wrong answer rather than a gap in coverage. It was
+            # reported UNSUPPORTED, which hid a defect in the implementation
+            # behind a case that stopped being counted: the 766220 pattern.
+            return TestCaseResult(
+                tg_id=group.tg_id,
+                tc_id=case.tc_id,
+                status=ResultStatus.FAIL,
+                expected=_values(name, expected.values[name]),
+                actual=None,
+                diagnostic=f"{action} failed, but an expected {name} was recorded",
+            )
         return _unsupported(
-            DeclineReason.IMPLEMENTATION_LACKS,
+            DeclineReason.OFFLINE_UNDECIDABLE,
             group.tg_id,
             case.tc_id,
-            "unwrapping failed with no expected verdict",
+            f"{action} failed with neither an expected {name} nor a verdict",
         )
     if expected.test_passed is not None:
         return _verdict(group.tg_id, case.tc_id, expected.test_passed, True, "a wrapping")

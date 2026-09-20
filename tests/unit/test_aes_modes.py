@@ -9,7 +9,7 @@ from typing import Any, cast
 import pytest
 
 from acvp_assay.algorithms import aes_modes
-from acvp_assay.models import DeclineClaimant, ResultStatus
+from acvp_assay.models import DeclineClaimant, DeclineReason, ResultStatus
 from acvp_assay.parser import AcvpValidationError
 from acvp_assay.providers.aes_modes import (
     MCT_OUTER_ITERATIONS,
@@ -496,8 +496,14 @@ def test_successful_unwrap_where_acvp_expects_rejection_is_a_failure() -> None:
     assert "accepted a wrapping" in (results[0].diagnostic or "")
 
 
-def test_failed_unwrap_without_a_verdict_is_unsupported() -> None:
-    """A rejected unwrap with nothing recorded to compare is declared."""
+def test_a_failed_unwrap_of_a_recorded_plaintext_is_a_failure() -> None:
+    """NIST recorded a plaintext, so refusing the wrapping is a wrong answer.
+
+    Reporting it UNSUPPORTED hid a defect in the implementation behind a coverage
+    gap: the totals stayed clean and the case stopped being counted, which is the
+    766220 pattern. The implementation under test is the only thing that can fail
+    here, so it is a FAIL.
+    """
     results = run(
         aes_modes.KW,
         {"direction": "decrypt", "keyLen": 128, "kwCipher": "cipher"},
@@ -505,7 +511,22 @@ def test_failed_unwrap_without_a_verdict_is_unsupported() -> None:
         [{"tcId": 1, "pt": "00" * 32}],
     )
 
+    assert results[0].status is ResultStatus.FAIL
+    assert results[0].decline_reason is None
+    assert "recorded" in (results[0].diagnostic or "")
+
+
+def test_a_failed_unwrap_with_nothing_recorded_is_undecidable() -> None:
+    """With neither a plaintext nor a verdict, nothing local can decide the case."""
+    results = run(
+        aes_modes.KW,
+        {"direction": "decrypt", "keyLen": 128, "kwCipher": "cipher"},
+        [{"tcId": 1, "key": KEY128.hex(), "ct": "00" * 40}],
+        [{"tcId": 1, "testPassed": None}],
+    )
+
     assert results[0].status is ResultStatus.UNSUPPORTED
+    assert results[0].decline_reason is DeclineReason.OFFLINE_UNDECIDABLE
     assert "unwrapping failed" in (results[0].diagnostic or "")
 
 

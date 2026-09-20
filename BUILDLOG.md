@@ -563,3 +563,13 @@
 - Commit/link/path: `src/acvp_assay/models.py`, `docs/harness-protocol.md`.
 - Blocker, if any: none.
 - Next unchecked ID: carry `runner_commit` into run reports, so a built-in run names the code that answered.
+
+## 2026-09-20 - The four open items, closed one at a time
+
+- Project and task ID: ACVP Assay - the items left open across 0.22.0 to 0.23.1, fixed after the user asked for all four.
+- Done condition: a failed unwrap of a recorded case is a failure rather than a gap; a run report names the commit that produced it; a PIN on a descriptor reaches a harness without a shell wrapper; and `info` describes the built-in provider it actually has.
+- **AES-KW reported a failure as a decline.** A KW or KWP case whose wrapping the implementation refused came back UNSUPPORTED when NIST had recorded the answer, so a defect in the implementation arrived as coverage that stopped being counted. That is the 766220 pattern, found here by classifying the reason codes in 0.22.0 rather than by a failing test: the code said "unwrapping failed with no expected verdict", and `implementation_lacks` pointed at the vendor while the status told the reader nothing had been tested.
+- It now splits three ways, by what the answer key holds. A recorded verdict is judged as before. A recorded plaintext or ciphertext makes a refusal a **FAIL**, carrying the value NIST recorded as the expected side. Only with neither recorded is it a decline, and then `offline_undecidable`, because nothing local can decide it: the old `implementation_lacks` blamed the implementation for a gap in the answer key.
+- **The tests were written first and watched failing**, which is what `CONTRIBUTING.md` asks for: one asserted FAIL and got UNSUPPORTED, the other asserted `offline_undecidable` and got `implementation_lacks`. The pinned KW and KWP sets then ran unchanged through the built-in provider, 3,600 passed and 0 failed in each, so the new FAIL path does not fire on NIST's own data; the other 3,600 in each set remain `kwCipher: inverse` declines by the runner.
+- Tests run and result: `scripts/dev.py test` - format, lint, strict mypy, 1,053 passed and 9 skipped.
+- Commit/link/path: `src/acvp_assay/algorithms/aes_modes.py`, `tests/unit/test_aes_modes.py`.
