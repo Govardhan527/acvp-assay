@@ -15,9 +15,16 @@
  *     cc -O2 -Wall -Wextra -o acvp_harness acvp_harness.c -ldl \
  *        -I/usr/include/p11-kit-1
  *
- * Run:
- *     PKCS11_PIN=1234 acvp-assay run prompt.json --provider-command \
- *         "./acvp_harness --module /usr/lib/softhsm/libsofthsm2.so"
+ * Run, with the PIN in a file only its owner can read:
+ *     acvp-assay run prompt.json --provider-command \
+ *         "./acvp_harness --module /usr/lib/softhsm/libsofthsm2.so \
+ *          --pin-file /run/user/1000/acvp.pin"
+ *
+ * A PIN is never taken on the command line. argv is world readable through
+ * /proc/PID/cmdline, and the runner keeps this harness alive for the whole
+ * measurement, so an exposure there lasts the run rather than an instant.
+ * --pin-fd N reads it from a descriptor the caller already opened, which keeps
+ * it out of the filesystem as well; see docs/harness-protocol.md.
  *
  * Operations answered here: metadata, digest, digest-mct, mac,
  * block-transform (AES-ECB/CBC), encrypt and decrypt (AES-GCM). Everything
@@ -43,9 +50,14 @@
 
 #include <dlfcn.h>
 #include <stdarg.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
 #include <p11-kit-1/p11-kit/pkcs11.h>
 
@@ -256,6 +268,115 @@ static void emit_rv(const char *where, CK_RV rv)
 static void emit_auth_failed(void) { emit("{\"error\": \"authentication failed\"}"); }
 static void emit_failure(const char *why) { emit("{\"error\": \"%s\"}", why); }
 
+/* ---------------------------------------------------------------------- PIN */
+
+/* A PIN never comes from argv. /proc/PID/cmdline is readable by every local
+   user, and --provider-command keeps this harness alive for the whole run, so
+   the exposure would last the measurement. It comes from a descriptor the
+   caller opened, from a file whose mode keeps it private, or failing those from
+   the environment, which is owner-only in /proc but is inherited by children. */
+
+#define PIN_MAX 256
+
+static char   pin_buffer[PIN_MAX];
+static size_t pin_length;
+
+/* Written through a volatile pointer so the store cannot be optimised away. */
+static void zero_secret(void *data, size_t length)
+{
+    volatile unsigned char *byte = data;
+    while (length--) *byte++ = 0;
+}
+
+/* Read a PIN from an open descriptor, to end of line or end of input. */
+static int pin_read_fd(int fd, const char *what)
+{
+    size_t used = 0;
+    for (;;) {
+        if (used == sizeof pin_buffer) {
+            fprintf(stderr, "acvp_harness: the PIN from %s is longer than %zu bytes\n",
+                    what, sizeof pin_buffer);
+            return 0;
+        }
+        ssize_t got = read(fd, pin_buffer + used, sizeof pin_buffer - used);
+        if (got < 0) {
+            if (errno == EINTR) continue;
+            fprintf(stderr, "acvp_harness: cannot read the PIN from %s: %s\n",
+                    what, strerror(errno));
+            return 0;
+        }
+        if (got == 0) break;
+        used += (size_t)got;
+        char *newline = memchr(pin_buffer, '\n', used);
+        if (newline) { used = (size_t)(newline - pin_buffer); break; }
+    }
+    while (used && (pin_buffer[used - 1] == '\r' || pin_buffer[used - 1] == '\n')) used--;
+    if (used == 0) {
+        fprintf(stderr, "acvp_harness: the PIN from %s is empty\n", what);
+        return 0;
+    }
+    pin_length = used;
+    return 1;
+}
+
+/* A PIN file that anyone else can read is the same defect wearing a different
+   hat, so refuse it and name the mode rather than logging in from it. */
+static int pin_read_file(const char *path)
+{
+    int fd = open(path, O_RDONLY | O_CLOEXEC);
+    if (fd < 0) {
+        fprintf(stderr, "acvp_harness: cannot open %s: %s\n", path, strerror(errno));
+        return 0;
+    }
+    struct stat status;
+    if (fstat(fd, &status) != 0) {
+        fprintf(stderr, "acvp_harness: cannot stat %s: %s\n", path, strerror(errno));
+        close(fd);
+        return 0;
+    }
+    if (status.st_mode & (S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH)) {
+        fprintf(stderr,
+                "acvp_harness: %s is mode %04o, readable or writable beyond its owner; "
+                "chmod 600 it\n",
+                path, (unsigned)(status.st_mode & 07777));
+        close(fd);
+        return 0;
+    }
+    int ok = pin_read_fd(fd, path);
+    close(fd);
+    return ok;
+}
+
+/* Fill pin_buffer from whichever source the caller chose. Returns 0 only when a
+   PIN was asked for and could not be read; no PIN at all is not an error, since
+   a token may need no login. */
+static int read_pin(const char *fd_text, const char *path)
+{
+    if (fd_text) {
+        char *end = NULL;
+        long fd = strtol(fd_text, &end, 10);
+        if (*fd_text == '\0' || *end != '\0' || fd < 3 || fd > INT_MAX) {
+            fprintf(stderr,
+                    "acvp_harness: --pin-fd takes a descriptor of 3 or more; "
+                    "0, 1 and 2 carry the protocol\n");
+            return 0;
+        }
+        return pin_read_fd((int)fd, "--pin-fd");
+    }
+    if (path) return pin_read_file(path);
+
+    const char *value = getenv("PKCS11_PIN");
+    if (!value) return 1;
+    size_t length = strlen(value);
+    if (length == 0 || length > sizeof pin_buffer) {
+        fprintf(stderr, "acvp_harness: PKCS11_PIN must be 1 to %zu bytes\n", sizeof pin_buffer);
+        return 0;
+    }
+    memcpy(pin_buffer, value, length);
+    pin_length = length;
+    return 1;
+}
+
 /* ------------------------------------------------------------------ PKCS#11 */
 
 static CK_FUNCTION_LIST_PTR p11;
@@ -263,7 +384,7 @@ static CK_SESSION_HANDLE    session;
 static void                *module_handle;
 static const char          *module_path = "(none)";
 
-static int p11_start(const char *path, const char *pin, CK_SLOT_ID wanted, int have_slot)
+static int p11_start(const char *path, CK_SLOT_ID wanted, int have_slot)
 {
     module_handle = dlopen(path, RTLD_NOW);
     if (!module_handle) {
@@ -307,8 +428,12 @@ static int p11_start(const char *path, const char *pin, CK_SLOT_ID wanted, int h
         fprintf(stderr, "acvp_harness: C_OpenSession failed (0x%lx)\n", (unsigned long)rv);
         return 0;
     }
-    if (pin) {
-        rv = p11->C_Login(session, CKU_USER, (CK_UTF8CHAR_PTR)pin, strlen(pin));
+    if (pin_length) {
+        rv = p11->C_Login(session, CKU_USER, (CK_UTF8CHAR_PTR)pin_buffer, (CK_ULONG)pin_length);
+        /* Nothing after the login needs the PIN, so it does not sit in memory
+           for the length of the run. This runs on the failure path too. */
+        zero_secret(pin_buffer, sizeof pin_buffer);
+        pin_length = 0;
         if (rv != CKR_OK && rv != CKR_USER_ALREADY_LOGGED_IN) {
             fprintf(stderr, "acvp_harness: C_Login failed (0x%lx)\n", (unsigned long)rv);
             return 0;
@@ -742,29 +867,51 @@ done:
 static void usage(void)
 {
     fprintf(stderr,
-        "usage: acvp_harness --module PATH [--pin PIN] [--slot ID]\n"
+        "usage: acvp_harness --module PATH [--pin-fd N | --pin-file PATH] [--slot ID]\n"
         "\n"
         "Reads one JSON request per line on stdin and writes one response per\n"
-        "line on stdout. Intended to be run by acvp-assay --provider-command.\n");
+        "line on stdout. Intended to be run by acvp-assay --provider-command.\n"
+        "\n"
+        "A PIN is never taken on the command line: argv is world readable through\n"
+        "/proc/PID/cmdline. Pass --pin-fd N to read it from a descriptor the\n"
+        "caller already opened, --pin-file PATH to read it from a file that is not\n"
+        "readable beyond its owner, or set PKCS11_PIN, which is owner-only in\n"
+        "/proc but is inherited by every child. --module may also come from\n"
+        "PKCS11_MODULE, and --slot picks a slot; without it the first slot with a\n"
+        "token is used.\n");
 }
 
 int main(int argc, char **argv)
 {
-    const char *module = getenv("PKCS11_MODULE");
-    const char *pin    = getenv("PKCS11_PIN");
-    CK_SLOT_ID  slot   = 0;
+    const char *module      = getenv("PKCS11_MODULE");
+    const char *pin_fd_text = NULL;
+    const char *pin_file    = NULL;
+    CK_SLOT_ID  slot        = 0;
     int have_slot = 0;
 
     for (int i = 1; i < argc; i++) {
-        if (!strcmp(argv[i], "--module") && i + 1 < argc)   module = argv[++i];
-        else if (!strcmp(argv[i], "--pin") && i + 1 < argc) pin = argv[++i];
+        if (!strcmp(argv[i], "--module") && i + 1 < argc)        module = argv[++i];
+        else if (!strcmp(argv[i], "--pin-fd") && i + 1 < argc)   pin_fd_text = argv[++i];
+        else if (!strcmp(argv[i], "--pin-file") && i + 1 < argc) pin_file = argv[++i];
         else if (!strcmp(argv[i], "--slot") && i + 1 < argc) {
             slot = (CK_SLOT_ID)strtoul(argv[++i], NULL, 0);
             have_slot = 1;
         } else { usage(); return 2; }
     }
     if (!module) { usage(); return 2; }
-    if (!p11_start(module, pin, slot, have_slot)) return 1;
+    if (pin_fd_text && pin_file) {
+        fprintf(stderr, "acvp_harness: pass --pin-fd or --pin-file, not both\n");
+        return 2;
+    }
+    if (!read_pin(pin_fd_text, pin_file)) {
+        zero_secret(pin_buffer, sizeof pin_buffer);
+        return 2;
+    }
+    if (!p11_start(module, slot, have_slot)) {
+        zero_secret(pin_buffer, sizeof pin_buffer);
+        return 1;
+    }
+    zero_secret(pin_buffer, sizeof pin_buffer);
 
     char  *line = NULL;
     size_t cap  = 0;

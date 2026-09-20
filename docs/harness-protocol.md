@@ -101,10 +101,11 @@ declining is a first-class answer, see below.
 carries what it returns, marked `"kind": "external"`, with the command beside it:
 the identity is what ran, and the command is where it ran. Check what a run will
 record before starting one with `acvp-assay info --provider-command COMMAND`.
-Reports are shared as evidence, so pass secrets such as a PIN through the
-environment rather than on the command line. The value after `--pin`, `--so-pin`,
-`--user-pin`, `--password`, `--passphrase` or `--secret` is recorded as `REDACTED`,
-which is a backstop for the common spellings and not a guarantee.
+Reports are shared as evidence, so keep a secret such as a PIN out of the command
+altogether; see [Handling a secret in a harness](#handling-a-secret-in-a-harness).
+The value after `--pin`, `--so-pin`, `--user-pin`, `--password`, `--passphrase` or
+`--secret` is recorded as `REDACTED`, which is a backstop for the common spellings
+and not a guarantee.
 
 `metadata` must also say which build answered, because a name and a version do not
 identify one: two builds a commit apart share both. Send `buildId`, a string that
@@ -488,6 +489,51 @@ in every standard library.
 Start from `examples/reference_harness.py`. It is a complete worked
 implementation that imports nothing from this package, so it can be copied out
 and rewritten in another language without carrying anything with it.
+
+### Handling a secret in a harness
+
+A PKCS#11 token wants a PIN, and a harness for another kind of module usually
+wants something like it. There are three places such a secret leaks, and they are
+closed separately:
+
+| Method | `/proc/PID/cmdline` | `/proc/PID/environ` | inherited by children |
+| --- | --- | --- | --- |
+| a PIN on argv | exposed to every local user | not used | no |
+| `PKCS11_PIN` | closed | owner-only | yes |
+| `--pin-fd N` | closed | closed | no |
+| `--pin-file PATH` | closed | closed | no, if the mode is checked |
+
+argv is the one to avoid. `/proc/PID/cmdline` is readable by every local user on a
+normal Linux host, and because the runner keeps a harness alive for the whole run
+rather than spawning it per case, an exposure there lasts the measurement rather
+than an instant. `examples/pkcs11` therefore has no `--pin` option at all: an
+option that exists gets used, and it gets used in CI, where the process table is
+the least private place on the machine.
+
+A descriptor is the strongest of the three, and it needs one thing to work through
+`--provider-command`. The runner starts a harness through Python's `subprocess`,
+which closes descriptors above 2, so a descriptor opened by whoever invoked
+`acvp-assay` does not reach the harness. Have the child open it instead:
+
+```bash
+acvp-assay run prompt.json --provider-command \
+    "sh -c 'exec ./acvp_harness --module /usr/lib/softhsm/libsofthsm2.so --pin-fd 3 3</run/user/1000/acvp.pin'"
+```
+
+`--pin-file` needs no wrapper, and `examples/pkcs11` refuses a file that is
+readable or writable beyond its owner, naming the mode it found: a PIN file at
+0644 is the same defect wearing a different hat. Whichever way it arrives, zero
+the buffer once the login returns, on the failure path too.
+
+`PKCS11_PIN` still works and is documented, and it is worth being exact about what
+it does and does not protect: `/proc/PID/environ` is owner-only, so it is closed to
+other local users, and it is inherited by every child the harness spawns.
+
+None of this replaces the redaction in the runner, which still writes `REDACTED`
+in place of the value after `--pin`, `--so-pin`, `--user-pin`, `--password`,
+`--passphrase` and `--secret` in the command it records. That is a backstop for
+harnesses written elsewhere: it protects the report and does nothing for the
+invocation, which is a separate exposure.
 
 ## Coverage
 

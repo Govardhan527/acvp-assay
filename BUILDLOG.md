@@ -539,3 +539,18 @@
 - Commit/link/path: `docs/harness-protocol.md`, `CONTRIBUTING.md`.
 - Blocker, if any: none.
 - Next unchecked ID: carry `runner_commit` into run reports, so a built-in run names the code that answered.
+
+## 2026-09-20 - A PIN on the command line, and a reason code that named the wrong repair
+
+- Project and task ID: ACVP Assay - two defects reported by Afchine Madjlessi, maintainer of FreeHSM, reviewing 0.23.0 before contributing a PKCS#11 harness.
+- Done condition: the shipped example cannot take a PIN on the command line, and `not_exposed` names a repair that can actually happen.
+- **The example harness took a PIN on argv, and 0.23.0 had closed the wrong half of that.** `examples/pkcs11/acvp_harness.c` accepted `--pin PIN`. `/proc/PID/cmdline` is readable by every local user on a normal Linux host, and `--provider-command` keeps a harness alive for the whole run rather than spawning it per case, so the exposure lasted the measurement rather than an instant. 0.23.0 redacted `--pin` from the *recorded command*, which protects the report and does nothing for the invocation: two separate exposures, one of them closed. Afchine found it by holding himself to a rule about where a PIN may appear, not by reading for bugs.
+- `--pin` is gone rather than deprecated: an option that exists gets used, and it gets used in CI, where the process table is the least private place on the machine. In its place, `--pin-fd N` reads the PIN from a descriptor the caller already opened, and `--pin-file PATH` reads it from a file, refusing one that is readable or writable beyond its owner and naming the mode it found. `PKCS11_PIN` still works, and what it does and does not protect is now stated: owner-only in `/proc`, inherited by every child. The buffer is zeroed once `C_Login` returns, on the failure path too.
+- **Verified against a SoftHSM 2.6.1 token rather than asserted.** With `--pin-fd` the login succeeds while `/proc/PID/cmdline` and `ps -ef` carry only `--pin-fd 3`; with a deliberately wrong PIN the same path fails at `C_Login` with 0xa0, CKR_PIN_INCORRECT, which is what proves the PIN reached the module rather than being quietly dropped. A 0644 PIN file is refused by mode, a 0600 one is accepted, `--pin` now produces the usage message and exit 2 rather than being silently ignored, and `PKCS11_PIN` still logs in.
+- **One thing the descriptor form needs, and it is not obvious.** The runner starts a harness through Python's `subprocess`, which closes descriptors above 2, so `--pin-fd 3` with the descriptor opened by whoever invoked `acvp-assay` fails with `Bad file descriptor`. The child has to open it, and `sh -c 'exec ./acvp_harness ... --pin-fd 3 3<FILE'` does: both forms were run through `acvp-assay`, and the documentation shows the one that works.
+- The redaction in the runner stays, and its role is now a backstop for harnesses written by other people, which is the right role for it rather than the fix.
+- `docs/harness-protocol.md` gained a subsection tabulating the three places such a secret leaks and which of them each method closes, because a harness author writing for a different token needs that and will not derive it from first principles.
+- Tests run and result: `scripts/dev.py test` - format, lint, strict mypy, 1,052 passed and 9 skipped; the example harness is C, so its checks were the SoftHSM runs above and a clean build under `-Wall -Wextra` through its own Makefile.
+- Commit/link/path: `examples/pkcs11/acvp_harness.c`, `examples/pkcs11/README.md`, `docs/harness-protocol.md`.
+- Blocker, if any: none.
+- Next unchecked ID: `not_exposed` describes the right case and names a repair that cannot happen for any PKCS#11 module.

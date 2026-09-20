@@ -21,15 +21,27 @@ the file, so there is nothing to vendor and no license to reconcile — copy
 ## Run
 
 ```sh
-PKCS11_PIN=1234 acvp-assay run prompt.json --provider-command \
-    "./acvp_harness --module /usr/lib/softhsm/libsofthsm2.so"
+acvp-assay run prompt.json --provider-command \
+    "./acvp_harness --module /usr/lib/softhsm/libsofthsm2.so --pin-file /run/user/1000/acvp.pin"
 ```
 
-`--module` may also come from `PKCS11_MODULE`, and `--pin` from `PKCS11_PIN`. Prefer the
-environment for the PIN: a report records the command its harness ran from, and reports are
-shared as evidence. A `--pin` value is recorded as `REDACTED`, but that is a backstop rather
-than the place to keep one.
-`--slot ID` picks a slot; without it the first slot holding a token is used.
+**There is no `--pin` option.** argv is readable by every local user through
+`/proc/PID/cmdline`, and the runner keeps a harness alive for the whole run rather than
+spawning it per case, so a PIN there is exposed for the length of the measurement. Three
+ways to supply one, in the order this harness looks for them:
+
+- `--pin-fd N` reads it from a descriptor the caller already opened, which keeps it out of
+  the filesystem as well. Through `--provider-command` the child has to open it, because the
+  runner closes descriptors above 2:
+  `"sh -c 'exec ./acvp_harness --module MODULE --pin-fd 3 3</run/user/1000/acvp.pin'"`.
+- `--pin-file PATH` reads it from a file, and refuses one that is readable or writable
+  beyond its owner, naming the mode it found. `chmod 600` it.
+- `PKCS11_PIN` in the environment still works. `/proc/PID/environ` is owner-only, so it is
+  closed to other local users, and it is inherited by every child the harness spawns.
+
+The PIN buffer is zeroed once `C_Login` returns, on the failure path too. `--module` may
+also come from `PKCS11_MODULE`, and `--slot ID` picks a slot; without it the first slot
+holding a token is used. `docs/harness-protocol.md` tabulates what each method closes.
 
 ## What it answers
 
