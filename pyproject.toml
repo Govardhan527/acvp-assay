@@ -67,7 +67,7 @@ select = ["B", "E", "F", "I", "SIM", "UP"]
 [tool.mypy]
 python_version = "3.12"
 strict = true
-files = ["src", "scripts", "tests"]
+files = ["src", "scripts", "tests", "tools"]
 
 [tool.coverage.run]
 branch = true
