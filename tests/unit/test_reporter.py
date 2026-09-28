@@ -7,6 +7,7 @@ from typing import cast
 
 from acvp_assay import __version__
 from acvp_assay.models import (
+    HARNESS_CLAIMABLE_REASONS,
     AesGcmValues,
     BuildIdAbsentReason,
     DeclineClaimant,
@@ -33,7 +34,7 @@ RUNNER: dict[str, object] = {
     "treeClean": True,
 }
 NO_CLAIMS = {
-    "harness": {"implementation_lacks": 0, "vector_incomplete": 0},
+    "harness": {reason.value: 0 for reason in DeclineReason if reason in HARNESS_CLAIMABLE_REASONS},
     "runner": dict(NO_DECLINES),
 }
 ONE_GROUP = Concentration("cases-by-tgId", 1, 1.0)
@@ -122,6 +123,7 @@ def test_the_summary_breaks_declined_cases_down_by_reason() -> None:
 
     assert summary.unsupported == 5
     assert summary.unsupported_by_reason == {
+        **NO_DECLINES,
         "implementation_lacks": 2,
         "runner_lacks": 1,
         "offline_undecidable": 1,
@@ -238,13 +240,8 @@ def test_declines_are_split_by_who_claimed_them() -> None:
     summary = summarize(results)
 
     assert summary.unsupported_by_claimant == {
-        "harness": {"implementation_lacks": 2, "vector_incomplete": 1},
-        "runner": {
-            "implementation_lacks": 1,
-            "runner_lacks": 1,
-            "offline_undecidable": 0,
-            "vector_incomplete": 0,
-        },
+        "harness": {**NO_CLAIMS["harness"], "implementation_lacks": 2, "vector_incomplete": 1},
+        "runner": {**NO_DECLINES, "implementation_lacks": 1, "runner_lacks": 1},
     }
     assert summary.unsupported_by_reason["implementation_lacks"] == 3
 

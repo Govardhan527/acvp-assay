@@ -51,14 +51,22 @@ refuses one without it. Choose by who would repair the gap:
 
 | Reason | Repaired by |
 | --- | --- |
-| `implementation_lacks` | the vendor |
+| `implementation_lacks` | the vendor, by implementing it |
+| `interface_lacks` | the vendor, by *exposing* what the module already does |
 | `runner_lacks` | this project |
 | `offline_undecidable` | a submission to ACVTS, or nothing |
 | `vector_incomplete` | a different registration, or NIST |
 
-A harness may claim only `implementation_lacks` and `vector_incomplete`. The
-other two are properties of this runner and of its method, which a harness is
-never in a position to assert, so claiming either is a protocol error.
+A harness may claim `implementation_lacks`, `interface_lacks` and
+`vector_incomplete`. The other two are properties of this runner and of its
+method, which a harness is never in a position to assert, so claiming either is a
+protocol error.
+
+`interface_lacks` is worth the extra member because the two vendor-facing
+reasons send a vendor somewhere different. `implementation_lacks` says write the
+code; `interface_lacks` says the code is already there and nothing in the API can
+reach it, which is a smaller and much cheaper repair. Reporting the second as the
+first tells a vendor to build what they have already built.
 
 ## Before opening a pull request
 

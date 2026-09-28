@@ -474,6 +474,27 @@ def test_a_harness_can_say_the_vector_is_incomplete_and_why(tmp_path: Path) -> N
     assert declined.value.detail == "the case carries no tag"
 
 
+def test_a_harness_can_say_its_interface_cannot_express_the_case(tmp_path: Path) -> None:
+    """The module does it; the API has nowhere to say so. A different repair from lacking it.
+
+    liboqs is the case this exists for: ML-DSA signs deterministically, and
+    ``OQS_SIG_*`` takes no ``rnd``, so a hedged signature cannot be reproduced
+    through it even though the code underneath does exactly that.
+    """
+    response = {
+        "error": "unsupported",
+        "declineReason": "interface_lacks",
+        "detail": "OQS_SIG_ml_dsa_44_sign takes no rnd",
+    }
+    provider = responding(tmp_path, json.dumps(response))
+
+    with pytest.raises(HarnessUnsupportedError) as declined:
+        provider.decrypt(key=KEY, iv=IV, ciphertext=b"", aad=b"", tag=b"")
+
+    assert declined.value.reason is DeclineReason.INTERFACE_LACKS
+    assert declined.value.detail == "OQS_SIG_ml_dsa_44_sign takes no rnd"
+
+
 @pytest.mark.parametrize("code", ["runner_lacks", "offline_undecidable", "not_a_reason", 7])
 def test_a_harness_cannot_claim_a_reason_only_the_runner_can_know(
     tmp_path: Path, code: object

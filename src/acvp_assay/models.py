@@ -50,6 +50,15 @@ class DeclineReason(StrEnum):
     #: The implementation under test lacks it: a harness declined, or the
     #: provider's declared capability excludes it. The vendor repairs it.
     IMPLEMENTATION_LACKS = "implementation_lacks"
+    #: The implementation can do it and its interface cannot say so: the
+    #: operation exists inside the module, and no entry point expresses this
+    #: case. liboqs is the worked example — ML-DSA signs deterministically and
+    #: its ``OQS_SIG_*`` API has nowhere to put the ``rnd`` that would make the
+    #: answer comparable. The vendor repairs it too, by *exposing* what is
+    #: already there rather than by implementing it, which is why it is not
+    #: ``implementation_lacks``: sending a vendor to write code they have
+    #: already written is the wrong instruction.
+    INTERFACE_LACKS = "interface_lacks"
     #: This runner lacks it: a path not built here, or a value its own tables
     #: do not know. Repaired by building it here.
     RUNNER_LACKS = "runner_lacks"
@@ -71,9 +80,15 @@ class DeclineClaimant(StrEnum):
 
 #: The reasons a harness may claim. ``runner_lacks`` and ``offline_undecidable``
 #: are properties of this runner and of its method, which a harness is never in a
-#: position to assert.
+#: position to assert. ``interface_lacks`` is the harness's to claim precisely
+#: because it is the thing holding the interface: it knows which entry points it
+#: found and which case it could not express through them.
 HARNESS_CLAIMABLE_REASONS = frozenset(
-    {DeclineReason.IMPLEMENTATION_LACKS, DeclineReason.VECTOR_INCOMPLETE}
+    {
+        DeclineReason.IMPLEMENTATION_LACKS,
+        DeclineReason.INTERFACE_LACKS,
+        DeclineReason.VECTOR_INCOMPLETE,
+    }
 )
 
 
@@ -345,13 +360,14 @@ class TestCaseResult:
         convention at a single call site.
 
         UNSUPPORTED must carry a ``DeclineReason``, and no other status may.
-        Without one, four states with four different repairs print alike, and
+        Without one, five states with five different repairs print alike, and
         session 766220's keyGen defect sat behind exactly that: a limitation of
         the method, printed the same as every other gap.
 
         UNSUPPORTED must also name who declined, ``harness`` or ``runner``, so a
         module author can separate the gaps that are theirs from the runner's. A
-        harness may only claim ``implementation_lacks`` or ``vector_incomplete``.
+        harness may claim only ``implementation_lacks``, ``interface_lacks`` or
+        ``vector_incomplete``.
         """
         if self.status is ResultStatus.ERROR and self.diagnostic not in _SAFE_DIAGNOSTIC_VALUES:
             raise ValueError(

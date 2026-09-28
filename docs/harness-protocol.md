@@ -460,15 +460,25 @@ harness declined from what the runner declined:
 ```
 ← {"error": "unsupported", "declineReason": "implementation_lacks", "detail": "curve B-163 is not on this token"}
 ← {"error": "unsupported", "declineReason": "vector_incomplete", "detail": "the case carries no modulus"}
+← {"error": "unsupported", "declineReason": "interface_lacks", "detail": "the API takes no rnd, so a hedged signature cannot be reproduced"}
 ```
 
 `declineReason` is optional, and a decline without one claims `implementation_lacks`,
-which is what declining has always meant. A harness may claim only those two codes.
+which is what declining has always meant. A harness may claim those three codes.
 The other two are refused: `runner_lacks` says this runner has not built something,
 and `offline_undecidable` says no recorded answer can decide a case. Both are
 properties of this runner and of its method, which a harness is never in a position
 to assert, so a claim of either, or of any other value, is a protocol error that names
-the code. `detail` is optional and at most 200 characters. It is copied into the report
+the code.
+
+Prefer `interface_lacks` to `implementation_lacks` wherever it is the honest one,
+because they send a reader somewhere different. `implementation_lacks` says the
+module cannot do this. `interface_lacks` says the module does it and the API has
+nowhere to say so — a different and far cheaper repair, and one a vendor can only
+make if the report distinguishes the two. liboqs 0.16.0 is the worked example:
+`examples/liboqs` reports every ML-DSA keyGen and sigGen case as `interface_lacks`
+when it is held to the public `OQS_SIG_*` API, because that API takes no seed and
+no `rnd`, while the same cases pass through the entry points underneath it. `detail` is optional and at most 200 characters. It is copied into the report
 after the runner's own sentence, so it should describe the capability and never quote
 the input.
 

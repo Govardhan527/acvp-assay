@@ -153,14 +153,20 @@ def test_run_prints_json_report_and_exits_zero_on_pass(
         "unsupported": 0,
         "unsupportedByReason": {
             "implementation_lacks": 0,
+            "interface_lacks": 0,
             "offline_undecidable": 0,
             "runner_lacks": 0,
             "vector_incomplete": 0,
         },
         "unsupportedByClaimant": {
-            "harness": {"implementation_lacks": 0, "vector_incomplete": 0},
+            "harness": {
+                "implementation_lacks": 0,
+                "interface_lacks": 0,
+                "vector_incomplete": 0,
+            },
             "runner": {
                 "implementation_lacks": 0,
+                "interface_lacks": 0,
                 "offline_undecidable": 0,
                 "runner_lacks": 0,
                 "vector_incomplete": 0,

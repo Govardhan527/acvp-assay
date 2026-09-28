@@ -137,6 +137,7 @@ def test_enum_values_match_external_wire_values() -> None:
     ]
     assert [reason.value for reason in DeclineReason] == [
         "implementation_lacks",
+        "interface_lacks",
         "runner_lacks",
         "offline_undecidable",
         "vector_incomplete",
@@ -145,7 +146,7 @@ def test_enum_values_match_external_wire_values() -> None:
 
 
 def test_unsupported_without_a_decline_reason_is_rejected() -> None:
-    """UNSUPPORTED alone merges four states with four different repairs."""
+    """UNSUPPORTED alone merges five states with five different repairs."""
     with pytest.raises(ValueError, match="UNSUPPORTED requires a DeclineReason"):
         CaseResult(1, 1, ResultStatus.UNSUPPORTED, None, None, "curve not supported")
 
@@ -214,8 +215,17 @@ def test_a_harness_cannot_claim_what_only_the_runner_can_know(reason: DeclineRea
 
 
 def test_a_harness_may_claim_its_own_gap_or_the_vectors() -> None:
-    """The two codes a harness is in a position to know."""
-    for reason in (DeclineReason.IMPLEMENTATION_LACKS, DeclineReason.VECTOR_INCOMPLETE):
+    """The three codes a harness is in a position to know.
+
+    ``interface_lacks`` is among them because the harness *is* the thing holding
+    the interface: it knows which entry points it found and which case it could
+    not express through them. Neither the runner nor the vector can say that.
+    """
+    for reason in (
+        DeclineReason.IMPLEMENTATION_LACKS,
+        DeclineReason.INTERFACE_LACKS,
+        DeclineReason.VECTOR_INCOMPLETE,
+    ):
         result = CaseResult(
             1, 1, ResultStatus.UNSUPPORTED, None, None, "x", reason, DeclineClaimant.HARNESS
         )
