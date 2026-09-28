@@ -5,7 +5,7 @@ All notable changes to this project are recorded here. The format follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Before 1.0.0 the
 provider protocols may change between minor versions.
 
-## [Unreleased]
+## [0.25.0] - 2026-09-28
 
 ### Added
 
@@ -54,6 +54,23 @@ provider protocols may change between minor versions.
   recorded.
 - **`scripts/fetch_vectors.py --only SET`**, so a job that tests one family does
   not fetch 45 MB for the others.
+
+### Changed
+
+- **Breaking for anyone implementing `MlDsaProvider`:** `verify` takes
+  `context: bytes | None` rather than `bytes`, and three further keyword
+  arguments — `pre_hash`, `hash_alg` and `external_mu`. `None` for the context is
+  not an empty context: the internal interface signs no prefix at all, while an
+  empty context still produces a two-byte one.
+- **Breaking for an ML-DSA harness:** the runner now sends sigVer groups it used
+  to decline — every `preHash` group and every `externalMu` group. A harness that
+  reads only `signatureInterface` will verify those against the wrong message and
+  return confident wrong verdicts, so read `preHash`, `hashAlg` and `externalMu`
+  or decline them. Nothing changes for groups a harness already answered.
+- **Report schema:** `unsupportedByReason` and `unsupportedByClaimant` carry a
+  fifth key, `interface_lacks`; reports gain `groups` and `runner.platform`, and
+  an external provider's block may carry `build`. A consumer comparing whole
+  dictionaries will see the new keys.
 
 ## [0.24.0] - 2026-09-20
 
@@ -1031,6 +1048,7 @@ Initial release: an offline AES-GCM vector runner.
 - Clean-checkout Linux CI, and a pinned, hash-verified upstream vector source
   that is referenced rather than redistributed.
 
+[0.25.0]: https://github.com/Govardhan527/acvp-assay/releases/tag/v0.25.0
 [0.24.0]: https://github.com/Govardhan527/acvp-assay/releases/tag/v0.24.0
 [0.23.1]: https://github.com/Govardhan527/acvp-assay/releases/tag/v0.23.1
 [0.23.0]: https://github.com/Govardhan527/acvp-assay/releases/tag/v0.23.0
