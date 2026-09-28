@@ -113,14 +113,21 @@ class MlDsaProvider(Protocol):
         public_key: bytes,
         message: bytes,
         signature: bytes,
-        context: bytes,
+        context: bytes | None,
         signature_interface: str,
+        pre_hash: str = "pure",
+        hash_alg: str | None = None,
+        external_mu: bool = False,
     ) -> bool:
         """Report whether the signature verifies. An invalid signature is a false verdict.
 
-        ``signature_interface`` is load-bearing: ML-DSA's *internal* interface
-        omits the domain separator and context prefix that the *external* one
-        applies, so verifying an internal signature externally rejects it.
+        The same four parameters that decide a signature decide whether one
+        verifies, and for the same reason: they change the message that is
+        actually checked. ``signature_interface`` is the load-bearing one --
+        ML-DSA's *internal* interface omits the domain separator and context
+        prefix the *external* one applies, so a valid internal signature checked
+        externally is rejected, which is a wrong answer that looks like a
+        correctly detected forgery.
         """
         ...
 
@@ -253,22 +260,33 @@ class SubprocessMlDsaProvider(HarnessClient):
         public_key: bytes,
         message: bytes,
         signature: bytes,
-        context: bytes,
+        context: bytes | None,
         signature_interface: str = "external",
+        pre_hash: str = "pure",
+        hash_alg: str | None = None,
+        external_mu: bool = False,
     ) -> bool:
-        """Ask the harness for its verification verdict."""
-        response = self.invoke(
-            {
-                "operation": "ml-dsa-verify",
-                "parameterSet": parameter_set,
-                "pk": public_key.hex().upper(),
-                "message": message.hex().upper(),
-                "signature": signature.hex().upper(),
-                "context": context.hex().upper(),
-                "signatureInterface": signature_interface,
-            }
-        )
-        return _verdict(response)
+        """Ask the harness for its verification verdict, in the shape the group fixes.
+
+        The optional fields travel exactly as they do for signing, and for the
+        same reason: a group is verified in one of four shapes and the signature
+        alone does not say which.
+        """
+        request: dict[str, object] = {
+            "operation": "ml-dsa-verify",
+            "parameterSet": parameter_set,
+            "pk": public_key.hex().upper(),
+            "signature": signature.hex().upper(),
+            "signatureInterface": signature_interface,
+            "preHash": pre_hash,
+            "externalMu": external_mu,
+        }
+        request["mu" if external_mu else "message"] = message.hex().upper()
+        if context is not None:
+            request["context"] = context.hex().upper()
+        if hash_alg is not None:
+            request["hashAlg"] = hash_alg
+        return _verdict(self.invoke(request))
 
 
 __all__ = [

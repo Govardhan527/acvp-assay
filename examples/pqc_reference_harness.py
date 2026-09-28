@@ -122,22 +122,29 @@ def ml_dsa_sign(request: dict[str, Any]) -> dict[str, str]:
     if request.get("signatureInterface") == "internal":
         return {"signature": dsa._sign_internal(secret, message, rnd).hex().upper()}
 
-    context = bytes.fromhex(request.get("context", ""))
-    if request.get("preHash") == "preHash":
-        oid, algorithm, length = PRE_HASH[request["hashAlg"]]
-        digest = hashlib.new(algorithm)
-        digest.update(message)
-        hashed = (
-            digest.digest(length)  # type: ignore[call-arg]
-            if algorithm.startswith("shake")
-            else digest.digest()
-        )
-        message = bytes.fromhex(oid) + hashed
-        prefix = bytes([1, len(context)])
-    else:
-        prefix = bytes([0, len(context)])
-    signature = dsa._sign_internal(secret, prefix + context + message, rnd)
+    signature = dsa._sign_internal(secret, signed_message(request, message), rnd)
     return {"signature": signature.hex().upper()}
+
+
+def signed_message(request: dict[str, Any], message: bytes) -> bytes:
+    """Build what the external interface actually signs: the prefix, then the message.
+
+    Pure ML-DSA signs ``00 || len(ctx) || ctx || M``. HashML-DSA signs
+    ``01 || len(ctx) || ctx || OID || PH(M)``, so the same digest under two
+    different hash names is two different signatures.
+    """
+    context = bytes.fromhex(request.get("context", ""))
+    if request.get("preHash") != "preHash":
+        return bytes([0, len(context)]) + context + message
+    oid, algorithm, length = PRE_HASH[request["hashAlg"]]
+    digest = hashlib.new(algorithm)
+    digest.update(message)
+    hashed = (
+        digest.digest(length)  # type: ignore[call-arg]
+        if algorithm.startswith("shake")
+        else digest.digest()
+    )
+    return bytes([1, len(context)]) + context + bytes.fromhex(oid) + hashed
 
 
 def encapsulate(request: dict[str, Any]) -> dict[str, str]:
@@ -179,24 +186,34 @@ def key_check(request: dict[str, Any]) -> dict[str, bool]:
     return {"testPassed": True}
 
 
-def ml_dsa_verify(request: dict[str, Any]) -> dict[str, bool]:
+def ml_dsa_verify(request: dict[str, Any]) -> dict[str, Any]:
     """Report the verification verdict for an ML-DSA signature.
 
     The signature interface matters: ML-DSA's *internal* interface omits the
     domain separator and context prefix the *external* one applies, so an
     internal signature checked externally is rejected even when valid.
+
+    ``dilithium-py`` signs with an external ``mu`` and offers no way to *verify*
+    with one, so those cases are declined as ``interface_lacks`` rather than
+    answered with a verdict this harness cannot reach. That is the honest code:
+    the library computes exactly this internally, and its API has nowhere to
+    hand the value in.
     """
     dsa = ML_DSA[request["parameterSet"]]
     public_key = bytes.fromhex(request["pk"])
-    message = bytes.fromhex(request["message"])
     signature = bytes.fromhex(request["signature"])
+    if request.get("externalMu"):
+        return {
+            "error": "unsupported",
+            "declineReason": "interface_lacks",
+            "detail": "dilithium-py verifies from a message, never from a supplied mu",
+        }
+    message = bytes.fromhex(request["message"])
     try:
         if request.get("signatureInterface") == "internal":
             verdict = dsa._verify_internal(public_key, message, signature)
         else:
-            verdict = dsa.verify(
-                public_key, message, signature, bytes.fromhex(request.get("context", ""))
-            )
+            verdict = dsa._verify_internal(public_key, signed_message(request, message), signature)
     except (ValueError, TypeError, IndexError):
         return {"testPassed": False}
     return {"testPassed": bool(verdict)}

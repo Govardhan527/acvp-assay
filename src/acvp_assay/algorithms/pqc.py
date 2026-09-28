@@ -468,7 +468,14 @@ def _sig_ver_case(
     expected_case: PqcExpectedCase,
     provider: MlDsaProvider,
 ) -> TestCaseResult:
-    """Reach the verification verdict ACVP recorded for this case."""
+    """Reach the verification verdict ACVP recorded for this case.
+
+    Every group shape sigGen can produce, sigVer can present, so the same four
+    parameters travel: the interface, the pre-hash and its algorithm, and
+    whether the message arrives as a precomputed ``mu``. An implementation that
+    cannot express one of them declines it, which is a statement about its
+    interface and not a verdict.
+    """
     if expected_case.test_passed is None:
         return _unsupported(
             DeclineReason.OFFLINE_UNDECIDABLE,
@@ -476,29 +483,26 @@ def _sig_ver_case(
             case.tc_id,
             "no expected verdict recorded",
         )
-    if group.external_mu or "mu" in case.fields:
-        return _unsupported(
-            DeclineReason.RUNNER_LACKS,
-            group.tg_id,
-            case.tc_id,
-            "externalMu groups supply a precomputed mu and are not supported",
-        )
-    if group.pre_hash != "pure":
-        return _unsupported(
-            DeclineReason.RUNNER_LACKS,
-            group.tg_id,
-            case.tc_id,
-            f"preHash {group.pre_hash!r} is not supported",
-        )
-    if absent := _missing(case, "pk", "message", "signature"):
+    payload = "mu" if group.external_mu else "message"
+    if absent := _missing(case, "pk", payload, "signature"):
         return _unsupported(DeclineReason.VECTOR_INCOMPLETE, group.tg_id, case.tc_id, absent)
+    if group.pre_hash != "pure" and case.hash_alg is None:
+        return _unsupported(
+            DeclineReason.VECTOR_INCOMPLETE,
+            group.tg_id,
+            case.tc_id,
+            "a preHash case names no hashAlg",
+        )
     verdict = provider.verify(
         parameter_set=group.parameter_set,
         public_key=case.fields["pk"],
-        message=case.fields["message"],
+        message=case.fields[payload],
         signature=case.fields["signature"],
-        context=case.fields.get("context", b""),
+        context=case.fields.get("context") if group.signature_interface == "external" else None,
         signature_interface=group.signature_interface,
+        pre_hash=group.pre_hash,
+        hash_alg=case.hash_alg,
+        external_mu=group.external_mu,
     )
     return _verdict_result(
         group.tg_id, case.tc_id, expected_case.test_passed, verdict, "a signature"

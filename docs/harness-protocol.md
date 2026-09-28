@@ -145,7 +145,7 @@ way, a PKCS#11 harness sends `not_exposed`, as `examples/pkcs11` does.
 | `ml-kem-key-check` | `parameterSet`, `ek`, `dk` | `testPassed` |
 | `ml-dsa-keygen` | `parameterSet`, `seed` | `pk`, `sk` |
 | `ml-dsa-sign` | `parameterSet`, `sk`, `message` or `mu`, `deterministic`, `signatureInterface`, `preHash`, `externalMu`, and `context`, `rnd`, `hashAlg` where the group has them | `signature` |
-| `ml-dsa-verify` | `parameterSet`, `pk`, `message`, `signature`, `signatureInterface`, `context` | `testPassed` |
+| `ml-dsa-verify` | `parameterSet`, `pk`, `message` or `mu`, `signature`, `signatureInterface`, `preHash`, `externalMu`, and `context`, `hashAlg` where the group has them | `testPassed` |
 | `block-transform` | `algorithm`, `direction`, `key`, `iv`, `data`, `payloadLen` ⁺ | `out` |
 | `block-mct` | `algorithm`, `direction`, `key`, `iv`, `data`, `payloadLen` ⁺ | `resultsArray` — 100 × `{key, iv, in, out}` |
 | `cbc-cs` | `algorithm`, `direction`, `key`, `iv`, `data` | `out` |
@@ -247,8 +247,19 @@ broken module.
 context-free signing call is wrong on nearly every external-interface case rather
 than on a rare one.
 
+`ml-dsa-verify` carries the same four switches, because sigVer presents every shape
+sigGen can produce and the signature does not say which it is. A verifier told
+nothing about them checks a pure external signature and rejects a valid internal
+one -- a wrong answer that looks exactly like a correctly detected forgery.
+
 These fields appear only in groups this runner previously declined outright, so a
-harness written before them sees no change on anything it already answered.
+harness written before them sees no change on anything it already answered. What
+changes is that those groups now arrive: a harness that cannot express one should
+decline it with `interface_lacks` rather than answer `testPassed` at all. A decline
+says nothing about the signature; a verdict reached the wrong way says the wrong
+thing about it. `examples/pqc_reference_harness.py` is the worked example again --
+`dilithium-py` signs with an external `mu` and offers no way to verify with one, so
+it declines those 45 cases and answers the other 135.
 
 ### Where a `buildId` can come from
 

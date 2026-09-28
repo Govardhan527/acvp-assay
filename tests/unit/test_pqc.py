@@ -19,7 +19,7 @@ from typing import Any, cast
 import pytest
 
 from acvp_assay.algorithms import UnsupportedAlgorithmError, pqc, run_vector_file
-from acvp_assay.models import ResultStatus
+from acvp_assay.models import DeclineClaimant, DeclineReason, ResultStatus
 from acvp_assay.parser import AcvpValidationError
 from acvp_assay.providers.pqc import (
     MlDsaProvider,
@@ -165,6 +165,7 @@ class FixedDsaProvider:
         self._keys = keys or {}
         self._signatures = signatures or {}
         self.signed: list[dict[str, object]] = []
+        self.verified: list[dict[str, object]] = []
 
     def metadata(self) -> Any:
         from acvp_assay.models import ProviderKind, ProviderMetadata
@@ -208,9 +209,21 @@ class FixedDsaProvider:
         public_key: bytes,
         message: bytes,
         signature: bytes,
-        context: bytes,
+        context: bytes | None,
         signature_interface: str = "external",
+        pre_hash: str = "pure",
+        hash_alg: str | None = None,
+        external_mu: bool = False,
     ) -> bool:
+        self.verified.append(
+            {
+                "context": context,
+                "signatureInterface": signature_interface,
+                "preHash": pre_hash,
+                "hashAlg": hash_alg,
+                "externalMu": external_mu,
+            }
+        )
         return self._verdict
 
 
@@ -289,8 +302,11 @@ class ReplayingDsaProvider:
         public_key: bytes,
         message: bytes,
         signature: bytes,
-        context: bytes,
+        context: bytes | None,
         signature_interface: str = "external",
+        pre_hash: str = "pure",
+        hash_alg: str | None = None,
+        external_mu: bool = False,
     ) -> bool:
         raise AssertionError("the generation sets never verify")
 
@@ -634,8 +650,7 @@ def test_a_sig_gen_group_that_contradicts_its_cases_is_an_incomplete_vector(
     )
 
     assert results[0].status is ResultStatus.UNSUPPORTED
-    assert results[0].decline_reason is not None
-    assert results[0].decline_reason.value == "vector_incomplete"
+    assert results[0].decline_reason is DeclineReason.VECTOR_INCOMPLETE
     assert fragment in (results[0].diagnostic or "")
 
 
@@ -871,10 +886,8 @@ def test_a_harness_that_declines_signing_is_reported_not_crashed(tmp_path: Path)
     )
 
     assert results[0].status is ResultStatus.UNSUPPORTED
-    assert results[0].decline_reason is not None
-    assert results[0].decline_reason.value == "interface_lacks"
-    assert results[0].declined_by is not None
-    assert results[0].declined_by.value == "harness"
+    assert results[0].decline_reason is DeclineReason.INTERFACE_LACKS
+    assert results[0].declined_by is DeclineClaimant.HARNESS
     assert "the API takes no rnd" in (results[0].diagnostic or "")
 
 
@@ -913,29 +926,74 @@ def test_missing_kem_inputs_are_declared() -> None:
 
 
 @pytest.mark.parametrize(
-    ("mutation", "fragment"),
+    ("mutation", "carried"),
     [
-        ({"externalMu": True}, "externalMu"),
-        ({"preHash": "preHash"}, "preHash"),
+        ({"externalMu": True}, {"externalMu": True, "preHash": "pure"}),
+        ({"preHash": "preHash"}, {"externalMu": False, "preHash": "preHash"}),
     ],
 )
-def test_ml_dsa_modes_outside_the_contract_are_declared(
-    mutation: dict[str, Any], fragment: str
+def test_every_sig_ver_group_shape_reaches_the_implementation(
+    mutation: dict[str, Any], carried: dict[str, Any]
 ) -> None:
-    """externalMu and preHash groups are declared rather than misinterpreted."""
+    """externalMu and preHash groups are sent on, with the parameters that define them.
+
+    They used to be declared ``runner_lacks`` here, which said this runner had
+    not built them. It has now, and whether they can be answered is the
+    implementation's statement to make.
+    """
     prompt, _ = kem_documents("sigVer", parameter_set="ML-DSA-44")
     prompt["algorithm"] = "ML-DSA"
     prompt["mode"] = "sigVer"
     prompt["testGroups"][0].update(mutation)
-    prompt["testGroups"][0]["tests"][0].update({"pk": "AA", "message": "BB", "signature": "CC"})
+    case = {"pk": "AA", "signature": "CC", "mu": "00" * 64, "message": "BB"}
+    if mutation.get("preHash") == "preHash":
+        case["hashAlg"] = "SHA2-256"
+    prompt["testGroups"][0]["tests"][0].update(case)
+    expected = {"vsId": 1, "testGroups": [{"tgId": 1, "tests": [{"tcId": 1, "testPassed": True}]}]}
+    provider = FixedDsaProvider(True)
+
+    results = pqc.run_ml_dsa(
+        pqc.parse_vector_set(prompt), pqc.parse_expected_results(expected), provider
+    )
+
+    assert results[0].status is ResultStatus.PASS
+    assert provider.verified[0]["externalMu"] == carried["externalMu"]
+    assert provider.verified[0]["preHash"] == carried["preHash"]
+
+
+def test_a_declining_verifier_is_not_read_as_a_rejected_signature() -> None:
+    """A harness that cannot express a case is not an implementation that rejected it.
+
+    This is the distinction the whole verdict path turns on. A decline says
+    nothing about the signature; reading it as ``testPassed: false`` would score
+    a conforming implementation as having accepted a forgery, or missed one.
+    """
+    from acvp_assay.providers.subprocess_harness import HarnessUnsupportedError
+
+    class DecliningDsaProvider(FixedDsaProvider):
+        def verify(self, **kwargs: Any) -> bool:
+            raise HarnessUnsupportedError(
+                "the harness declined 'ml-dsa-verify'",
+                reason=DeclineReason.INTERFACE_LACKS,
+                detail="no verification from a supplied mu",
+            )
+
+    prompt, _ = kem_documents("sigVer", parameter_set="ML-DSA-44")
+    prompt["algorithm"] = "ML-DSA"
+    prompt["mode"] = "sigVer"
+    prompt["testGroups"][0]["externalMu"] = True
+    prompt["testGroups"][0]["tests"][0].update({"pk": "AA", "mu": "00" * 64, "signature": "CC"})
     expected = {"vsId": 1, "testGroups": [{"tgId": 1, "tests": [{"tcId": 1, "testPassed": True}]}]}
 
     results = pqc.run_ml_dsa(
-        pqc.parse_vector_set(prompt), pqc.parse_expected_results(expected), FixedDsaProvider(True)
+        pqc.parse_vector_set(prompt),
+        pqc.parse_expected_results(expected),
+        DecliningDsaProvider(True),
     )
 
     assert results[0].status is ResultStatus.UNSUPPORTED
-    assert fragment in (results[0].diagnostic or "")
+    assert results[0].decline_reason is DeclineReason.INTERFACE_LACKS
+    assert results[0].actual is None
 
 
 def test_ml_dsa_missing_fields_are_declared() -> None:
