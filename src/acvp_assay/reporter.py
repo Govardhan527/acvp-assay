@@ -22,6 +22,11 @@ from acvp_assay.models import (
 #: How a run's cases are partitioned when their concentration is measured.
 PARTITION = "cases-by-tgId"
 
+#: How many distinct sentences a group carries into the report before the rest
+#: are counted instead. A group's cases decline for one or two reasons in
+#: practice; a long list would be a wall rather than an explanation.
+GROUP_REASON_LIMIT = 3
+
 
 @dataclass(frozen=True, slots=True)
 class Concentration:
@@ -37,6 +42,27 @@ class Concentration:
     partition: str
     cardinality: int
     largest_two_share: float | None
+
+
+@dataclass(frozen=True, slots=True)
+class GroupOutcome:
+    """What happened to one test group, and why, where it was not all PASS.
+
+    A per-case list answers "which case", and a total answers "how many"; a
+    reader asking *why a group did not run* has to reconstruct it from either.
+    ACVP's parameters live on the group -- the interface, the context length,
+    the parameter set -- so the reason a group was declined is a property of the
+    group and belongs beside it: "the harness declined this case: no
+    verification from a supplied mu", once, against the fifteen cases it
+    explains.
+    """
+
+    tg_id: int
+    total: int
+    by_status: Mapping[str, int]
+    by_reason: Mapping[str, int]
+    reasons: tuple[str, ...]
+    further_reasons: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -76,6 +102,48 @@ def concentration(results: Sequence[TestCaseResult]) -> Concentration:
         cardinality=len(groups),
         largest_two_share=round(largest / len(results), 4) if results else None,
     )
+
+
+def group_outcomes(results: Sequence[TestCaseResult]) -> list[GroupOutcome]:
+    """Every group with something to explain, in the order the vector file has them.
+
+    A group whose cases all passed is left out. It has nothing to say that the
+    totals do not, and including one line per group would bury the groups that
+    do: NIST's KDF set alone is 5,878 of them.
+    """
+    order: list[int] = []
+    grouped: dict[int, list[TestCaseResult]] = {}
+    for result in results:
+        if result.tg_id not in grouped:
+            order.append(result.tg_id)
+            grouped[result.tg_id] = []
+        grouped[result.tg_id].append(result)
+
+    outcomes: list[GroupOutcome] = []
+    for tg_id in order:
+        cases = grouped[tg_id]
+        if all(case.status is ResultStatus.PASS for case in cases):
+            continue
+        statuses = Counter(case.status for case in cases)
+        reasons = Counter(case.decline_reason for case in cases if case.decline_reason)
+        sentences = list(
+            dict.fromkeys(
+                case.diagnostic
+                for case in cases
+                if case.status is not ResultStatus.PASS and case.diagnostic
+            )
+        )
+        outcomes.append(
+            GroupOutcome(
+                tg_id=tg_id,
+                total=len(cases),
+                by_status={status.value: count for status, count in sorted(statuses.items())},
+                by_reason={reason.value: count for reason, count in sorted(reasons.items())},
+                reasons=tuple(sentences[:GROUP_REASON_LIMIT]),
+                further_reasons=max(0, len(sentences) - GROUP_REASON_LIMIT),
+            )
+        )
+    return outcomes
 
 
 def summarize(results: Sequence[TestCaseResult]) -> ReportSummary:
@@ -125,6 +193,20 @@ def _summary_document(summary: ReportSummary) -> dict[str, object]:
     }
 
 
+def _group_document(outcome: GroupOutcome) -> dict[str, object]:
+    document: dict[str, object] = {
+        "tgId": outcome.tg_id,
+        "total": outcome.total,
+        "byStatus": dict(outcome.by_status),
+        "reasons": list(outcome.reasons),
+    }
+    if outcome.by_reason:
+        document["declineReasons"] = dict(outcome.by_reason)
+    if outcome.further_reasons:
+        document["furtherReasons"] = outcome.further_reasons
+    return document
+
+
 def _values_document(values: CaseValues | None) -> dict[str, object] | None:
     if values is None:
         return None
@@ -165,6 +247,7 @@ def build_report(
         "runner": dict(runner) if runner is not None else runner_document(),
         "provider": _provider_document(provider),
         "summary": _summary_document(summary),
+        "groups": [_group_document(outcome) for outcome in group_outcomes(results)],
         "cases": [_case_document(result) for result in results],
     }
 
@@ -209,10 +292,13 @@ def report_json(
 
 
 __all__ = [
+    "GROUP_REASON_LIMIT",
     "Concentration",
+    "GroupOutcome",
     "ReportSummary",
     "build_report",
     "concentration",
+    "group_outcomes",
     "report_json",
     "summarize",
 ]

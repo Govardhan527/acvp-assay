@@ -125,6 +125,8 @@ The algorithm is read from the vector file itself and routed automatically.
 
 Every `UNSUPPORTED` case carries a `declineReason` beside its English `diagnostic`, from a closed set of five with five different repairs: `implementation_lacks` (the implementation under test lacks it, so the vendor implements it), `interface_lacks` (the module does the operation and its API cannot express this case, so the vendor exposes what is already there), `runner_lacks` (this runner has not built it), `offline_undecidable` (no recorded answer can decide it, so only a submission to ACVTS can, or nothing can), and `vector_incomplete` (the vector lacks or contradicts what its own group requires). The summary counts each under `unsupportedByReason`, so one total never stands in for five different gaps, and splits them again under `unsupportedByClaimant` by who declined: what an external harness claimed about itself, which may be `implementation_lacks`, `interface_lacks` or `vector_incomplete`, and what this runner decided.
 
+Beside the summary, `groups` explains the groups that did not simply pass: each carries its `tgId`, its case total, its counts by status and decline reason, and the distinct sentences behind them. ACVP's parameters live on the group — the signature interface, the context length, the parameter set — so the reason a group was not executed is a property of the group, and saying it once against the fifteen cases it explains beats repeating it fifteen times or leaving it to be reconstructed. A group whose cases all passed is left out, because NIST's KDF set alone has 5,878 of them.
+
 The summary also carries `concentration`: the two largest test groups' share of the cases, with the partition that produced it (`cases-by-tgId`) and how many groups there are. A case total reads as breadth and can be substantially one or two groups; NIST's pinned SHA2-256 set is 517 cases, and 99.8% of them are in two of its three groups.
 
 ## Coverage
@@ -396,6 +398,7 @@ $ acvp-assay run fixtures/aes-gcm-valid-encrypt/prompt.json; echo "exit: $?"
       "tgId": 1
     }
   ],
+  "groups": [],
   "provider": { "name": "cryptography-aes-gcm", "...": "..." },
   "runner": { "version": "...", "commit": "...", "commitAbsentReason": null, "treeClean": true },
   "summary": { "total": 1, "passed": 1, "failed": 0, "errored": 0, "skipped": 0, "unsupported": 0,
@@ -426,6 +429,7 @@ $ acvp-assay run fixtures/aes-gcm-invalid-decrypt-tag/prompt.json; echo "exit: $
       "tgId": 1
     }
   ],
+  "groups": [ { "tgId": 1, "total": 1, "byStatus": { "ERROR": 1 }, "reasons": [ "authentication failed" ] } ],
   "provider": { "name": "cryptography-aes-gcm", "...": "..." },
   "runner": { "version": "...", "commit": "...", "commitAbsentReason": null, "treeClean": true },
   "summary": { "total": 1, "passed": 0, "failed": 0, "errored": 1, "skipped": 0, "unsupported": 0,

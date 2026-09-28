@@ -21,6 +21,7 @@ from acvp_assay.reporter import (
     Concentration,
     ReportSummary,
     build_report,
+    group_outcomes,
     report_json,
     summarize,
 )
@@ -244,6 +245,64 @@ def test_declines_are_split_by_who_claimed_them() -> None:
         "runner": {**NO_DECLINES, "implementation_lacks": 1, "runner_lacks": 1},
     }
     assert summary.unsupported_by_reason["implementation_lacks"] == 3
+
+
+def test_a_group_that_passed_entirely_needs_no_explanation() -> None:
+    """The groups block explains what did not run; a clean run has nothing in it."""
+    results = [CaseResult(1, index, ResultStatus.PASS, None, None) for index in range(1, 4)]
+
+    assert group_outcomes(results) == []
+    assert build_report(results, provider_metadata(), runner=RUNNER)["groups"] == []
+
+
+def test_a_declined_group_carries_its_reason_once_rather_than_per_case() -> None:
+    """Fifteen cases declined for one reason is one sentence, not fifteen."""
+    unsupported = ResultStatus.UNSUPPORTED
+    harness = DeclineClaimant.HARNESS
+    reason = DeclineReason.INTERFACE_LACKS
+    sentence = "the harness declined this case: no verification from a supplied mu"
+    results = [
+        CaseResult(7, index, unsupported, None, None, sentence, reason, harness)
+        for index in range(1, 16)
+    ]
+
+    outcome = group_outcomes(results)[0]
+
+    assert outcome.tg_id == 7
+    assert outcome.total == 15
+    assert outcome.by_status == {"UNSUPPORTED": 15}
+    assert outcome.by_reason == {"interface_lacks": 15}
+    assert outcome.reasons == (sentence,)
+    assert outcome.further_reasons == 0
+
+
+def test_a_mixed_group_lists_each_distinct_reason_and_counts_the_rest() -> None:
+    """A group with more explanations than the limit says how many it left out."""
+    unsupported = ResultStatus.UNSUPPORTED
+    runner = DeclineClaimant.RUNNER
+    reason = DeclineReason.RUNNER_LACKS
+    results = [CaseResult(2, 1, ResultStatus.PASS, None, None)]
+    results += [
+        CaseResult(2, index, unsupported, None, None, f"reason {index}", reason, runner)
+        for index in range(2, 7)
+    ]
+
+    outcome = group_outcomes(results)[0]
+
+    assert outcome.by_status == {"PASS": 1, "UNSUPPORTED": 5}
+    assert outcome.reasons == ("reason 2", "reason 3", "reason 4")
+    assert outcome.further_reasons == 2
+    document = build_report(results, provider_metadata(), runner=RUNNER)["groups"]
+    assert document == [
+        {
+            "tgId": 2,
+            "total": 6,
+            "byStatus": {"PASS": 1, "UNSUPPORTED": 5},
+            "reasons": ["reason 2", "reason 3", "reason 4"],
+            "declineReasons": {"runner_lacks": 5},
+            "furtherReasons": 2,
+        }
+    ]
 
 
 def test_an_external_provider_block_carries_its_command_and_build() -> None:

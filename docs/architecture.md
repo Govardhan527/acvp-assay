@@ -107,6 +107,8 @@ Every UNSUPPORTED case carries a `decline_reason` from a closed set of five, bec
 | `offline_undecidable` | the method: no recorded answer to compare with, or an answer that is fresh by construction | submitting to ACVTS, or structurally not at all |
 | `vector_incomplete` | the vector: a case missing data its group requires, or contradicting it | a different registration, or NIST |
 
+The report's `groups` block carries the same reasons up a level, one entry per group that was not entirely PASS, because the parameter that caused a decline is a property of the group rather than of any one case. A group whose cases all passed is omitted.
+
 `TestCaseResult` rejects UNSUPPORTED without a reason, and a reason on any other status. The English `diagnostic` stays beside the code: the code is for aggregation and filtering, the sentence for a person reading one case. The run summary counts each reason, and `acvp-assay diff` reports a case whose reason changed even when its status did not, since the totals cannot show it.
 
 ## Boundaries
