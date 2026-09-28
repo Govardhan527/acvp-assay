@@ -58,6 +58,7 @@ PROSE = sorted(
         ROOT / "CONTRIBUTING.md",
         ROOT / "CHANGELOG.md",
         ROOT / "BUILDLOG.md",
+        ROOT / "FINDINGS.md",
         ROOT / "fixtures/README.md",
         *ROOT.glob("docs/*.md"),
         *ROOT.glob("docs/decisions/*.md"),
