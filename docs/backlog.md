@@ -266,6 +266,27 @@ that document ranks.
       `DSA` measures 28% and stays unranked: SP 800-131A disallowed signature
       generation after 2023, so what remains is legacy verification.
 
+- [x] M27: the PQC generation half, and the provider that reaches it. ML-KEM
+      keyGen, ML-DSA keyGen and ML-DSA sigGen were the three modes this runner
+      could not ask for at all, and ML-DSA sigVer ran three of its twelve group
+      shapes. All four are now answered, across pure and preHash, external and
+      internal interface, externalMu, deterministic and hedged, through three new
+      harness operations and one widened one.
+      `examples/liboqs/` drives liboqs 0.16.0 through its C API and reports which
+      layer answered: 285 of 855 pinned cases through the published `OQS_*` API,
+      815 through the entry points underneath, nothing failing either way. That
+      difference is the point of the work and of the fifth `DeclineReason`,
+      `interface_lacks` — the ML-DSA API takes neither the seed FIPS 204 defines
+      KeyGen on nor the `rnd` it defines Sign on, so no generation case is
+      expressible through it however correct the library is.
+      The 285 figure reproduces, exactly, what a collaborator measured through
+      `liboqs-python`, which settles where his ceiling was: the C API, not the
+      binding. Written up in `FINDINGS.md` with reproductions, tabulated in
+      `docs/pqc-coverage.md`, and checked in CI on every push.
+      Not done: the live-session responder still answers only ML-KEM `encapDecap`
+      and ML-DSA `sigVer`, so the new modes are offline-only until a session is
+      registered for them.
+
 Not worth building, now measured rather than assumed: `ACVP-AES-GCM-SIV`,
 `Ascon`, `XECDH` and `ACVP-AES-FF3-1` appear on **no** active FIPS 140-3
 certificate, and the fourteen three-key TDES names are disallowed for new
