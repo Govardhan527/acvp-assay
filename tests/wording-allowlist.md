@@ -45,3 +45,8 @@ CHANGELOG.md :: validated under, with 128 and 256-bit keys and both tweak conven
 CHANGELOG.md :: agreement appears wherever TLS is validated and was the last item on this
 CHANGELOG.md :: and a CMAC beside it, and reviewing published CAVP certificates showed those
 BUILDLOG.md :: - Done condition: the AES names that recur on published CAVP certificates alongside GCM are runnable - `ACVP-AES-ECB`, `ACVP-AES-GMAC`, `ACVP-AES-KW`, `ACVP-AES-KWP` and `CMAC-AES`.
+
+## Describing the guard, which has to quote the words it bans
+
+CHANGELOG.md :: - **A wording guard that fails the build** on `validated`, `CAVP`, `certified`
+CHANGELOG.md :: or `FIPS approved` in a generated report, or in published prose outside the

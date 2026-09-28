@@ -181,8 +181,8 @@ Three questions a vendor actually needs answered, in one table:
 | `ECDSA` | sigGen, sigVer | ✅ | ✅ | `passed` — 765343 |
 | `KAS-ECC-SSC` | AFT, VAL (ephemeralUnified) | partial ³ | ✅ | `passed` — 765769 |
 | `RSA` | sigGen, sigVer, signaturePrimitive, decryptionPrimitive | ✅ | ✅ | `passed` — 765356 |
-| `ML-KEM` | encap, decap, key checks | harness only | ✅ | `passed` — 765724 ¹ |
-| `ML-DSA` | sigVer (pure, external) | harness only | ✅ | `passed` — 765727 ¹ |
+| `ML-KEM` | keyGen, encap, decap, key checks | harness only | ✅ | `passed` — 765724 ¹ |
+| `ML-DSA` | keyGen, sigGen, sigVer — every interface, preHash and externalMu | harness only | ✅ | `passed` — 765727 ¹ |
 
 ¹ Answered by the educational reference harness, not a shippable implementation — see the banner.
 
@@ -251,8 +251,7 @@ family; `cSHAKE`, `KMAC`, `ParallelHash` and `TupleHash`; the key-agreement name
 two SSC variants built here — `KAS-ECC`, `KAS-FFC`, `KAS-IFC` and `KAS-KC`; `DSA`, `EDDSA` and `DetECDSA`;
 the eight `kdf-components` modes other than `ssh`;
 `LMS` and `SLH-DSA`; `ConditioningComponent`; `Ascon`; `XECDH`; key
-generation for RSA or ECDSA; and for the PQC names, everything but ML-KEM `encapDecap`
-and ML-DSA `sigVer`.
+generation for RSA or ECDSA.
 
 How this list is chosen is no longer a matter of taste: `docs/algorithm-frequency.md`
 counts every one of these across active FIPS 140-3 certificates, and
@@ -292,8 +291,15 @@ acvp-assay run vectors/SHA2-256-1.0/prompt.json \
 Two worked starting points, neither importing anything from this package:
 
 - **`examples/reference_harness.py`** — all 20 non-PQC operations in Python.
-  (`examples/pqc_reference_harness.py` covers the four ML-KEM and ML-DSA operations
+  (`examples/pqc_reference_harness.py` covers the seven ML-KEM and ML-DSA operations
   separately, since it needs different dependencies.)
+- **`examples/liboqs/`** — a complete harness **in C, driving liboqs through its C API**,
+  answering ML-KEM and ML-DSA. It is the worked example of a report that distinguishes
+  what an implementation cannot do from what its interface cannot express: restricted to
+  liboqs's published API it reaches 285 of 855 pinned NIST cases, and allowed the entry
+  points underneath it reaches 815, with nothing failing either way.
+  [`docs/pqc-coverage.md`](docs/pqc-coverage.md) is that measurement in full and
+  [`FINDINGS.md`](FINDINGS.md) is what it turned up.
 - **`examples/pkcs11/`** — a complete harness **in C, dispatching to a PKCS#11 token**, in
   one file with no dependencies beyond `libdl` and a PKCS#11 header. If your implementation
   is an HSM, start here: it answers AES-GCM, AES-ECB/CBC, the SHA-2 family including the
@@ -359,7 +365,7 @@ The 24 operations, by family — implement only the rows you are testing:
 | RSA | `rsa-sign-group`, `rsa-verify`, `rsa-primitive-sign`, `rsa-primitive-decrypt` |
 | DRBGs | `drbg` |
 | KDF SP 800-108 | `kdf-108` |
-| ML-KEM, ML-DSA | `ml-kem-encapsulate`, `ml-kem-decapsulate`, `ml-kem-key-check`, `ml-dsa-verify` |
+| ML-KEM, ML-DSA | `ml-kem-keygen`, `ml-kem-encapsulate`, `ml-kem-decapsulate`, `ml-kem-key-check`, `ml-dsa-keygen`, `ml-dsa-sign`, `ml-dsa-verify` |
 
 `ecdsa-sign-group` and `rsa-sign-group` are needed only if you intend to *submit* sigGen to a
 live session: ACVP reports the public key once per group, so every case in a group must share
@@ -490,8 +496,9 @@ production ACVTS, which is available to accredited laboratories rather than to t
 ML-KEM nor ML-DSA, so there is nothing built in to answer with; the harness is backed by
 `kyber-py` and `dilithium-py`, which are educational and not constant-time. These two verdicts
 say the runner handles PQC vector sets correctly, and say nothing about any shippable
-implementation. Both sessions registered narrowly — ML-DSA `pure`/`external` only — because
-`preHash` and `externalMu` groups are refused by design rather than answered.
+implementation. Both sessions registered narrowly — ML-DSA `pure`/`external` only — because at
+the time `preHash` and `externalMu` groups were refused rather than answered. They are answered
+now, offline, against the pinned sets; a session registering them has not been run.
 
 ¹ Session 765508 registered a sixteenth algorithm, AES-GMAC, whose vector set NIST's generator
 refused with `min must be less than max` — the registration declared a zero-width `payloadLen`,
@@ -656,9 +663,14 @@ python3.12 scripts/dev.py demo
 - `scripts/fetch_vectors.py`: downloads and hash-verifies the pinned upstream vectors
 - `scripts/cavp_frequency.py`: counts ACVP algorithm names across every active FIPS 140-3
   certificate, which is how the build order is chosen
+- `scripts/check_liboqs_capabilities.py`, `scripts/check_liboqs_coverage.py`: the two CI
+  checks behind `examples/liboqs` — what that build exposes, and what it reaches
+- `tools/cmvp_pqc_count.py`: how many CMVP certificates list ML-KEM or ML-DSA, out of what,
+  on what date — with `tools/METHOD.md` and a per-certificate CSV beside it
 - `acvts-capabilities/`: capability registrations used for the live sessions
 - `examples/`: worked reference harnesses that import nothing from the package —
-  Python, and a PKCS#11 one in C under `examples/pkcs11/`
+  Python, a PKCS#11 one in C under `examples/pkcs11/`, and a liboqs one in C under
+  `examples/liboqs/`
 - `tests/unit/`: focused unit tests
 - `tests/integration/`: subprocess and full-path tests
 - `fixtures/`: small, rights-safe local test vectors
@@ -670,6 +682,9 @@ python3.12 scripts/dev.py demo
 - `docs/vector-sources.md`: pinned upstream source, hashes, licensing, and redistribution policy
 - `docs/algorithm-frequency.md`: **what FIPS 140-3 certificates actually contain** — every
   algorithm name counted across 690 active certificates, and what that changed
+- `docs/pqc-coverage.md`: every pinned ML-KEM and ML-DSA case, by operation, parameter set
+  and result, through liboqs's published API and through the entry points underneath
+- `FINDINGS.md`: what driving liboqs through NIST's vectors turned up, with reproductions
 - `docs/decisions/`: committed design decisions
 - `docs/backlog.md`: what is built and what is next
 - `SERVICES.md`: paid engagements — readiness assessment, harness build, regression retainer

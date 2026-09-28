@@ -5,6 +5,56 @@ All notable changes to this project are recorded here. The format follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Before 1.0.0 the
 provider protocols may change between minor versions.
 
+## [Unreleased]
+
+### Added
+
+- **A liboqs provider, in C, under `examples/liboqs/`.** It answers ML-KEM and
+  ML-DSA by driving liboqs through its C API, and reports which layer of that API
+  answered. `--interface public` restricts it to `OQS_KEM_*` and `OQS_SIG_*` and
+  reaches 285 of 855 pinned NIST cases; `--interface extended` also uses the
+  mldsa-native entry points liboqs vendors underneath and reaches 815. Nothing
+  fails either way. `--capabilities` prints what the build in front of you
+  exposes, established by weak symbols rather than assumed, and the pinned
+  probe is committed as `capabilities.json`. `docs/pqc-coverage.md` is the full
+  table and `FINDINGS.md` is what it turned up.
+- **Three new harness operations, and a fourth widened.** `ml-kem-keygen`,
+  `ml-dsa-keygen` and `ml-dsa-sign` reach what an implementation *produces*
+  rather than what it decides, and `ml-dsa-verify` now carries the four group
+  parameters that define a sigVer case. These fields appear only in groups the
+  runner previously declined outright, so a harness written before them sees no
+  change on anything it already answered.
+- **ML-KEM keyGen and ML-DSA keyGen and sigGen are supported**, and ML-DSA
+  sigVer now covers every group shape: pure and preHash, external and internal
+  interface, externalMu, deterministic and hedged. Three NIST sets are pinned for
+  them (37 files across 18 sets).
+- **`interface_lacks`, a fifth `DeclineReason`.** "The module does this and its
+  API cannot express the case" is a different gap from "the module does not do
+  this", and it has a different repair: expose an entry point rather than write
+  one. A harness may claim it, because the harness is the thing holding the
+  interface.
+- **`groups` in every report.** One entry per test group that was not entirely
+  PASS, with its counts by status and decline reason and the distinct sentences
+  behind them. The parameter that causes a decline belongs to the group, so the
+  reason is stated once beside it rather than repeated per case.
+- **`metadata` may send `build`** — compiler, flags, CPU, OS — recorded under
+  `provider.build`. Reports also carry `runner.platform`. For a compiled library
+  that is evidence rather than decoration: `-O2` against `-O3 -march=native` is a
+  different binary, and a library that dispatches on CPU features runs different
+  code on different machines.
+- **A wording guard that fails the build** on `validated`, `CAVP`, `certified`
+  or `FIPS approved` in a generated report, or in published prose outside the
+  reviewed allowlist in `tests/wording-allowlist.md`.
+- **`tools/cmvp_pqc_count.py`**, separate from the runner: how many CMVP
+  certificates list ML-KEM or ML-DSA, with all three populations as the
+  denominator, a per-certificate CSV, and a generated `tools/METHOD.md`. On the
+  2026-09-28 snapshot, 15 of 5,545 — all Active and FIPS 140-3.
+- **A CI job for the PQC provider**, building liboqs at its pinned commit and
+  checking both the capability probe and the case counts against what is
+  recorded.
+- **`scripts/fetch_vectors.py --only SET`**, so a job that tests one family does
+  not fetch 45 MB for the others.
+
 ## [0.24.0] - 2026-09-20
 
 ### Fixed

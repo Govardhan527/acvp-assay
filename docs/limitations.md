@@ -56,6 +56,25 @@ harness.
 - `--strict` turns UNSUPPORTED and SKIPPED into a failing exit code, so a coverage gap cannot
   pass quietly in CI.
 
+## ML-KEM and ML-DSA depend entirely on the implementation's interface
+
+There is no built-in PQC provider, so every one of these cases is answered by a harness, and
+what a harness can answer is decided by what its implementation will accept as *input*. ACVP
+fixes the randomness for every generation case — `d` and `z` for an ML-KEM key pair, `m` for an
+encapsulation, one seed for an ML-DSA key pair, `rnd` for a hedged signature — because a value
+the implementation chose itself matches nothing NIST recorded.
+
+An API that cannot be given those inputs cannot answer those cases however correct it is, and
+that is reported `interface_lacks` rather than as a failure or as a missing implementation.
+liboqs 0.16.0 is the measured example: through its published C API, 285 of 855 pinned cases are
+reachable; through the entry points underneath, 815. `docs/pqc-coverage.md` has the full table
+and `FINDINGS.md` has the reproductions.
+
+HashML-DSA adds a second dependency: ACVP names twelve pre-hash algorithms, and a harness can
+only answer the ones its implementation offers. A harness that computes a missing digest itself
+stops testing the implementation for those cases, so `examples/liboqs` declines the four liboqs
+does not expose rather than filling them in.
+
 ## Reporting boundaries
 
 - Malformed, unsupported, failed and errored cases are distinct outcomes, never merged.
