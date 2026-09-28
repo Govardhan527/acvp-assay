@@ -62,6 +62,84 @@ def metadata() -> dict[str, str]:
     }
 
 
+#: The DER-encoded OID of each hash, and the digest length HashML-DSA fixes for it.
+#: FIPS 204 Algorithm 4 puts this OID into the signed prefix, so the same digest
+#: under two different names is two different signatures. The two XOFs have fixed
+#: lengths here rather than a caller's choice: 256 bits for SHAKE-128, 512 for
+#: SHAKE-256.
+PRE_HASH = {
+    "SHA2-224": ("0609608648016503040204", "sha224", 28),
+    "SHA2-256": ("0609608648016503040201", "sha256", 32),
+    "SHA2-384": ("0609608648016503040202", "sha384", 48),
+    "SHA2-512": ("0609608648016503040203", "sha512", 64),
+    "SHA2-512/224": ("0609608648016503040205", "sha512_224", 28),
+    "SHA2-512/256": ("0609608648016503040206", "sha512_256", 32),
+    "SHA3-224": ("0609608648016503040207", "sha3_224", 28),
+    "SHA3-256": ("0609608648016503040208", "sha3_256", 32),
+    "SHA3-384": ("0609608648016503040209", "sha3_384", 48),
+    "SHA3-512": ("060960864801650304020A", "sha3_512", 64),
+    "SHAKE-128": ("060960864801650304020B", "shake_128", 32),
+    "SHAKE-256": ("060960864801650304020C", "shake_256", 64),
+}
+
+
+def ml_kem_keygen(request: dict[str, Any]) -> dict[str, str]:
+    """Generate an ML-KEM key pair from ACVP's two seeds.
+
+    FIPS 203 KeyGen takes ``d`` and ``z``; the public ``keygen`` invents both,
+    so only the internal entry point can answer these cases.
+    """
+    kem = ML_KEM[request["parameterSet"]]
+    encapsulation, decapsulation = kem._keygen_internal(
+        bytes.fromhex(request["d"]), bytes.fromhex(request["z"])
+    )
+    return {"ek": encapsulation.hex().upper(), "dk": decapsulation.hex().upper()}
+
+
+def ml_dsa_keygen(request: dict[str, Any]) -> dict[str, str]:
+    """Generate an ML-DSA key pair from ACVP's 32-byte seed."""
+    dsa = ML_DSA[request["parameterSet"]]
+    public, secret = dsa._keygen_internal(bytes.fromhex(request["seed"]))
+    return {"pk": public.hex().upper(), "sk": secret.hex().upper()}
+
+
+def ml_dsa_sign(request: dict[str, Any]) -> dict[str, str]:
+    """Sign one ACVP case with exactly the randomness and prefix its group fixes.
+
+    The message that actually gets signed is built here rather than by the
+    library's own ``sign``, because ACVP asks for combinations its public API
+    does not offer: the internal interface with no prefix at all, a supplied
+    ``rnd``, a precomputed ``mu``, and HashML-DSA's OID-carrying prefix.
+    """
+    dsa = ML_DSA[request["parameterSet"]]
+    secret = bytes.fromhex(request["sk"])
+    rnd = bytes.fromhex(request["rnd"]) if "rnd" in request else bytes(32)
+    if request.get("externalMu"):
+        signature = dsa._sign_internal(secret, bytes.fromhex(request["mu"]), rnd, external_mu=True)
+        return {"signature": signature.hex().upper()}
+
+    message = bytes.fromhex(request["message"])
+    if request.get("signatureInterface") == "internal":
+        return {"signature": dsa._sign_internal(secret, message, rnd).hex().upper()}
+
+    context = bytes.fromhex(request.get("context", ""))
+    if request.get("preHash") == "preHash":
+        oid, algorithm, length = PRE_HASH[request["hashAlg"]]
+        digest = hashlib.new(algorithm)
+        digest.update(message)
+        hashed = (
+            digest.digest(length)  # type: ignore[call-arg]
+            if algorithm.startswith("shake")
+            else digest.digest()
+        )
+        message = bytes.fromhex(oid) + hashed
+        prefix = bytes([1, len(context)])
+    else:
+        prefix = bytes([0, len(context)])
+    signature = dsa._sign_internal(secret, prefix + context + message, rnd)
+    return {"signature": signature.hex().upper()}
+
+
 def encapsulate(request: dict[str, Any]) -> dict[str, str]:
     """Encapsulate using ACVP's supplied randomness, so the output is comparable.
 
@@ -126,9 +204,12 @@ def ml_dsa_verify(request: dict[str, Any]) -> dict[str, bool]:
 
 HANDLERS = {
     "metadata": lambda _: metadata(),
+    "ml-kem-keygen": ml_kem_keygen,
     "ml-kem-encapsulate": encapsulate,
     "ml-kem-decapsulate": decapsulate,
     "ml-kem-key-check": key_check,
+    "ml-dsa-keygen": ml_dsa_keygen,
+    "ml-dsa-sign": ml_dsa_sign,
     "ml-dsa-verify": ml_dsa_verify,
 }
 

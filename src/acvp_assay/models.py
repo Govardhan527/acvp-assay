@@ -183,6 +183,26 @@ class DigestValues:
 
 
 @dataclass(frozen=True, slots=True)
+class KeyPairValues:
+    """A generated key pair, under the field names its family uses.
+
+    ML-KEM calls the halves ``ek`` and ``dk``, ML-DSA ``pk`` and ``sk``, and a
+    keyGen case is answered by both halves together: a public key that matches
+    under a private key that does not is still a wrong answer, and reporting one
+    without the other would hide it.
+    """
+
+    ek: bytes | None = None
+    dk: bytes | None = None
+    pk: bytes | None = None
+    sk: bytes | None = None
+
+    def as_document(self) -> dict[str, object]:
+        """Render present values using ACVP's key field names."""
+        return _hex_document(ek=self.ek, dk=self.dk, pk=self.pk, sk=self.sk)
+
+
+@dataclass(frozen=True, slots=True)
 class VerdictValues:
     """A pass/fail verdict, for tests whose expected result is a boolean.
 
@@ -405,6 +425,7 @@ __all__ = [
     "ExpectedResultGroup",
     "ExpectedResultSet",
     "HARNESS_BUILD_ABSENCES",
+    "KeyPairValues",
     "HARNESS_CLAIMABLE_REASONS",
     "ProviderKind",
     "ProviderMetadata",

@@ -139,9 +139,12 @@ way, a PKCS#11 harness sends `not_exposed`, as `examples/pkcs11` does.
 | `ecdsa-sign-group` | `curve`, `hashAlg`, `messages` (array) | `qx`, `qy`, `signatures` (array of `{r, s}`, same order) |
 | `ecdsa-verify` | `curve`, `hashAlg`, `message`, `qx`, `qy`, `r`, `s` | `testPassed` |
 | `kas-ecc-ssc` | `curve`, `serverX`, `serverY`, and `privateKey` for VAL only | `iutX`, `iutY`, `z` |
+| `ml-kem-keygen` | `parameterSet`, `d`, `z` | `ek`, `dk` |
 | `ml-kem-encapsulate` | `parameterSet`, `ek` | `c`, `k` |
 | `ml-kem-decapsulate` | `parameterSet`, `dk`, `c` | `k` |
 | `ml-kem-key-check` | `parameterSet`, `ek`, `dk` | `testPassed` |
+| `ml-dsa-keygen` | `parameterSet`, `seed` | `pk`, `sk` |
+| `ml-dsa-sign` | `parameterSet`, `sk`, `message` or `mu`, `deterministic`, `signatureInterface`, `preHash`, `externalMu`, and `context`, `rnd`, `hashAlg` where the group has them | `signature` |
 | `ml-dsa-verify` | `parameterSet`, `pk`, `message`, `signature`, `signatureInterface`, `context` | `testPassed` |
 | `block-transform` | `algorithm`, `direction`, `key`, `iv`, `data`, `payloadLen` ⁺ | `out` |
 | `block-mct` | `algorithm`, `direction`, `key`, `iv`, `data`, `payloadLen` ⁺ | `resultsArray` — 100 × `{key, iv, in, out}` |
@@ -201,6 +204,51 @@ own and does not care whether the keys differ. Only a live submission needs
 `ecdsa-sign-group`; implement it if you intend to submit ECDSA sigGen.
 
 The exchange is drawn as a sequence diagram in [`design.md`](design.md#the-harness-contract).
+
+### ML-KEM and ML-DSA: generation is only testable because ACVP fixes the randomness
+
+Every PQC operation here is deterministic *as ACVP sends it*, and that is not a
+property of the algorithms — it is a property of what the vector supplies. ML-KEM
+keyGen sends `d` and `z`, encapsulation sends `m`, ML-DSA keyGen sends the 32-byte
+seed, and a hedged ML-DSA sigGen case sends `rnd`. An implementation that generates
+its own randomness produces a perfectly valid answer that matches nothing NIST
+recorded.
+
+That is worth saying plainly because it decides what a decline means. An API with no
+way to accept the seed or the `rnd` is not an implementation that cannot sign; it is
+one whose interface cannot express the case, which is `interface_lacks`. Report it
+that way, because the repair is to expose an entry point rather than to write one.
+
+**`ml-dsa-sign` carries four switches and every one of them changes the signature.**
+None can be recovered from the output, so a harness that ignores a field returns a
+valid signature of the wrong thing — which is indistinguishable, in a report, from a
+broken module.
+
+* **`deterministic`** is sent as its own boolean, and `rnd` is sent only when it is
+  `false`. A deterministic case signs with **32 zero bytes**, and the flag travels
+  separately rather than being inferred from the missing field, because the two
+  readings of an absent `rnd` — "use zeros" and "choose your own" — differ in the
+  answer and only one is right.
+* **`signatureInterface`** decides the prefix. `external` signs
+  `00 || len(ctx) || ctx || M`, where `len(ctx)` is one byte. `internal` signs `M`
+  with **no prefix at all**, and the field `context` is then **absent**, which is not
+  the same as an empty one: an empty context still produces a two-byte prefix.
+* **`preHash`** is `pure` or `preHash`. A `preHash` case carries `hashAlg`, and the
+  harness hashes `message` itself and signs `01 || len(ctx) || ctx || OID || PH(M)`.
+  ACVP's twelve `hashAlg` values include `SHA2-512/224`, `SHA2-512/256` and
+  `SHA3-224`, which many libraries do not expose; decline those by name rather than
+  substituting a digest. The two XOFs have fixed output lengths here: **SHAKE-128 is
+  32 bytes and SHAKE-256 is 64**.
+* **`externalMu`** replaces `message` with **`mu`**, 64 bytes that have already
+  absorbed the public key, so the case exercises the signing half alone. The field
+  `message` is then absent.
+
+`context` runs to **255 bytes** in NIST's own sigGen set, so a harness that passes a
+context-free signing call is wrong on nearly every external-interface case rather
+than on a rare one.
+
+These fields appear only in groups this runner previously declined outright, so a
+harness written before them sees no change on anything it already answered.
 
 ### Where a `buildId` can come from
 
