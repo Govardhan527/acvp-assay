@@ -2,7 +2,7 @@
 
 ## Selected upstream source
 
-Status: 31 files across 15 vector sets are pinned to the commit below and verified by
+Status: 37 files across 18 vector sets are pinned to the commit below and verified by
 size and SHA-256 before use. Sets added after the first are recorded in their own
 sections; families with no pinned set are listed near the end.
 
@@ -119,6 +119,42 @@ set is `kwCipher: inverse`, which this runner does not implement, and reporting
 those 3,600 cases as UNSUPPORTED rather than quietly dropping them is the
 difference between an honest total and a flattering one.
 
+### The PQC generation sets (M27)
+
+Pinned at the same commit and under the same licensing decision. These are the three
+sets that reach what a *generating* implementation does, rather than what a verifying
+one decides, and they are the sets a liboqs harness exists to answer.
+
+| File | Size | SHA-256 |
+| --- | ---: | --- |
+| [`ML-KEM-keyGen-FIPS203/prompt.json`](https://github.com/usnistgov/ACVP-Server/blob/975de31eb83d87039ec88934fdc47d8c312b892d/gen-val/json-files/ML-KEM-keyGen-FIPS203/prompt.json) | 16,066 bytes | `3f9ce34f6c836c77958bad2729e837c3b213f44ac36c3065976e7acca6389523` |
+| [`ML-KEM-keyGen-FIPS203/expectedResults.json`](https://github.com/usnistgov/ACVP-Server/blob/975de31eb83d87039ec88934fdc47d8c312b892d/gen-val/json-files/ML-KEM-keyGen-FIPS203/expectedResults.json) | 544,032 bytes | `a253d0ad91c95ebea5b409673defef0aa49d65d4ed72286399e2e798ddf073a4` |
+| *ML-KEM-keyGen-FIPS203* | | 75 cases; the prompt supplies `d` and `z`, the answer is `ek` and `dk` |
+| [`ML-DSA-keyGen-FIPS204/prompt.json`](https://github.com/usnistgov/ACVP-Server/blob/975de31eb83d87039ec88934fdc47d8c312b892d/gen-val/json-files/ML-DSA-keyGen-FIPS204/prompt.json) | 10,062 bytes | `43e81ad820e495dbcad086fe27c1008393a8c32100bbbff77c558c3f06dcefef` |
+| [`ML-DSA-keyGen-FIPS204/expectedResults.json`](https://github.com/usnistgov/ACVP-Server/blob/975de31eb83d87039ec88934fdc47d8c312b892d/gen-val/json-files/ML-DSA-keyGen-FIPS204/expectedResults.json) | 873,632 bytes | `361f47ca19d592adcc66ff2cb591686ad785fea157b295648738bed6921a68df` |
+| *ML-DSA-keyGen-FIPS204* | | 75 cases; one 32-byte `seed`, exact `pk` and `sk` |
+| [`ML-DSA-sigGen-FIPS204/prompt.json`](https://github.com/usnistgov/ACVP-Server/blob/975de31eb83d87039ec88934fdc47d8c312b892d/gen-val/json-files/ML-DSA-sigGen-FIPS204/prompt.json) | 5,044,293 bytes | `447749d72817b211160d243311ce32302f3023e59c355b0f70be2bd3e9e7830d` |
+| [`ML-DSA-sigGen-FIPS204/expectedResults.json`](https://github.com/usnistgov/ACVP-Server/blob/975de31eb83d87039ec88934fdc47d8c312b892d/gen-val/json-files/ML-DSA-sigGen-FIPS204/expectedResults.json) | 2,511,972 bytes | `228d011bbe274aeb93e22eea1e0d57b78f43795cf6a64fb5ef1e626485a0bedb` |
+| *ML-DSA-sigGen-FIPS204* | | 360 cases across 24 groups: deterministic and hedged, `pure` and `preHash`, external and internal interface, `externalMu` both ways |
+
+The sigGen set is the one worth reading closely, because every one of its four
+independent switches changes the answer and none of them is guessable from the
+signature alone:
+
+* **`deterministic`** decides `rnd`. A deterministic case sends none and the
+  signature is produced with 32 zero bytes; a hedged case sends the 32 bytes ACVP
+  chose. An implementation that cannot be told which randomness to use cannot
+  answer either kind exactly.
+* **`signatureInterface`** decides the domain-separation prefix. `external` prefixes
+  the message with `00 || len(ctx) || ctx`; `internal` signs the message with no
+  prefix at all. Contexts here run from 0 to 255 bytes, so the prefix is never
+  negligible.
+* **`preHash`** replaces the message with a digest of it and changes the prefix's
+  first byte to `01` and appends the hash's OID. Its 12 `hashAlg` values include
+  `SHA2-512/224` and `SHA2-512/256`, which many libraries do not expose.
+* **`externalMu`** replaces the message entirely with a 64-byte `mu` that has
+  already absorbed the public key, so the case exercises the signing half alone.
+
 ### Families with no pinned set
 
 Not every supported family has an upstream sample set worth pinning. `SHA-1`, the
@@ -134,9 +170,9 @@ redistributed than the pinned ones.
 
 ## Suitability and limits
 
-Fifteen sets are pinned, covering AES-GCM, AES-ECB/GMAC/KW/KWP, CMAC-AES, SHA2-256,
-HMAC-SHA2-256, ECDSA sigGen and sigVer, ML-KEM, ML-DSA sigVer, both ctrDRBG
-revisions, and KDF SP 800-108.
+Eighteen sets are pinned, covering AES-GCM, AES-ECB/GMAC/KW/KWP, CMAC-AES, SHA2-256,
+HMAC-SHA2-256, ECDSA sigGen and sigVer, ML-KEM encapDecap and keyGen, ML-DSA keyGen,
+sigGen and sigVer, both ctrDRBG revisions, and KDF SP 800-108.
 
 These are useful for schema and execution compatibility; none of them is the
 complete capability space of its algorithm. The AES-GCM set, for example, is four
@@ -152,7 +188,7 @@ The repository README describes `gen-val/json-files` as sample JSON files. The s
 
 The pinned repository README contains a NIST software notice that permits use, copying, modification, and distribution, requires the notice to remain intact, asks modified works to record their changes, and requests explicit NIST attribution. It also states that software developed by NIST employees is not subject to United States copyright protection. The notice is embedded in [`README.md`](https://github.com/usnistgov/ACVP-Server/blob/975de31eb83d87039ec88934fdc47d8c312b892d/README.md#license); the repository has no standalone license file or SPDX license identifier at this commit.
 
-The notice discusses NIST-developed software but does not separately classify the generated JSON artifacts. Therefore this repository does not redistribute any upstream JSON file — 31 files across 15 sets at the time of writing. Compatibility tests that need them fetch the exact pinned files and verify the recorded sizes and SHA-256 values before use. The committed fixtures under `fixtures/` are independently generated or drawn from published standards, and are labelled as local test data rather than copied subsets of the NIST files.
+The notice discusses NIST-developed software but does not separately classify the generated JSON artifacts. Therefore this repository does not redistribute any upstream JSON file — 37 files across 18 sets at the time of writing. Compatibility tests that need them fetch the exact pinned files and verify the recorded sizes and SHA-256 values before use. The committed fixtures under `fixtures/` are independently generated or drawn from published standards, and are labelled as local test data rather than copied subsets of the NIST files.
 
 If upstream vector files or extracts are ever committed later, that requires a new decision: preserve the entire upstream notice, add NIST attribution, record the date and nature of modifications, and confirm that the notice applies to the artifacts being redistributed.
 

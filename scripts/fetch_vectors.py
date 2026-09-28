@@ -55,7 +55,10 @@ HMAC_SHA2_256 = "HMAC-SHA2-256-1.0"
 ECDSA_SIGGEN = "ECDSA-SigGen-FIPS186-5"
 ECDSA_SIGVER = "ECDSA-SigVer-FIPS186-5"
 ML_KEM = "ML-KEM-encapDecap-FIPS203"
+ML_KEM_KEYGEN = "ML-KEM-keyGen-FIPS203"
 ML_DSA_SIGVER = "ML-DSA-sigVer-FIPS204"
+ML_DSA_KEYGEN = "ML-DSA-keyGen-FIPS204"
+ML_DSA_SIGGEN = "ML-DSA-sigGen-FIPS204"
 CMAC_AES = "CMAC-AES-1.0"
 AES_ECB = "ACVP-AES-ECB-1.0"
 AES_GMAC = "ACVP-AES-GMAC-1.0"
@@ -155,6 +158,42 @@ PINNED_FILES = (
         name="expectedResults.json",
         size_bytes=13956,
         sha256="e1d84ef1b2f35196278ab0b0ed6a46ec62cc03d2dfa92c564199e1999bfb8ea6",
+    ),
+    PinnedFile(
+        directory=ML_KEM_KEYGEN,
+        name="prompt.json",
+        size_bytes=16066,
+        sha256="3f9ce34f6c836c77958bad2729e837c3b213f44ac36c3065976e7acca6389523",
+    ),
+    PinnedFile(
+        directory=ML_KEM_KEYGEN,
+        name="expectedResults.json",
+        size_bytes=544032,
+        sha256="a253d0ad91c95ebea5b409673defef0aa49d65d4ed72286399e2e798ddf073a4",
+    ),
+    PinnedFile(
+        directory=ML_DSA_KEYGEN,
+        name="prompt.json",
+        size_bytes=10062,
+        sha256="43e81ad820e495dbcad086fe27c1008393a8c32100bbbff77c558c3f06dcefef",
+    ),
+    PinnedFile(
+        directory=ML_DSA_KEYGEN,
+        name="expectedResults.json",
+        size_bytes=873632,
+        sha256="361f47ca19d592adcc66ff2cb591686ad785fea157b295648738bed6921a68df",
+    ),
+    PinnedFile(
+        directory=ML_DSA_SIGGEN,
+        name="prompt.json",
+        size_bytes=5044293,
+        sha256="447749d72817b211160d243311ce32302f3023e59c355b0f70be2bd3e9e7830d",
+    ),
+    PinnedFile(
+        directory=ML_DSA_SIGGEN,
+        name="expectedResults.json",
+        size_bytes=2511972,
+        sha256="228d011bbe274aeb93e22eea1e0d57b78f43795cf6a64fb5ef1e626485a0bedb",
     ),
     PinnedFile(
         directory=CMAC_AES,
