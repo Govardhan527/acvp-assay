@@ -257,7 +257,8 @@ def _provider_document(provider: ProviderMetadata) -> dict[str, object]:
 
     ``kind`` makes a run through an external harness impossible to read as a
     built-in one. An external provider also records the command it ran from, and
-    its build, or ``null`` with the reason it has none.
+    its build, or ``null`` with the reason it has none, and whatever it declares
+    about the toolchain and machine behind it.
     """
     document: dict[str, object] = {
         "name": provider.name,
@@ -277,6 +278,8 @@ def _provider_document(provider: ProviderMetadata) -> dict[str, object]:
         absent = provider.build_id_absent_reason
         document["buildId"] = provider.build_id
         document["buildIdAbsentReason"] = absent.value if absent else None
+        if provider.build_environment is not None:
+            document["build"] = dict(provider.build_environment)
     return document
 
 

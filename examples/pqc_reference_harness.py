@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import platform
 import sys
 from typing import Any
 
@@ -45,10 +46,12 @@ ML_DSA = {
 }
 
 
-def metadata() -> dict[str, str]:
+def metadata() -> dict[str, Any]:
     """Identify the reference implementations behind this harness.
 
     ``buildId`` is the SHA-256 of this file, which is the whole of the harness.
+    ``build`` says where it ran; for pure Python the interpreter is the toolchain,
+    and there are no flags to report.
     """
     with open(__file__, "rb") as source:
         build = hashlib.sha256(source.read()).hexdigest()
@@ -59,6 +62,11 @@ def metadata() -> dict[str, str]:
         "backendName": "pure-python",
         "backendVersion": "not-constant-time",
         "buildId": f"sha256:{build}",
+        "build": {
+            "compiler": f"CPython {platform.python_version()}",
+            "cpu": platform.machine(),
+            "os": f"{platform.system()} {platform.release()}",
+        },
     }
 
 

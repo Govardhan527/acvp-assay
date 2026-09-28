@@ -447,6 +447,85 @@ def test_the_recorded_command_carries_no_secret(command: list[str], recorded: st
     assert recorded_command(command) == recorded
 
 
+def test_a_harness_can_name_the_toolchain_and_machine_behind_it(tmp_path: Path) -> None:
+    """Two builds of one library answer differently; a report that names neither cannot say so."""
+    response = {
+        "name": "liboqs-harness",
+        "libraryName": "liboqs",
+        "libraryVersion": "0.16.0",
+        "backendName": "mldsa-native",
+        "backendVersion": "x86_64",
+        "buildId": "5a1a854b0dc9f2141bdc771c555ee60c37950183",
+        "build": {
+            "compiler": "gcc 13.3.0",
+            "flags": "-O2 -std=c11",
+            "cpu": "x86_64 avx2",
+            "os": "Linux 7.0.0",
+        },
+    }
+    provider = responding(tmp_path, json.dumps(response))
+
+    metadata = provider.metadata()
+
+    assert metadata.build_environment == {
+        "compiler": "gcc 13.3.0",
+        "flags": "-O2 -std=c11",
+        "cpu": "x86_64 avx2",
+        "os": "Linux 7.0.0",
+    }
+
+
+def test_a_harness_that_names_no_toolchain_is_not_in_error(tmp_path: Path) -> None:
+    """Plenty of implementations have nothing useful to say here, and that is allowed."""
+    response = {
+        "name": "h",
+        "libraryName": "l",
+        "libraryVersion": "1",
+        "backendName": "b",
+        "backendVersion": "2",
+        "buildId": "abc",
+    }
+    provider = responding(tmp_path, json.dumps(response))
+
+    assert provider.metadata().build_environment is None
+
+
+@pytest.mark.parametrize(
+    "build", [7, {"compiler": 7}, {"flags": "x" * 201}], ids=["not-object", "not-string", "long"]
+)
+def test_a_build_environment_is_bounded(tmp_path: Path, build: object) -> None:
+    """It is copied verbatim into a report that gets shared, so it is held to short strings."""
+    response = {
+        "name": "h",
+        "libraryName": "l",
+        "libraryVersion": "1",
+        "backendName": "b",
+        "backendVersion": "2",
+        "buildId": "abc",
+        "build": build,
+    }
+    provider = responding(tmp_path, json.dumps(response))
+
+    with pytest.raises(HarnessProtocolError, match="build"):
+        provider.metadata()
+
+
+def test_an_unknown_build_field_is_left_out_rather_than_copied(tmp_path: Path) -> None:
+    """The field set is closed, so a report's shape never depends on a harness's invention."""
+    response = {
+        "name": "h",
+        "libraryName": "l",
+        "libraryVersion": "1",
+        "backendName": "b",
+        "backendVersion": "2",
+        "buildId": "abc",
+        "build": {"compiler": "cc", "hostname": "build-07.internal"},
+    }
+    provider = responding(tmp_path, json.dumps(response))
+
+    assert provider.metadata().build_environment == {"compiler": "cc"}
+
+
 def test_a_plain_decline_claims_the_implementation_lacks_it(tmp_path: Path) -> None:
     """What declining has always meant, so a harness written before reasons keeps its meaning."""
     provider = responding(tmp_path, '{"error": "unsupported"}')

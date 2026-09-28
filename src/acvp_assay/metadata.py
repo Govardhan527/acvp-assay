@@ -105,6 +105,24 @@ def runner_identity(package: Path = PACKAGE) -> dict[str, str | bool | None]:
     }
 
 
+def platform_document() -> dict[str, str]:
+    """The machine a run happened on, as a report records it.
+
+    A vector answer can depend on the machine -- a dispatching library runs
+    different code on a CPU with AVX2 than without, and two builds of one
+    release differ in more than their version. The provider names its own
+    toolchain where it can; this names where the run took place, so a report
+    describes its own conditions rather than relying on whoever files it to
+    remember them.
+    """
+    return {
+        "system": platform.system(),
+        "release": platform.release(),
+        "machine": platform.machine(),
+        "python": platform.python_version(),
+    }
+
+
 def runner_document() -> dict[str, object]:
     """The runner's identity as a report records it.
 
@@ -118,6 +136,7 @@ def runner_document() -> dict[str, object]:
         "commit": identity["runner_commit"],
         "commitAbsentReason": identity["runner_commit_absent_reason"],
         "treeClean": identity["runner_tree_clean"],
+        "platform": platform_document(),
     }
 
 
@@ -165,6 +184,7 @@ def runtime_metadata(provider: ProviderMetadata | None = None) -> dict[str, obje
     runner: dict[str, object] = {
         "python_version": platform.python_version(),
         "runner_version": __version__,
+        "platform": platform_document(),
         **runner_identity(),
     }
     if provider is None:
@@ -186,4 +206,6 @@ def runtime_metadata(provider: ProviderMetadata | None = None) -> dict[str, obje
         absent = provider.build_id_absent_reason
         identity["provider_build_id"] = provider.build_id
         identity["provider_build_id_absent_reason"] = absent.value if absent else None
+        if provider.build_environment is not None:
+            identity["provider_build"] = dict(provider.build_environment)
     return {**identity, **runner}

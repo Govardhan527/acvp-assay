@@ -11,6 +11,7 @@ downstream of execution.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import Protocol, runtime_checkable
@@ -319,6 +320,13 @@ class ProviderMetadata:
     ``build_id_absent_reason``. A name and a version do not identify a build, since
     two builds a commit apart share both. A built-in provider has neither, because
     this runner's own commit identifies the code that answered.
+
+    ``build_environment`` is what the harness says about the machine and toolchain
+    it was built and run on -- compiler, flags, CPU, operating system. It is
+    optional, and it belongs to an external provider only: the built-in one is
+    built by whoever installed this package, and the runner block already says
+    where it ran. It matters for a C library, where `-O2` against `-O3 -march=native`
+    is a different binary answering the same vectors.
     """
 
     name: str
@@ -330,6 +338,7 @@ class ProviderMetadata:
     command: str | None = None
     build_id: str | None = None
     build_id_absent_reason: BuildIdAbsentReason | None = None
+    build_environment: Mapping[str, str] | None = None
 
     def __post_init__(self) -> None:
         """Refuse a kind outside the closed set, and a command or build that contradicts it."""
@@ -345,6 +354,8 @@ class ProviderMetadata:
         if self.kind is ProviderKind.BUILTIN:
             if self.build_id is not None or absent is not None:
                 raise ValueError("a built-in provider is identified by the runner's commit")
+            if self.build_environment is not None:
+                raise ValueError("a built-in provider's build environment is the runner's")
         elif (self.build_id is None) == (absent is None):
             raise ValueError("an external provider carries a build id or the reason it has none")
         if self.build_id == "":

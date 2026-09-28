@@ -119,6 +119,17 @@ on stderr; `not_reported` is recorded by this runner and is not a harness's to c
 A `buildId` need not come from the implementation's own API; see
 [Where a `buildId` can come from](#where-a-buildid-can-come-from).
 
+`metadata` may also send `build`, an object saying what the answering code was built
+with and what it ran on: `compiler`, `flags`, `cpu`, `os`. Every field is optional and
+each is at most 200 characters, and anything outside that set is dropped rather than
+copied, so a report's shape never depends on what a harness invents. The runner records
+it under the report's `provider.build`, beside its own `runner.platform`.
+
+It is worth sending for a compiled library and pointless for most other things. `-O2`
+against `-O3 -march=native` is a different binary answering the same vectors, and on a
+library that dispatches at run time — liboqs among them — the CPU decides which code
+answered at all. A report that names neither cannot be reproduced from itself.
+
 For a PKCS#11 harness, `C_GetInfo` and `C_GetTokenInfo` supply the rest of the identity
 at no cost: `manufacturerID` and `libraryDescription` for the library, `libraryVersion`,
 and the token's `label`, `model` and `serialNumber`. They do not supply a build. Their
@@ -128,7 +139,7 @@ way, a PKCS#11 harness sends `not_exposed`, as `examples/pkcs11` does.
 
 | `operation` | Request fields | Response fields |
 | --- | --- | --- |
-| `metadata` | — | `name`, `libraryName`, `libraryVersion`, `backendName`, `backendVersion`, and `buildId` or `null` with `buildIdAbsentReason` |
+| `metadata` | — | `name`, `libraryName`, `libraryVersion`, `backendName`, `backendVersion`, `buildId` or `null` with `buildIdAbsentReason`, and optionally `build` |
 | `encrypt` | `key`, `iv`, `pt`, `aad`, `tagLen` | `ct`, `tag` |
 | `decrypt` | `key`, `iv`, `ct`, `aad`, `tag` | `pt` |
 | `digest` | `algorithm`, `message` | `md` |

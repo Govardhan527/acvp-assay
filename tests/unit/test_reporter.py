@@ -334,7 +334,13 @@ def test_a_report_measures_the_runner_when_none_is_supplied() -> None:
     runner = build_report([], provider_metadata())["runner"]
 
     assert isinstance(runner, dict)
-    assert set(runner) == {"version", "commit", "commitAbsentReason", "treeClean"}
+    assert set(runner) == {"version", "commit", "commitAbsentReason", "treeClean", "platform"}
+    assert set(cast(dict[str, str], runner["platform"])) == {
+        "system",
+        "release",
+        "machine",
+        "python",
+    }
     assert runner["version"] == __version__
     if runner["commit"] is None:
         assert runner["commitAbsentReason"] is not None

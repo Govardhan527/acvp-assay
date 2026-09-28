@@ -102,6 +102,14 @@ SECRET_OPTIONS = frozenset(
 )
 REDACTED = "REDACTED"
 
+#: What a harness may say about the machine and toolchain behind it. The set is
+#: closed so that a report's shape does not depend on a harness's imagination,
+#: and every member is optional: a harness sends the ones it can establish.
+BUILD_ENVIRONMENT_FIELDS = ("compiler", "flags", "cpu", "os")
+
+#: The longest value any one of them may carry.
+BUILD_ENVIRONMENT_LIMIT = 200
+
 #: The longest ``detail`` a declining harness may send. It is copied into the
 #: report as the case's diagnostic, so it is kept to a sentence.
 DETAIL_LIMIT = 200
@@ -232,6 +240,38 @@ def _declared_build(
             f"{repr(reason)[:40]}; a harness may state only {' or '.join(allowed)}"
         )
     return None, BuildIdAbsentReason(reason)
+
+
+def _declared_environment(response: Mapping[str, object]) -> Mapping[str, str] | None:
+    """Read what a harness says about its own build, refusing anything unbounded.
+
+    Two builds of one library answer the same vectors differently -- ``-O2``
+    against ``-O3 -march=native`` is a different binary, and on a dispatching
+    library the CPU decides which code ran at all. A report that names neither
+    cannot be reproduced from itself.
+
+    The fields are a closed set and each is a short string, because this is
+    copied verbatim into a report that gets shared as evidence. A harness that
+    sends none is not in error: plenty of implementations have nothing useful
+    to say here.
+    """
+    declared = response.get("build")
+    if declared is None:
+        return None
+    if not isinstance(declared, Mapping):
+        raise HarnessProtocolError("harness metadata 'build' must be an object")
+    environment: dict[str, str] = {}
+    for name in BUILD_ENVIRONMENT_FIELDS:
+        value = declared.get(name)
+        if value is None:
+            continue
+        if not isinstance(value, str) or len(value) > BUILD_ENVIRONMENT_LIMIT:
+            raise HarnessProtocolError(
+                f"harness metadata build.{name} must be a string of at most "
+                f"{BUILD_ENVIRONMENT_LIMIT} characters"
+            )
+        environment[name] = value
+    return environment or None
 
 
 def declined_result(
@@ -408,6 +448,7 @@ class HarnessClient:
             command=recorded_command(self._command),
             build_id=build_id,
             build_id_absent_reason=build_id_absent_reason,
+            build_environment=_declared_environment(response),
         )
 
     def _start(self) -> subprocess.Popen[str]:
@@ -613,6 +654,8 @@ class SubprocessAesGcmProvider(HarnessClient):
 
 __all__ = [
     "AUTHENTICATION_FAILED",
+    "BUILD_ENVIRONMENT_FIELDS",
+    "BUILD_ENVIRONMENT_LIMIT",
     "DEFAULT_TIMEOUT_SECONDS",
     "DETAIL_LIMIT",
     "UNSUPPORTED",

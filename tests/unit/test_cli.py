@@ -95,7 +95,14 @@ def test_a_built_in_run_reports_its_provider_as_built_in(tmp_path: Path) -> None
     provider = report["provider"]
     assert exit_code == 0
     assert report["runner"]["version"] == __version__
-    assert set(report["runner"]) == {"version", "commit", "commitAbsentReason", "treeClean"}
+    assert set(report["runner"]) == {
+        "version",
+        "commit",
+        "commitAbsentReason",
+        "treeClean",
+        "platform",
+    }
+    assert report["runner"]["platform"]["machine"]
     assert provider["kind"] == "builtin"
     assert provider["name"] == "hashlib-sha2-256"
     assert "command" not in provider

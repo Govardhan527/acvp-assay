@@ -199,6 +199,27 @@ def test_provider_metadata_states_its_kind_and_a_command_that_agrees() -> None:
         ProviderMetadata("h", "l", "1", "b", "2", kind, "./harness")  # type: ignore[arg-type]
 
 
+def test_only_an_external_provider_carries_a_build_environment() -> None:
+    """The built-in provider's toolchain is the runner's, and the runner block says so."""
+    with pytest.raises(ValueError, match="build environment is the runner's"):
+        ProviderMetadata(
+            "h", "l", "1", "b", "2", ProviderKind.BUILTIN, build_environment={"compiler": "cc"}
+        )
+
+    external = ProviderMetadata(
+        "h",
+        "l",
+        "1",
+        "b",
+        "2",
+        ProviderKind.EXTERNAL,
+        "./harness",
+        "b1",
+        build_environment={"compiler": "cc"},
+    )
+    assert external.build_environment == {"compiler": "cc"}
+
+
 def test_unsupported_must_name_who_declined_it() -> None:
     """A gap with no claimant cannot be sorted into the author's list or the runner's."""
     with pytest.raises(ValueError, match="must name who declined it"):
