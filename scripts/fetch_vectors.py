@@ -337,10 +337,30 @@ def main(argv: Sequence[str] | None = None) -> int:
         action="store_true",
         help="verify already-downloaded files without contacting the network",
     )
+    parser.add_argument(
+        "--only",
+        action="append",
+        default=None,
+        metavar="SET",
+        help=(
+            "fetch only the vector sets whose directory starts with this, repeatable; "
+            "a job that tests one family has no reason to pull 45 MB for the others"
+        ),
+    )
     arguments = parser.parse_args(argv)
 
+    wanted = [
+        pinned
+        for pinned in PINNED_FILES
+        if not arguments.only
+        or any(pinned.directory.startswith(prefix) for prefix in arguments.only)
+    ]
+    if not wanted:
+        print(f"no pinned set matches {arguments.only}", file=sys.stderr)
+        return 1
+
     failures = 0
-    for pinned in PINNED_FILES:
+    for pinned in wanted:
         destination = DESTINATION / pinned.directory / pinned.name
         destination.parent.mkdir(parents=True, exist_ok=True)
         if _is_current(destination, pinned):
@@ -366,7 +386,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     if failures:
         print(f"\n{failures} file(s) unavailable or unverified", file=sys.stderr)
         return 1
-    print(f"\nAll {len(PINNED_FILES)} pinned files verified in {DESTINATION.relative_to(ROOT)}/")
+    print(f"\nAll {len(wanted)} pinned files verified in {DESTINATION.relative_to(ROOT)}/")
     return 0
 
 

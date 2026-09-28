@@ -7,6 +7,11 @@ on:
 permissions:
   contents: read
 
+env:
+  # liboqs 0.16.0. Pinned, because the measurement below is a statement about
+  # one build: which entry points it exposes is exactly what is being reported.
+  LIBOQS_COMMIT: 5a1a854b0dc9f2141bdc771c555ee60c37950183
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -20,3 +25,62 @@ jobs:
         run: python scripts/dev.py setup
       - name: Verify source and build artifacts
         run: python scripts/dev.py verify
+
+  liboqs:
+    # The PQC provider, measured rather than asserted. It builds liboqs at the
+    # pinned commit, drives it through the harness in examples/liboqs, and
+    # checks the case counts against NIST's own answers. A liboqs that changed
+    # what it exposes, or a harness that stopped reaching it, moves these
+    # numbers and fails here rather than being noticed in a report months later.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Cache the pinned liboqs build
+        id: liboqs-cache
+        uses: actions/cache@v4
+        with:
+          path: liboqs-install
+          key: liboqs-${{ env.LIBOQS_COMMIT }}-${{ runner.os }}-${{ runner.arch }}
+
+      - name: Build liboqs at the pinned commit
+        if: steps.liboqs-cache.outputs.cache-hit != 'true'
+        run: |
+          git clone --quiet --filter=blob:none --no-checkout \
+              https://github.com/open-quantum-safe/liboqs.git liboqs-src
+          git -C liboqs-src checkout --quiet "$LIBOQS_COMMIT"
+          # OpenSSL off so the build depends on nothing outside the pin, and
+          # only ML-KEM and ML-DSA so it takes a minute rather than twenty.
+          cmake -S liboqs-src -B liboqs-build \
+              -DCMAKE_BUILD_TYPE=Release \
+              -DBUILD_SHARED_LIBS=OFF \
+              -DOQS_BUILD_ONLY_LIB=ON \
+              -DOQS_USE_OPENSSL=OFF \
+              -DCMAKE_INSTALL_PREFIX="$PWD/liboqs-install" \
+              -DOQS_MINIMAL_BUILD="KEM_ml_kem_512;KEM_ml_kem_768;KEM_ml_kem_1024;SIG_ml_dsa_44;SIG_ml_dsa_65;SIG_ml_dsa_87"
+          cmake --build liboqs-build --parallel
+          cmake --install liboqs-build
+
+      - name: Build the harness
+        run: |
+          make -C examples/liboqs \
+              LIBOQS="$PWD/liboqs-install" LIBOQS_COMMIT="$LIBOQS_COMMIT"
+
+      - name: Probe what this build exposes
+        run: |
+          ./examples/liboqs/acvp_harness --capabilities | tee capabilities.json
+          python scripts/check_liboqs_capabilities.py capabilities.json \
+              examples/liboqs/capabilities.json
+
+      - name: Install the runner
+        run: python scripts/dev.py setup
+
+      - name: Fetch the pinned PQC vectors
+        run: .venv/bin/python scripts/fetch_vectors.py --only ML-KEM --only ML-DSA
+
+      - name: Run every PQC set through liboqs, both interfaces
+        run: .venv/bin/python scripts/check_liboqs_coverage.py
