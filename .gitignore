@@ -35,8 +35,9 @@ docs/acvts-demo-access-request.md
 # Local credential paths (points outside the repo; not a secret, but not shared)
 .acvts-env
 
-# Built C harness (source is committed; the binary is not)
+# Built C harnesses (source is committed; the binaries are not)
 examples/pkcs11/acvp_harness
+examples/liboqs/acvp_harness
 
 # Research cache for scripts/cavp_frequency.py — 1,182 fetched pages, not redistributed
 .cavp-cache/

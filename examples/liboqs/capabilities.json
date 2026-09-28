@@ -1,0 +1,19 @@
+{
+  "probe": "examples/liboqs/acvp_harness.c --capabilities",
+  "library": {"name": "liboqs", "version": "0.16.0", "commit": "5a1a854b0dc9f2141bdc771c555ee60c37950183"},
+  "build": {"compiler": "cc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0", "flags": "-O2 -Wall -Wextra -std=c11", "cpu": "x86_64 avx2 bmi2 popcnt", "os": "Linux 7.0.0-34-generic x86_64", "dispatch": "x86_64"},
+  "buildId": "sha3-256:a75db8c289003361e43fcbe3f0d90732d3ccc44f4178f4e8953d9c566feea510",
+  "mlKem": {
+    "ML-KEM-512": {"present": true, "keypairDerand": "public", "encapsDerand": "public", "decaps": "public", "keyCheck": "via encaps/decaps"},
+    "ML-KEM-768": {"present": true, "keypairDerand": "public", "encapsDerand": "public", "decaps": "public", "keyCheck": "via encaps/decaps"},
+    "ML-KEM-1024": {"present": true, "keypairDerand": "public", "encapsDerand": "public", "decaps": "public", "keyCheck": "via encaps/decaps"}
+  },
+  "mlDsa": {
+    "ML-DSA-44": {"keypairFromSeed": "internal", "signWithRnd": "internal", "signExternalMu": "internal", "signPreHash": "internal", "verifyInternal": "internal", "verifyPreHash": "internal", "verifyPureExternal": "public", "keypairSeeded_public": false, "signWithRnd_public": false},
+    "ML-DSA-65": {"keypairFromSeed": "internal", "signWithRnd": "internal", "signExternalMu": "internal", "signPreHash": "internal", "verifyInternal": "internal", "verifyPreHash": "internal", "verifyPureExternal": "public", "keypairSeeded_public": false, "signWithRnd_public": false},
+    "ML-DSA-87": {"keypairFromSeed": "internal", "signWithRnd": "internal", "signExternalMu": "internal", "signPreHash": "internal", "verifyInternal": "internal", "verifyPreHash": "internal", "verifyPureExternal": "public", "keypairSeeded_public": false, "signWithRnd_public": false}
+  },
+  "preHash": {"available": ["SHA2-256", "SHA2-384", "SHA2-512", "SHA3-256", "SHA3-384", "SHA3-512", "SHAKE-128", "SHAKE-256"],
+    "absent": ["SHA2-224", "SHA2-512/224", "SHA2-512/256", "SHA3-224"],
+    "note": "liboqs exposes no SHA2-224, SHA2-512/224, SHA2-512/256 or SHA3-224; this harness computes nothing liboqs does not, so HashML-DSA cases naming them are declined"}
+}
