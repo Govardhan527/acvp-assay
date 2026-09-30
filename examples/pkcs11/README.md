@@ -54,6 +54,7 @@ holding a token is used. `docs/harness-protocol.md` tabulates what each method c
 | `mac` | `CKM_SHA*_HMAC`, truncated to the group's `macLen` |
 | `block-transform` | `CKM_AES_ECB`, `CKM_AES_CBC` |
 | `encrypt` / `decrypt` | `CKM_AES_GCM` |
+| `key-wrap` | `CKM_AES_KEY_WRAP`, `CKM_AES_KEY_WRAP_KWP`, through `C_Encrypt` / `C_Decrypt` |
 
 Everything else returns `{"error": "unsupported"}`. That is a first-class
 answer, not a stub: the runner records it as UNSUPPORTED rather than as a
@@ -77,6 +78,29 @@ groups this harness does not implement, and the HMAC 225 are keys shorter than
 SoftHSM's minimum for those mechanisms. A different token would decline a
 different set — which is the point of asking the implementation rather than
 assuming.
+
+`key-wrap` was measured separately, through the offline pilot in
+`docs/harness-protocol.md`, against FreeHSM `6c54700` (a signed module running
+on the OpenSSL 3.5.7 FIPS provider) on the pinned sets:
+
+| Set | Passed | Failed | Declined by the runner |
+| --- | ---: | ---: | ---: |
+| `ACVP-AES-KW-1.0` | 3,600 | 0 | 3,600 |
+| `ACVP-AES-KWP-1.0` | 3,600 | 0 | 3,600 |
+
+The declined half is every group with `kwCipher: inverse`, which the runner
+does not answer; none of it is a harness gap. Of the cases that pass, 370 (KW)
+and 384 (KWP) are deliberately corrupt wrappings the token refused with
+`CKR_ENCRYPTED_DATA_INVALID`, reported as `authentication failed`. The same
+run through this harness before `key-wrap` existed passed none and declined
+3,600 of each set as `implementation_lacks`.
+
+KWP is `CKM_AES_KEY_WRAP_KWP` (`0x210B`, RFC 5649). `CKM_AES_KEY_WRAP_PAD`
+(`0x210A`) is a different padding and would fail every KWP vector. A token
+that offers the wrap mechanisms only through `C_WrapKey` / `C_UnwrapKey`
+should refuse `C_EncryptInit` with `CKR_MECHANISM_INVALID` or
+`CKR_FUNCTION_NOT_SUPPORTED`, which this harness reports as unsupported rather
+than as a failure. That path was not measured here: FreeHSM offers both.
 
 ## Three things worth keeping if you adapt it
 

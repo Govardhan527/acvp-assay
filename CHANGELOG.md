@@ -5,6 +5,21 @@ All notable changes to this project are recorded here. The format follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Before 1.0.0 the
 provider protocols may change between minor versions.
 
+## [Unreleased]
+
+### Added
+
+- **The PKCS#11 reference harness answers `key-wrap`.** `examples/pkcs11/`
+  now drives AES-KW and AES-KWP through `C_Encrypt` / `C_Decrypt` with
+  `CKM_AES_KEY_WRAP` and `CKM_AES_KEY_WRAP_KWP` (RFC 5649, `0x210B` -- not
+  `CKM_AES_KEY_WRAP_PAD`, which pads differently). A wrapping that fails its
+  integrity check is `authentication failed`, as in `op_gcm`. Through the
+  offline pilot in `docs/harness-protocol.md`, against FreeHSM `6c54700`
+  (signed, OpenSSL 3.5.7 FIPS provider), on the pinned `ACVP-AES-KW-1.0` and
+  `ACVP-AES-KWP-1.0`: 3,600 of each set's 7,200 cases pass and none fail; the
+  other 3,600 are `kwCipher: inverse`, declined by the runner. Before the change
+  the harness declined all 3,600 of each set as `implementation_lacks`.
+
 ## [0.25.0] - 2026-09-28
 
 ### Added

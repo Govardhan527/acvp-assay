@@ -27,17 +27,20 @@
  * it out of the filesystem as well; see docs/harness-protocol.md.
  *
  * Operations answered here: metadata, digest, digest-mct, mac,
- * block-transform (AES-ECB/CBC), encrypt and decrypt (AES-GCM). Everything
+ * block-transform (AES-ECB/CBC), encrypt and decrypt (AES-GCM), and key-wrap
+ * (AES-KW/KWP through C_Encrypt/C_Decrypt). Everything
  * else is declined with {"error":"unsupported"}, which the runner reports as
  * UNSUPPORTED rather than as a failure -- capability is the implementation's
  * to declare, so declining is a first-class answer and not an error path.
  *
  * Two rules worth keeping if you adapt this:
  *
- *   - A rejected AES-GCM tag is {"error":"authentication failed"}, never a
- *     crash or a non-zero exit. Roughly a third of NIST's decrypt cases are
- *     deliberate forgeries where rejecting is the correct answer, and a
- *     harness that dies on them scores a conforming module as broken.
+ *   - A rejected AES-GCM tag, or an AES-KW wrapping that fails its integrity
+ *     check, is {"error":"authentication failed"}, never a crash or a non-zero
+ *     exit. Roughly a third of NIST's GCM decrypt cases, and half of each
+ *     unwrap set, are deliberate forgeries where rejecting is the correct
+ *     answer, and a harness that dies on them scores a conforming module as
+ *     broken.
  *
  *   - Monte Carlo chains are answered whole. One round trip per inner
  *     iteration would take hours, and running the chain is what a real
@@ -862,6 +865,85 @@ done:
     free(key); free(iv); free(aad); free(payload); free(tag); free(joined); free(out_bytes);
 }
 
+/* AES-KW and AES-KWP, SP 800-38F, as byte-level encrypt and decrypt.
+ *
+ * PKCS#11 v3.2 section 6.16 gives CKM_AES_KEY_WRAP and CKM_AES_KEY_WRAP_KWP both
+ * halves -- C_WrapKey/C_UnwrapKey on key objects, and C_Encrypt/C_Decrypt on
+ * bytes. ACVP hands over bytes, so this uses the second pair. A token that
+ * implements only the first answers CKR_MECHANISM_INVALID or
+ * CKR_FUNCTION_NOT_SUPPORTED at Init, which emit_rv reports as unsupported.
+ *
+ * KWP is CKM_AES_KEY_WRAP_KWP (0x210B), RFC 5649. Not CKM_AES_KEY_WRAP_PAD
+ * (0x210A), which pads PKCS#7-style and would fail every KWP vector while
+ * looking like a working mechanism. Older headers lack the KWP constant. */
+#ifndef CKM_AES_KEY_WRAP_KWP
+#define CKM_AES_KEY_WRAP_KWP 0x0000210BUL
+#endif
+
+static void op_key_wrap(const char *line)
+{
+    char *direction = json_string(line, "direction");
+    char *key_hex   = json_string(line, "key");
+    char *data_hex  = json_string(line, "data");
+    int   padded    = json_bool(line, "padded");
+    unsigned char *key = NULL, *data = NULL, *out_bytes = NULL;
+    CK_OBJECT_HANDLE handle = 0;
+
+    if (!direction || !key_hex || !data_hex) {
+        emit_failure("missing direction, key or data");
+        goto done;
+    }
+    int wrap = !strcmp(direction, "wrap");
+    if (!wrap && strcmp(direction, "unwrap")) { emit_unsupported(); goto done; }
+
+    size_t key_len = 0, data_len = 0;
+    key  = hex_decode(key_hex, &key_len);
+    data = hex_decode(data_hex, &data_len);
+    if (!key || !data) { emit_failure("invalid hex"); goto done; }
+
+    if (!import_key(key, key_len, CKK_AES, wrap ? CKA_ENCRYPT : CKA_DECRYPT, &handle)) {
+        emit_failure("could not import the key");
+        goto done;
+    }
+
+    CK_MECHANISM m = { padded ? CKM_AES_KEY_WRAP_KWP : CKM_AES_KEY_WRAP, NULL, 0 };
+    CK_RV rv = wrap ? p11->C_EncryptInit(session, &m, handle)
+                    : p11->C_DecryptInit(session, &m, handle);
+    if (rv != CKR_OK) { emit_rv(wrap ? "C_EncryptInit" : "C_DecryptInit", rv); goto done; }
+
+    /* Wrapping adds the 8-byte integrity block, and KWP first pads to a
+       multiple of 8; unwrapping only removes. data_len + 16 covers both. */
+    CK_ULONG out_len = (CK_ULONG)data_len + 16;
+    out_bytes = malloc(out_len);
+    if (!out_bytes) { emit_failure("out of memory"); goto done; }
+    rv = wrap ? p11->C_Encrypt(session, data, (CK_ULONG)data_len, out_bytes, &out_len)
+              : p11->C_Decrypt(session, data, (CK_ULONG)data_len, out_bytes, &out_len);
+    if (!wrap && (rv == CKR_ENCRYPTED_DATA_INVALID || rv == CKR_ENCRYPTED_DATA_LEN_RANGE ||
+                  rv == CKR_DATA_INVALID || rv == CKR_GENERAL_ERROR)) {
+        /* A wrapping that fails its integrity check is a correct refusal,
+           not a fault: half of each NIST unwrap set is deliberately corrupt.
+           ENCRYPTED_DATA_LEN_RANGE belongs here too -- a length KW could not
+           have produced is a rejected wrapping. GENERAL_ERROR, as in op_gcm,
+           because some tokens report every decrypt failure that way. */
+        fprintf(stderr, "acvp_harness: C_Decrypt refused the wrapping (0x%lx)\n",
+                (unsigned long)rv);
+        emit_auth_failed();
+        goto done;
+    }
+    if (rv != CKR_OK) { emit_rv(wrap ? "C_Encrypt" : "C_Decrypt", rv); goto done; }
+
+    Buf out = {0};
+    buf_puts(&out, "{\"out\": \"");
+    buf_add_hex(&out, out_bytes, out_len);
+    buf_puts(&out, "\"}");
+    emit_buf(&out);
+    buf_free(&out);
+done:
+    discard_key(handle);
+    free(direction); free(key_hex); free(data_hex);
+    free(key); free(data); free(out_bytes);
+}
+
 /* ---------------------------------------------------------------------- main */
 
 static void usage(void)
@@ -927,6 +1009,7 @@ int main(int argc, char **argv)
         else if (!strcmp(operation, "block-transform")) op_block_transform(line);
         else if (!strcmp(operation, "encrypt"))        op_gcm(line, 1);
         else if (!strcmp(operation, "decrypt"))        op_gcm(line, 0);
+        else if (!strcmp(operation, "key-wrap"))       op_key_wrap(line);
         else                                           emit_unsupported();
         free(operation);
     }
