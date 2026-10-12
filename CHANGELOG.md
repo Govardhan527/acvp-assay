@@ -19,6 +19,23 @@ provider protocols may change between minor versions.
   `ACVP-AES-KWP-1.0`: 3,600 of each set's 7,200 cases pass and none fail; the
   other 3,600 are `kwCipher: inverse`, declined by the runner. Before the change
   the harness declined all 3,600 of each set as `implementation_lacks`.
+  Contributed by Afchine Madjlessi, maintainer of FreeHSM.
+
+### Notes
+
+- **The same two sets on a token that offers AES-KW only on key objects.**
+  SoftHSM 2.6.1 refuses `C_EncryptInit` and `C_DecryptInit` with
+  `CKR_MECHANISM_INVALID` for both mechanisms, so the harness declines the 3,600
+  cases of each set it would otherwise answer, and nothing passes, fails or
+  errors. `C_GetMechanismInfo` lists `CKM_AES_KEY_WRAP` with `CKF_WRAP` and
+  `CKF_UNWRAP` only, and does not list `CKM_AES_KEY_WRAP_KWP`. The pull request
+  had reasoned that this is what such a token would do and said it had no token
+  to measure it on; `examples/pkcs11/README.md` now carries the measurement.
+- **Those declines say `implementation_lacks`, and that is not quite what was
+  found.** The harness sends no `declineReason` or `detail` on a refused
+  mechanism, and it does not fall back to `C_WrapKey`, so a report cannot yet
+  tell a token without AES-KW from one that offers it only on key objects.
+  Recorded rather than fixed.
 
 ## [0.25.0] - 2026-09-28
 

@@ -96,11 +96,29 @@ run through this harness before `key-wrap` existed passed none and declined
 3,600 of each set as `implementation_lacks`.
 
 KWP is `CKM_AES_KEY_WRAP_KWP` (`0x210B`, RFC 5649). `CKM_AES_KEY_WRAP_PAD`
-(`0x210A`) is a different padding and would fail every KWP vector. A token
-that offers the wrap mechanisms only through `C_WrapKey` / `C_UnwrapKey`
-should refuse `C_EncryptInit` with `CKR_MECHANISM_INVALID` or
-`CKR_FUNCTION_NOT_SUPPORTED`, which this harness reports as unsupported rather
-than as a failure. That path was not measured here: FreeHSM offers both.
+(`0x210A`) is a different padding and would fail every KWP vector.
+
+A token that offers the wrap mechanisms only through `C_WrapKey` /
+`C_UnwrapKey` refuses `C_EncryptInit`, and this harness reports that as
+unsupported rather than as a failure. FreeHSM offers both halves, so that path
+was measured on SoftHSM 2.6.1 instead, on the same pinned sets:
+
+| Set | Passed | Failed | Declined by the harness | Declined by the runner |
+| --- | ---: | ---: | ---: | ---: |
+| `ACVP-AES-KW-1.0` | 0 | 0 | 3,600 | 3,600 |
+| `ACVP-AES-KWP-1.0` | 0 | 0 | 3,600 | 3,600 |
+
+In each set `C_EncryptInit` and `C_DecryptInit` return `CKR_MECHANISM_INVALID`
+1,800 times apiece, and nothing fails or errors. `C_GetMechanismInfo` says why:
+SoftHSM lists `CKM_AES_KEY_WRAP` with `CKF_WRAP` and `CKF_UNWRAP` and with
+neither `CKF_ENCRYPT` nor `CKF_DECRYPT`, and does not list
+`CKM_AES_KEY_WRAP_KWP` at all.
+
+Those 3,600 are reported `implementation_lacks` with no `detail`, and for
+`CKM_AES_KEY_WRAP` that reads as more than it is. SoftHSM does list AES-KW, for
+key objects; what it does not offer is the byte-level form this harness asks
+for. The harness does not fall back to `C_WrapKey`, so its report cannot yet
+tell a token without AES-KW from a token that offers it only that way.
 
 ## Three things worth keeping if you adapt it
 
