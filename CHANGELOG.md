@@ -5,7 +5,7 @@ All notable changes to this project are recorded here. The format follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Before 1.0.0 the
 provider protocols may change between minor versions.
 
-## [Unreleased]
+## [0.25.1] - 2026-10-12
 
 ### Added
 
@@ -36,6 +36,12 @@ provider protocols may change between minor versions.
   mechanism, and it does not fall back to `C_WrapKey`, so a report cannot yet
   tell a token without AES-KW from one that offers it only on key objects.
   Recorded rather than fixed.
+- No library behaviour changed, and the harness protocol is unchanged. The new
+  operation is in example code.
+
+This produces test evidence, not a certificate. It confers no validation status:
+only an accredited CST or 17ACVT laboratory performs CAVP or FIPS 140-3
+validation, and Demo is not the production ACVTS.
 
 ## [0.25.0] - 2026-09-28
 
@@ -1080,6 +1086,7 @@ Initial release: an offline AES-GCM vector runner.
 - Clean-checkout Linux CI, and a pinned, hash-verified upstream vector source
   that is referenced rather than redistributed.
 
+[0.25.1]: https://github.com/Govardhan527/acvp-assay/releases/tag/v0.25.1
 [0.25.0]: https://github.com/Govardhan527/acvp-assay/releases/tag/v0.25.0
 [0.24.0]: https://github.com/Govardhan527/acvp-assay/releases/tag/v0.24.0
 [0.23.1]: https://github.com/Govardhan527/acvp-assay/releases/tag/v0.23.1
