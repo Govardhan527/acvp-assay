@@ -5,6 +5,21 @@ All notable changes to this project are recorded here. The format follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Before 1.0.0 the
 provider protocols may change between minor versions.
 
+## [Unreleased]
+
+### Changed
+
+- **The PKCS#11 reference harness says why it declined `key-wrap`.** When
+  `C_EncryptInit` or `C_DecryptInit` refuses the mechanism, `examples/pkcs11/`
+  now asks `C_GetMechanismInfo` and puts what it finds in the decline's
+  `detail`: the token does not list the mechanism, or lists it for `C_WrapKey`
+  and `C_UnwrapKey` only. 0.25.1 recorded that a report could not tell those
+  two apart. On SoftHSM 2.6.1 the counts are unchanged, 3,600 declined by the
+  harness and 3,600 by the runner in each pinned set with nothing failing or
+  erroring, and every harness decline now carries one of the two details. The
+  reason code is still `implementation_lacks`, and the harness still has no
+  `C_WrapKey` path.
+
 ## [0.25.1] - 2026-10-12
 
 ### Added

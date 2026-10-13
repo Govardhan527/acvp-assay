@@ -242,6 +242,20 @@ static void emit_buf(Buf *b)
 
 static void emit_unsupported(void) { emit("{\"error\": \"unsupported\"}"); }
 
+/* A decline that says why. The runner copies `detail` into the report after its
+   own sentence, so it names a capability and never quotes the input, and it
+   stays under the protocol's 200 characters. */
+static void emit_unsupported_detail(const char *fmt, ...)
+{
+    char detail[200];
+    va_list args;
+    va_start(args, fmt);
+    vsnprintf(detail, sizeof detail, fmt, args);
+    va_end(args);
+    emit("{\"error\": \"unsupported\", \"declineReason\": \"implementation_lacks\", "
+         "\"detail\": \"%s\"}", detail);
+}
+
 /* Report a PKCS#11 failure. The return value goes to stderr, which the runner
    passes through to your terminal but never puts in a report -- a failing
    module often quotes key material, and reports get shared as evidence. The
@@ -384,6 +398,7 @@ static int read_pin(const char *fd_text, const char *path)
 
 static CK_FUNCTION_LIST_PTR p11;
 static CK_SESSION_HANDLE    session;
+static CK_SLOT_ID           slot_id;
 static void                *module_handle;
 static const char          *module_path = "(none)";
 
@@ -425,6 +440,7 @@ static int p11_start(const char *path, CK_SLOT_ID wanted, int have_slot)
         slot = slots[0];
         free(slots);
     }
+    slot_id = slot;
 
     rv = p11->C_OpenSession(slot, CKF_SERIAL_SESSION | CKF_RW_SESSION, NULL, NULL, &session);
     if (rv != CKR_OK) {
@@ -871,7 +887,8 @@ done:
  * halves -- C_WrapKey/C_UnwrapKey on key objects, and C_Encrypt/C_Decrypt on
  * bytes. ACVP hands over bytes, so this uses the second pair. A token that
  * implements only the first answers CKR_MECHANISM_INVALID or
- * CKR_FUNCTION_NOT_SUPPORTED at Init, which emit_rv reports as unsupported.
+ * CKR_FUNCTION_NOT_SUPPORTED at Init, and decline_key_wrap says which of the
+ * two that was.
  *
  * KWP is CKM_AES_KEY_WRAP_KWP (0x210B), RFC 5649. Not CKM_AES_KEY_WRAP_PAD
  * (0x210A), which pads PKCS#7-style and would fail every KWP vector while
@@ -879,6 +896,30 @@ done:
 #ifndef CKM_AES_KEY_WRAP_KWP
 #define CKM_AES_KEY_WRAP_KWP 0x0000210BUL
 #endif
+
+/* The token refused the Init. Ask it why, because the two reasons read the same
+   from here and are not the same finding: a token with no such mechanism, and a
+   token that offers it on key objects only. The second does have AES-KW, and a
+   decline with no detail reports it as though it had none. This harness has no
+   C_WrapKey path, so it still cannot answer; it can say what it found. */
+static void decline_key_wrap(CK_MECHANISM_TYPE type, int wrap)
+{
+    const char *name = type == CKM_AES_KEY_WRAP ? "CKM_AES_KEY_WRAP" : "CKM_AES_KEY_WRAP_KWP";
+    CK_FLAGS wanted = wrap ? CKF_ENCRYPT : CKF_DECRYPT;
+    CK_MECHANISM_INFO info;
+    CK_RV rv = p11->C_GetMechanismInfo(slot_id, type, &info);
+
+    if (rv == CKR_MECHANISM_INVALID)
+        emit_unsupported_detail("the token does not list %s", name);
+    else if (rv != CKR_OK || (info.flags & wanted))
+        emit_unsupported();
+    else if (info.flags & (CKF_WRAP | CKF_UNWRAP))
+        emit_unsupported_detail("the token lists %s for C_WrapKey and C_UnwrapKey only, "
+                                "and this harness asks through C_Encrypt and C_Decrypt", name);
+    else
+        emit_unsupported_detail("the token lists %s without %s", name,
+                                wrap ? "CKF_ENCRYPT" : "CKF_DECRYPT");
+}
 
 static void op_key_wrap(const char *line)
 {
@@ -909,6 +950,12 @@ static void op_key_wrap(const char *line)
     CK_MECHANISM m = { padded ? CKM_AES_KEY_WRAP_KWP : CKM_AES_KEY_WRAP, NULL, 0 };
     CK_RV rv = wrap ? p11->C_EncryptInit(session, &m, handle)
                     : p11->C_DecryptInit(session, &m, handle);
+    if (rv == CKR_MECHANISM_INVALID || rv == CKR_FUNCTION_NOT_SUPPORTED) {
+        fprintf(stderr, "acvp_harness: %s returned 0x%lx\n",
+                wrap ? "C_EncryptInit" : "C_DecryptInit", (unsigned long)rv);
+        decline_key_wrap(m.mechanism, wrap);
+        goto done;
+    }
     if (rv != CKR_OK) { emit_rv(wrap ? "C_EncryptInit" : "C_DecryptInit", rv); goto done; }
 
     /* Wrapping adds the 8-byte integrity block, and KWP first pads to a

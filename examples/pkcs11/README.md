@@ -114,11 +114,19 @@ SoftHSM lists `CKM_AES_KEY_WRAP` with `CKF_WRAP` and `CKF_UNWRAP` and with
 neither `CKF_ENCRYPT` nor `CKF_DECRYPT`, and does not list
 `CKM_AES_KEY_WRAP_KWP` at all.
 
-Those 3,600 are reported `implementation_lacks` with no `detail`, and for
-`CKM_AES_KEY_WRAP` that reads as more than it is. SoftHSM does list AES-KW, for
-key objects; what it does not offer is the byte-level form this harness asks
-for. The harness does not fall back to `C_WrapKey`, so its report cannot yet
-tell a token without AES-KW from a token that offers it only that way.
+Each of those declines says which of the two it met, in its `detail`:
+
+| Set | `detail` on the harness's 3,600 declines |
+| --- | --- |
+| `ACVP-AES-KW-1.0` | the token lists CKM_AES_KEY_WRAP for C_WrapKey and C_UnwrapKey only, and this harness asks through C_Encrypt and C_Decrypt |
+| `ACVP-AES-KWP-1.0` | the token does not list CKM_AES_KEY_WRAP_KWP |
+
+The reason code is `implementation_lacks` in both, and for `CKM_AES_KEY_WRAP`
+it is the detail that keeps it accurate. SoftHSM does have AES-KW, on key
+objects; what it does not offer is the byte-level form this harness asks for,
+and the harness has no `C_WrapKey` path to fall back on. So a report tells a
+token without AES-KW from one that offers it only that way by the detail, not
+by the code.
 
 ## Three things worth keeping if you adapt it
 
