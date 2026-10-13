@@ -32,6 +32,13 @@ provider protocols may change between minor versions.
   favour of `CKM_AES_KEY_WRAP_KWP` and `CKM_AES_KEY_WRAP_PKCS7`, and gives it
   no definition, so what a token computes under it is that token's choice. The
   0.25.1 entry below is corrected in place.
+- **The tests pass on Python 3.13 and 3.14.** Two of them assumed 3.12: one
+  pinned the interpreter version that `info` reports, and the other pinned the
+  column CPython gives for a trailing comma, which moved in 3.13. Reported by
+  Afchine Madjlessi. Four responder tests also failed, where they should have
+  skipped, on a checkout that had the pinned PQC vectors and not `kyber-py` and
+  `dilithium-py`. CI now runs the gate on 3.12, 3.13 and 3.14, and names its
+  runner image instead of following `ubuntu-latest`.
 
 ## [0.25.1] - 2026-10-12
 

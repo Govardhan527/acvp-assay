@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import platform
 import runpy
 import sys
 from pathlib import Path
@@ -36,7 +37,9 @@ def test_info_prints_metadata(capsys: pytest.CaptureFixture[str]) -> None:
     for entry in libraries.values():
         assert entry["version"]
         assert entry["backend_version"].startswith("OpenSSL ")
-    assert payload["python_version"].startswith("3.12")
+    # Against the interpreter, not a literal: the package supports every version
+    # from 3.12 on, and a pinned "3.12" fails on all the others.
+    assert payload["python_version"] == platform.python_version()
 
 
 def test_info_names_an_external_harness_by_what_it_declares(

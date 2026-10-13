@@ -10,6 +10,7 @@ belong to the implementation once one is supplied.
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import sys
 from pathlib import Path
@@ -261,6 +262,16 @@ needs_ml_dsa = pytest.mark.skipif(
     not ML_DSA_PROMPT.is_file(), reason="run scripts/dev.py vectors to fetch the ML-DSA set"
 )
 
+#: The reference harness imports ``kyber-py`` and ``dilithium-py`` when it starts,
+#: both of them, whichever algorithm is asked for. Neither is a dependency of
+#: this package, so a test that starts the harness skips without them rather than
+#: failing on a harness that never came up. A test that is refused before the
+#: harness starts does not need them and does not carry this mark.
+needs_pqc_libraries = pytest.mark.skipif(
+    any(importlib.util.find_spec(name) is None for name in ("kyber_py", "dilithium_py")),
+    reason="pip install kyber-py dilithium-py: the reference harness imports both",
+)
+
 
 def test_pqc_refuses_without_a_harness(tmp_path: Path) -> None:
     """There is no built-in ML-KEM, so a submission cannot be invented.
@@ -293,6 +304,7 @@ def test_pqc_refuses_without_a_harness(tmp_path: Path) -> None:
 
 
 @needs_ml_dsa
+@needs_pqc_libraries
 def test_ml_dsa_answers_with_a_verdict_per_case(tmp_path: Path) -> None:
     """sigVer is verdict-only: ACVP supplies signatures that may be invalid."""
     source = json.loads(ML_DSA_PROMPT.read_text(encoding="utf-8"))
@@ -348,6 +360,7 @@ def ml_kem_prompt(tmp_path: Path, *functions: str) -> Path:
 
 
 @needs_ml_kem
+@needs_pqc_libraries
 def test_ml_kem_encapsulation_answers_with_ciphertext_and_shared_secret(
     tmp_path: Path,
 ) -> None:
@@ -362,6 +375,7 @@ def test_ml_kem_encapsulation_answers_with_ciphertext_and_shared_secret(
 
 
 @needs_ml_kem
+@needs_pqc_libraries
 def test_ml_kem_decapsulation_answers_with_the_shared_secret(tmp_path: Path) -> None:
     """Decapsulation reports only k -- the ciphertext was supplied."""
     prompt = ml_kem_prompt(tmp_path, "decapsulation")
@@ -374,6 +388,7 @@ def test_ml_kem_decapsulation_answers_with_the_shared_secret(tmp_path: Path) -> 
 
 
 @needs_ml_kem
+@needs_pqc_libraries
 def test_ml_kem_key_checks_answer_with_a_verdict(tmp_path: Path) -> None:
     """ACVP supplies deliberately malformed keys; rejecting one is the answer."""
     prompt = ml_kem_prompt(tmp_path, "encapsulationKeyCheck", "decapsulationKeyCheck")

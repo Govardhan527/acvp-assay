@@ -14,12 +14,21 @@ env:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    # A named image, not ubuntu-latest: that label moves to a new release on
+    # GitHub's schedule, and a failure on the day it moves would say nothing
+    # about this code. Changing the image is a commit here, like any other pin.
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        # Every minor version requires-python admits and that has been released.
+        # 3.12 alone let two tests assume it, and a contributor found them.
+        python-version: ["3.12", "3.13", "3.14"]
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
         with:
-          python-version: "3.12"
+          python-version: ${{ matrix.python-version }}
           cache: pip
       - name: Install dependencies
         run: python scripts/dev.py setup
@@ -32,7 +41,7 @@ jobs:
     # checks the case counts against NIST's own answers. A liboqs that changed
     # what it exposes, or a harness that stopped reaching it, moves these
     # numbers and fails here rather than being noticed in a report months later.
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7

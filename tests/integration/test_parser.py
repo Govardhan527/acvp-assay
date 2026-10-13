@@ -61,7 +61,10 @@ def test_encrypt_and_decrypt_fields_normalize_by_direction() -> None:
 def test_invalid_json_reports_location_without_echoing_content(tmp_path: Path) -> None:
     """Malformed JSON produces a bounded diagnostic with line and column."""
     source = tmp_path / "invalid.json"
-    source.write_text('{"secret": "do-not-echo",}', encoding="utf-8")
+    # A missing comma, not a trailing one. CPython reports a trailing comma at the
+    # comma from 3.13 on and one column later before that, and this test is about
+    # the shape of the diagnostic, not about which column an interpreter picks.
+    source.write_text('{"secret": "do-not-echo" "x": 1}', encoding="utf-8")
 
     with pytest.raises(AcvpValidationError) as captured:
         load_vector_set(source)
