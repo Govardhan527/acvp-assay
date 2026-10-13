@@ -95,8 +95,11 @@ and 384 (KWP) are deliberately corrupt wrappings the token refused with
 run through this harness before `key-wrap` existed passed none and declined
 3,600 of each set as `implementation_lacks`.
 
-KWP is `CKM_AES_KEY_WRAP_KWP` (`0x210B`, RFC 5649). `CKM_AES_KEY_WRAP_PAD`
-(`0x210A`) is a different padding and would fail every KWP vector.
+KWP is `CKM_AES_KEY_WRAP_KWP` (`0x210B`), which PKCS#11 v3.2 defines to give
+the same results as RFC 5649. `CKM_AES_KEY_WRAP_PAD` (`0x210A`) is not a
+substitute: v3.2 deprecates it in favour of `CKM_AES_KEY_WRAP_KWP` and
+`CKM_AES_KEY_WRAP_PKCS7` and gives it no definition of its own, so what a token
+computes under it is that token's choice.
 
 A token that offers the wrap mechanisms only through `C_WrapKey` /
 `C_UnwrapKey` refuses `C_EncryptInit`, and this harness reports that as

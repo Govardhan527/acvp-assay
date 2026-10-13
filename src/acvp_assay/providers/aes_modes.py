@@ -234,8 +234,8 @@ class SubprocessAesModeProvider(HarnessClient):
 
         A rejected unwrapping arrives as the reserved "authentication failed"
         error, which the transport raises as InvalidTag; it is translated here
-        to the ValueError this boundary promises, because half of each upstream
-        unwrap set is a deliberately corrupt wrapping and rejecting one is the
+        to the ValueError this boundary promises, because about a fifth of each
+        pinned unwrap set is a deliberately corrupt wrapping and rejecting one is the
         correct answer rather than a fault.
         """
         try:

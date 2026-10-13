@@ -1059,7 +1059,7 @@ def key_wrap(request: dict[str, Any]) -> dict[str, str]:
     """Wrap or unwrap key material.
 
     A rejected unwrapping is reported as an authentication failure, not a
-    crash: half of each upstream unwrap set is a deliberately corrupt wrapping
+    crash: about a fifth of each pinned unwrap set is a deliberately corrupt wrapping
     where refusing it is the correct answer.
     """
     key = bytes.fromhex(request["key"])

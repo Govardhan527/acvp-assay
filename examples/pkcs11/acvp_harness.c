@@ -37,8 +37,8 @@
  *
  *   - A rejected AES-GCM tag, or an AES-KW wrapping that fails its integrity
  *     check, is {"error":"authentication failed"}, never a crash or a non-zero
- *     exit. Roughly a third of NIST's GCM decrypt cases, and half of each
- *     unwrap set, are deliberate forgeries where rejecting is the correct
+ *     exit. Roughly a third of NIST's GCM decrypt cases, and about a fifth of
+ *     each unwrap set, are deliberate forgeries where rejecting is the correct
  *     answer, and a harness that dies on them scores a conforming module as
  *     broken.
  *
@@ -890,9 +890,11 @@ done:
  * CKR_FUNCTION_NOT_SUPPORTED at Init, and decline_key_wrap says which of the
  * two that was.
  *
- * KWP is CKM_AES_KEY_WRAP_KWP (0x210B), RFC 5649. Not CKM_AES_KEY_WRAP_PAD
- * (0x210A), which pads PKCS#7-style and would fail every KWP vector while
- * looking like a working mechanism. Older headers lack the KWP constant. */
+ * KWP is CKM_AES_KEY_WRAP_KWP (0x210B), which v3.2 defines to give the same
+ * results as RFC 5649. Not CKM_AES_KEY_WRAP_PAD (0x210A): v3.2 deprecates it in
+ * favour of the KWP and PKCS7 mechanisms and gives it no definition, so what a
+ * token computes under it is that token's choice, and neither a pass nor a
+ * failure there says anything about KWP. Older headers lack the KWP constant. */
 #ifndef CKM_AES_KEY_WRAP_KWP
 #define CKM_AES_KEY_WRAP_KWP 0x0000210BUL
 #endif
@@ -968,7 +970,8 @@ static void op_key_wrap(const char *line)
     if (!wrap && (rv == CKR_ENCRYPTED_DATA_INVALID || rv == CKR_ENCRYPTED_DATA_LEN_RANGE ||
                   rv == CKR_DATA_INVALID || rv == CKR_GENERAL_ERROR)) {
         /* A wrapping that fails its integrity check is a correct refusal,
-           not a fault: half of each NIST unwrap set is deliberately corrupt.
+           not a fault: about a fifth of each NIST unwrap set is deliberately
+           corrupt.
            ENCRYPTED_DATA_LEN_RANGE belongs here too -- a length KW could not
            have produced is a rejected wrapping. GENERAL_ERROR, as in op_gcm,
            because some tokens report every decrypt failure that way. */

@@ -20,6 +20,19 @@ provider protocols may change between minor versions.
   reason code is still `implementation_lacks`, and the harness still has no
   `C_WrapKey` path.
 
+### Fixed
+
+- **Two statements about key wrapping were wrong, and are corrected.** "Half of
+  each unwrap set is deliberately corrupt" is about a fifth on the pinned sets:
+  370 of the 1,800 `cipher` unwrap cases in `ACVP-AES-KW-1.0` and 384 of 1,800
+  in `ACVP-AES-KWP-1.0`, and 367 and 331 of the `inverse` ones. It stood in
+  `docs/harness-protocol.md`, in two docstrings and in two comments in the
+  PKCS#11 harness. And `CKM_AES_KEY_WRAP_PAD` was said to pad differently and
+  to fail every KWP vector. PKCS#11 v3.2 says only that it is deprecated in
+  favour of `CKM_AES_KEY_WRAP_KWP` and `CKM_AES_KEY_WRAP_PKCS7`, and gives it
+  no definition, so what a token computes under it is that token's choice. The
+  0.25.1 entry below is corrected in place.
+
 ## [0.25.1] - 2026-10-12
 
 ### Added
@@ -27,7 +40,7 @@ provider protocols may change between minor versions.
 - **The PKCS#11 reference harness answers `key-wrap`.** `examples/pkcs11/`
   now drives AES-KW and AES-KWP through `C_Encrypt` / `C_Decrypt` with
   `CKM_AES_KEY_WRAP` and `CKM_AES_KEY_WRAP_KWP` (RFC 5649, `0x210B` -- not
-  `CKM_AES_KEY_WRAP_PAD`, which pads differently). A wrapping that fails its
+  `CKM_AES_KEY_WRAP_PAD`, which v3.2 deprecates). A wrapping that fails its
   integrity check is `authentication failed`, as in `op_gcm`. Through the
   offline pilot in `docs/harness-protocol.md`, against FreeHSM `6c54700`
   (signed, OpenSSL 3.5.7 FIPS provider), on the pinned `ACVP-AES-KW-1.0` and

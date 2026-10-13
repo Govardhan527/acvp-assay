@@ -383,7 +383,7 @@ implementing the same thing twice. ECB sends an empty `iv`. CTR has **no**
 Monte Carlo test, so `block-mct` is never asked for it.
 
 A rejected unwrapping is reported with the reserved `authentication failed`
-error, not as a crash: half of each upstream unwrap set is a deliberately
+error, not as a crash: about a fifth of each pinned unwrap set is a deliberately
 corrupt wrapping where refusing is the correct answer.
 
 ### The block-mode Monte Carlo chain
