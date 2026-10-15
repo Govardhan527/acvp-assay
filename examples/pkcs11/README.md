@@ -55,6 +55,7 @@ holding a token is used. `docs/harness-protocol.md` tabulates what each method c
 | `block-transform` | `CKM_AES_ECB`, `CKM_AES_CBC` |
 | `encrypt` / `decrypt` | `CKM_AES_GCM` |
 | `key-wrap` | `CKM_AES_KEY_WRAP`, `CKM_AES_KEY_WRAP_KWP`, through `C_Encrypt` / `C_Decrypt` |
+| `ml-dsa-sign` / `ml-dsa-verify` | `CKM_ML_DSA`; preHash through `CKM_HASH_ML_DSA_<hash>`, or `CKM_HASH_ML_DSA` on PH(M) from the token's `C_Digest` for SHA2-512/224 and SHA2-512/256 |
 
 Everything else returns `{"error": "unsupported"}`. That is a first-class
 answer, not a stub: the runner records it as UNSUPPORTED rather than as a
@@ -130,6 +131,44 @@ objects; what it does not offer is the byte-level form this harness asks for,
 and the harness has no `C_WrapKey` path to fall back on. So a report tells a
 token without AES-KW from one that offers it only that way by the detail, not
 by the code.
+
+## ML-DSA
+
+PKCS#11 v3.2 section 6.67 decides what this harness can ask, so each of
+`ml-dsa-sign`'s switches maps to a mechanism or to a decline:
+
+| Case | Answered with, or declined because |
+| --- | --- |
+| external interface, pure | `CKM_ML_DSA` with `CK_SIGN_ADDITIONAL_CONTEXT` carrying the context |
+| external interface, preHash | `CKM_HASH_ML_DSA_<hash>` on the message; for SHA2-512/224 and SHA2-512/256, which have no mechanism of their own, `CKM_HASH_ML_DSA` on PH(M) computed by the token's `C_Digest` |
+| deterministic signing | `hedgeVariant` `CKH_DETERMINISTIC_REQUIRED` |
+| hedged signing | `interface_lacks`: `CK_SIGN_ADDITIONAL_CONTEXT` carries no `rnd`, so the token's own randomness matches nothing NIST recorded |
+| internal interface | `interface_lacks`: no v3.2 mechanism signs or verifies M′ as given |
+| external mu | `interface_lacks`: no v3.2 mechanism takes mu |
+
+Keys come from the vector and are imported with `C_CreateObject`, `CKA_VALUE`
+and `CKA_PARAMETER_SET`, which v3.2 Tables 280 and 281 require on creation. A
+token that refuses the import or the mechanism is `implementation_lacks`, with
+the `CK_RV` in the detail. A verification the token rejects with
+`CKR_SIGNATURE_INVALID` or `CKR_SIGNATURE_LEN_RANGE` is `testPassed: false`:
+a verdict, not a fault. keyGen is not answered: v3.2 creates a key from its
+seed only through `CKA_SEED`, which tokens may refuse.
+
+Measured against FreeHSM `main` at `9a64b77` (the HashML-DSA mechanisms of its
+2.4.0, before that release's version bump; a signed `nist-approved-only` module
+on the OpenSSL 3.5.7 FIPS provider), on the pinned sets:
+
+| Set | Passed | Failed | Declined by the harness | Declined by the runner |
+| --- | ---: | ---: | ---: | ---: |
+| `ML-DSA-sigGen-FIPS204` | 90 | 0 | 270 | 0 |
+| `ML-DSA-sigVer-FIPS204` | 90 | 0 | 90 | 0 |
+
+The 90 in each are the 45 pure and the 45 preHash cases of the external,
+deterministic groups, compared with NIST's answers; in sigVer, 36 of the 45
+pure cases are signatures the token had to reject, and did. Every decline is `interface_lacks`,
+naming the standard: internal-interface groups in both sets, and the hedged
+groups in sigGen. Nothing is `implementation_lacks`, so FreeHSM took every
+import and every mechanism.
 
 ## Three things worth keeping if you adapt it
 

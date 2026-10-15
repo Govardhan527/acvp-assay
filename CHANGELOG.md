@@ -7,6 +7,21 @@ provider protocols may change between minor versions.
 
 ## [Unreleased]
 
+### Added
+
+- **ML-DSA in the PKCS#11 reference harness.** `examples/pkcs11/` answers
+  `ml-dsa-sign` and `ml-dsa-verify` through PKCS#11 v3.2 section 6.67:
+  `CKM_ML_DSA` for pure cases and `CKM_HASH_ML_DSA_<hash>` for preHash ones,
+  with `CKM_HASH_ML_DSA` on PH(M) from the token's `C_Digest` for SHA2-512/224
+  and SHA2-512/256. Keys are imported with `CKA_PARAMETER_SET`, which v3.2
+  requires on creation. What the standard cannot express is declined as
+  `interface_lacks` with the standard named in the detail -- hedged signing
+  (`CK_SIGN_ADDITIONAL_CONTEXT` carries no `rnd`), the internal interface and
+  external mu -- through a new `emit_interface_lacks` beside
+  `emit_unsupported_detail`. Against FreeHSM's HashML-DSA build on the pinned
+  sets: 90 of 360 sigGen and 90 of 180 sigVer cases pass, nothing fails, and
+  the rest are `interface_lacks`.
+
 ### Changed
 
 - **The PKCS#11 reference harness says why it declined `key-wrap`.** When

@@ -27,8 +27,9 @@
  * it out of the filesystem as well; see docs/harness-protocol.md.
  *
  * Operations answered here: metadata, digest, digest-mct, mac,
- * block-transform (AES-ECB/CBC), encrypt and decrypt (AES-GCM), and key-wrap
- * (AES-KW/KWP through C_Encrypt/C_Decrypt). Everything
+ * block-transform (AES-ECB/CBC), encrypt and decrypt (AES-GCM), key-wrap
+ * (AES-KW/KWP through C_Encrypt/C_Decrypt), and ml-dsa-sign and ml-dsa-verify
+ * (ML-DSA and HashML-DSA, PKCS#11 v3.2 section 6.67). Everything
  * else is declined with {"error":"unsupported"}, which the runner reports as
  * UNSUPPORTED rather than as a failure -- capability is the implementation's
  * to declare, so declining is a first-class answer and not an error path.
@@ -245,15 +246,32 @@ static void emit_unsupported(void) { emit("{\"error\": \"unsupported\"}"); }
 /* A decline that says why. The runner copies `detail` into the report after its
    own sentence, so it names a capability and never quotes the input, and it
    stays under the protocol's 200 characters. */
-static void emit_unsupported_detail(const char *fmt, ...)
+static void emit_decline(const char *reason, const char *fmt, va_list args)
 {
     char detail[200];
+    vsnprintf(detail, sizeof detail, fmt, args);
+    emit("{\"error\": \"unsupported\", \"declineReason\": \"%s\", "
+         "\"detail\": \"%s\"}", reason, detail);
+}
+
+/* The token does not do this. */
+static void emit_unsupported_detail(const char *fmt, ...)
+{
     va_list args;
     va_start(args, fmt);
-    vsnprintf(detail, sizeof detail, fmt, args);
+    emit_decline("implementation_lacks", fmt, args);
     va_end(args);
-    emit("{\"error\": \"unsupported\", \"declineReason\": \"implementation_lacks\", "
-         "\"detail\": \"%s\"}", detail);
+}
+
+/* The token may well do this, and PKCS#11 has no way to ask it: the repair is
+   in the standard, not the module. The detail names the standard, because no
+   token vendor can expose an entry point the interface does not define. */
+static void emit_interface_lacks(const char *fmt, ...)
+{
+    va_list args;
+    va_start(args, fmt);
+    emit_decline("interface_lacks", fmt, args);
+    va_end(args);
 }
 
 /* Report a PKCS#11 failure. The return value goes to stderr, which the runner
@@ -994,6 +1012,305 @@ done:
     free(key); free(data); free(out_bytes);
 }
 
+/* ML-DSA, FIPS 204, through PKCS#11 v3.2 section 6.67.
+ *
+ * What the standard can express decides what this can answer, so each of
+ * ml-dsa-sign's four switches maps to a mechanism or to a decline:
+ *
+ *   external, pure       CKM_ML_DSA with CK_SIGN_ADDITIONAL_CONTEXT
+ *   external, preHash    CKM_HASH_ML_DSA_<hash> on the message, or, for the
+ *                        two hashes with no mechanism of their own
+ *                        (SHA2-512/224, SHA2-512/256), CKM_HASH_ML_DSA on
+ *                        PH(M) from the token's own C_Digest
+ *   deterministic        hedgeVariant CKH_DETERMINISTIC_REQUIRED; a hedged
+ *                        case is interface_lacks, because the parameter
+ *                        carries no rnd and the token's own randomness
+ *                        matches nothing NIST recorded
+ *   internal, externalMu interface_lacks: no v3.2 mechanism signs M' as given
+ *                        or takes mu
+ *
+ * Keys come from the vector and are imported with C_CreateObject, CKA_VALUE
+ * and CKA_PARAMETER_SET -- which v3.2 Tables 280 and 281 require on creation
+ * (footnote 1), so a token that refuses a template without it is right to.
+ * A token that refuses the import, or the mechanism, does not do that case:
+ * implementation_lacks, with the CK_RV in the detail.
+ *
+ * Older headers lack all of this, hence the local definitions. The two
+ * parameter structures are spelled here under their own names so that a
+ * header which does define them does not clash. */
+#ifndef CKK_ML_DSA
+#define CKK_ML_DSA                0x0000004AUL
+#endif
+#ifndef CKA_PARAMETER_SET
+#define CKA_PARAMETER_SET         0x0000061DUL
+#endif
+#ifndef CKM_ML_DSA
+#define CKM_ML_DSA                0x0000001DUL
+#endif
+#ifndef CKM_HASH_ML_DSA
+#define CKM_HASH_ML_DSA           0x0000001FUL
+#endif
+#ifndef CKH_DETERMINISTIC_REQUIRED
+#define CKH_DETERMINISTIC_REQUIRED 0x00000002UL
+#endif
+#ifndef CKM_SHA512_224
+#define CKM_SHA512_224            0x00000048UL
+#endif
+#ifndef CKM_SHA512_256
+#define CKM_SHA512_256            0x0000004CUL
+#endif
+
+typedef struct {
+    CK_ULONG    hedgeVariant;
+    CK_BYTE_PTR pContext;
+    CK_ULONG    ulContextLen;
+} HarnessSignContext;          /* CK_SIGN_ADDITIONAL_CONTEXT */
+
+typedef struct {
+    CK_ULONG          hedgeVariant;
+    CK_BYTE_PTR       pContext;
+    CK_ULONG          ulContextLen;
+    CK_MECHANISM_TYPE hash;
+} HarnessHashSignContext;      /* CK_HASH_SIGN_ADDITIONAL_CONTEXT */
+
+/* CKP_ML_DSA_44/65/87. */
+static CK_ULONG ml_dsa_parameter_set(const char *name)
+{
+    if (!strcmp(name, "ML-DSA-44")) return 1;
+    if (!strcmp(name, "ML-DSA-65")) return 2;
+    if (!strcmp(name, "ML-DSA-87")) return 3;
+    return 0;
+}
+
+/* ACVP's hashAlg names. hash_mldsa is the mechanism that hashes the message
+   itself, or 0 where v3.2 defines none; digest names the hash for the generic
+   mechanism and for C_Digest, or 0 for the XOFs, which have no digest
+   mechanism and so no generic route. */
+static const struct {
+    const char       *name;
+    CK_MECHANISM_TYPE hash_mldsa;
+    CK_MECHANISM_TYPE digest;
+} PREHASH[] = {
+    { "SHA2-224",     0x23, CKM_SHA224 },
+    { "SHA2-256",     0x24, CKM_SHA256 },
+    { "SHA2-384",     0x25, CKM_SHA384 },
+    { "SHA2-512",     0x26, CKM_SHA512 },
+    { "SHA2-512/224", 0,    CKM_SHA512_224 },
+    { "SHA2-512/256", 0,    CKM_SHA512_256 },
+    { "SHA3-224",     0x27, 0x2B5 },
+    { "SHA3-256",     0x28, 0x2B0 },
+    { "SHA3-384",     0x29, 0x2C0 },
+    { "SHA3-512",     0x2A, 0x2D0 },
+    { "SHAKE-128",    0x2B, 0 },
+    { "SHAKE-256",    0x2C, 0 },
+};
+
+/* A sign or verify request, decoded once for both directions. */
+typedef struct {
+    CK_ULONG       parameter_set;
+    unsigned char *key, *payload, *context, *signature;
+    size_t         key_len, payload_len, context_len, signature_len;
+    int            prehash;          /* index into PREHASH, or -1 for pure */
+} MlDsaCase;
+
+static void ml_dsa_case_free(MlDsaCase *c)
+{
+    free(c->key); free(c->payload); free(c->context); free(c->signature);
+}
+
+/* Decode the request, or answer it with a decline or a failure and return 0.
+   The interface checks come first: a case the standard cannot express is
+   declined the same way whatever key it carries. */
+static int ml_dsa_case_read(const char *line, int sign, MlDsaCase *c)
+{
+    memset(c, 0, sizeof *c);
+    c->prehash = -1;
+    int ok = 0;
+    char *set = json_string(line, "parameterSet");
+    char *interface = json_string(line, "signatureInterface");
+    char *prehash = json_string(line, "preHash");
+    char *hash_alg = json_string(line, "hashAlg");
+    char *key_hex = json_string(line, sign ? "sk" : "pk");
+    char *message_hex = json_string(line, "message");
+    char *context_hex = json_string(line, "context");
+    char *signature_hex = sign ? NULL : json_string(line, "signature");
+
+    if (interface && !strcmp(interface, "internal")) {
+        emit_interface_lacks("PKCS#11 v3.2: no mechanism %s M' as given "
+                             "(ML-DSA.%s_internal)", sign ? "signs" : "verifies",
+                             sign ? "Sign" : "Verify");
+        goto done;
+    }
+    if (json_bool(line, "externalMu")) {
+        emit_interface_lacks("PKCS#11 v3.2: no mechanism takes mu as input");
+        goto done;
+    }
+    if (sign && !json_bool(line, "deterministic")) {
+        emit_interface_lacks("PKCS#11 v3.2: CK_SIGN_ADDITIONAL_CONTEXT carries no rnd, "
+                             "so a hedged signature cannot be reproduced");
+        goto done;
+    }
+    if (!set || !key_hex || !message_hex || (!sign && !signature_hex)) {
+        emit_failure("missing parameterSet, key, message or signature");
+        goto done;
+    }
+    c->parameter_set = ml_dsa_parameter_set(set);
+    if (!c->parameter_set) { emit_unsupported(); goto done; }
+    if (prehash && !strcmp(prehash, "preHash")) {
+        for (size_t i = 0; hash_alg && i < sizeof PREHASH / sizeof PREHASH[0]; i++)
+            if (!strcmp(hash_alg, PREHASH[i].name)) c->prehash = (int)i;
+        if (c->prehash < 0) { emit_unsupported(); goto done; }
+    }
+
+    c->key = hex_decode(key_hex, &c->key_len);
+    c->payload = hex_decode(message_hex, &c->payload_len);
+    /* An absent context on the external interface is the empty one. */
+    c->context = hex_decode(context_hex ? context_hex : "", &c->context_len);
+    if (!sign) c->signature = hex_decode(signature_hex, &c->signature_len);
+    if (!c->key || !c->payload || !c->context || (!sign && !c->signature)) {
+        emit_failure("invalid hex");
+        goto done;
+    }
+    ok = 1;
+done:
+    free(set); free(interface); free(prehash); free(hash_alg);
+    free(key_hex); free(message_hex); free(context_hex); free(signature_hex);
+    if (!ok) ml_dsa_case_free(c);
+    return ok;
+}
+
+/* The key from the vector, as a session object with only the one usage. */
+static CK_RV ml_dsa_import(const MlDsaCase *c, int sign, CK_OBJECT_HANDLE *out)
+{
+    CK_OBJECT_CLASS klass = sign ? CKO_PRIVATE_KEY : CKO_PUBLIC_KEY;
+    CK_KEY_TYPE type = CKK_ML_DSA;
+    CK_ULONG set = c->parameter_set;
+    CK_BBOOL yes = CK_TRUE, no = CK_FALSE;
+    CK_ATTRIBUTE attrs[] = {
+        { CKA_CLASS,         &klass, sizeof klass },
+        { CKA_KEY_TYPE,      &type,  sizeof type  },
+        { CKA_TOKEN,         &no,    sizeof no    },
+        { sign ? CKA_SIGN : CKA_VERIFY, &yes, sizeof yes },
+        { CKA_PARAMETER_SET, &set,   sizeof set   },
+        { CKA_VALUE,         c->key, (CK_ULONG)c->key_len },
+    };
+    return p11->C_CreateObject(session, attrs, sizeof attrs / sizeof attrs[0], out);
+}
+
+/* The mechanism and the data it takes. For the generic route PH(M) comes from
+   the token's C_Digest, so the hash is the token's as well as the signature.
+   Returns 0 after answering the request itself. */
+static int ml_dsa_mechanism(const MlDsaCase *c, CK_MECHANISM *m,
+                            HarnessSignContext *sc, HarnessHashSignContext *hc,
+                            unsigned char *ph, const unsigned char **data, size_t *data_len)
+{
+    *data = c->payload;
+    *data_len = c->payload_len;
+    *sc = (HarnessSignContext){ CKH_DETERMINISTIC_REQUIRED, c->context, (CK_ULONG)c->context_len };
+    if (c->prehash < 0 || PREHASH[c->prehash].hash_mldsa) {
+        m->mechanism = c->prehash < 0 ? CKM_ML_DSA : PREHASH[c->prehash].hash_mldsa;
+        m->pParameter = sc;
+        m->ulParameterLen = sizeof *sc;
+        return 1;
+    }
+    size_t ph_len = 64;
+    CK_MECHANISM dm = { PREHASH[c->prehash].digest, NULL, 0 };
+    CK_RV rv = p11->C_DigestInit(session, &dm);
+    if (rv == CKR_OK) {
+        unsigned char nothing = 0;
+        CK_ULONG n = (CK_ULONG)ph_len;
+        rv = p11->C_Digest(session, (CK_BYTE_PTR)(c->payload_len ? c->payload : &nothing),
+                           (CK_ULONG)c->payload_len, ph, &n);
+        ph_len = n;
+    }
+    if (rv == CKR_MECHANISM_INVALID) {
+        emit_unsupported_detail("the token has no %s digest for CKM_HASH_ML_DSA",
+                                PREHASH[c->prehash].name);
+        return 0;
+    }
+    if (rv != CKR_OK) { emit_rv("C_Digest", rv); return 0; }
+    *hc = (HarnessHashSignContext){ CKH_DETERMINISTIC_REQUIRED, c->context,
+                                    (CK_ULONG)c->context_len, PREHASH[c->prehash].digest };
+    m->mechanism = CKM_HASH_ML_DSA;
+    m->pParameter = hc;
+    m->ulParameterLen = sizeof *hc;
+    *data = ph;
+    *data_len = ph_len;
+    return 1;
+}
+
+static const char *ml_dsa_mechanism_name(CK_MECHANISM_TYPE type)
+{
+    switch (type) {
+    case CKM_ML_DSA:      return "CKM_ML_DSA";
+    case CKM_HASH_ML_DSA: return "CKM_HASH_ML_DSA";
+    default:              return "its CKM_HASH_ML_DSA_<hash>";
+    }
+}
+
+static void op_ml_dsa(const char *line, int sign)
+{
+    MlDsaCase c;
+    if (!ml_dsa_case_read(line, sign, &c)) return;
+
+    CK_OBJECT_HANDLE key = 0;
+    unsigned char *signature = NULL;
+    CK_RV rv = ml_dsa_import(&c, sign, &key);
+    if (rv != CKR_OK) {
+        fprintf(stderr, "acvp_harness: C_CreateObject returned 0x%lx\n", (unsigned long)rv);
+        emit_unsupported_detail("the token refused the ML-DSA %s key import (CK_RV 0x%lx)",
+                                sign ? "private" : "public", (unsigned long)rv);
+        goto done;
+    }
+
+    CK_MECHANISM m;
+    HarnessSignContext sc;
+    HarnessHashSignContext hc;
+    unsigned char ph[64];
+    const unsigned char *data;
+    size_t data_len;
+    if (!ml_dsa_mechanism(&c, &m, &sc, &hc, ph, &data, &data_len)) goto done;
+
+    rv = sign ? p11->C_SignInit(session, &m, key) : p11->C_VerifyInit(session, &m, key);
+    if (rv == CKR_MECHANISM_INVALID) {
+        emit_unsupported_detail("the token does not offer %s", ml_dsa_mechanism_name(m.mechanism));
+        goto done;
+    }
+    if (rv != CKR_OK) { emit_rv(sign ? "C_SignInit" : "C_VerifyInit", rv); goto done; }
+
+    unsigned char nothing = 0;
+    CK_BYTE_PTR in = (CK_BYTE_PTR)(data_len ? data : &nothing);
+    if (sign) {
+        CK_ULONG sig_len = 8192;   /* ML-DSA-87 is 4,627 bytes */
+        signature = malloc(sig_len);
+        if (!signature) { emit_failure("out of memory"); goto done; }
+        rv = p11->C_Sign(session, in, (CK_ULONG)data_len, signature, &sig_len);
+        if (rv != CKR_OK) { emit_rv("C_Sign", rv); goto done; }
+        Buf out = {0};
+        buf_puts(&out, "{\"signature\": \"");
+        buf_add_hex(&out, signature, sig_len);
+        buf_puts(&out, "\"}");
+        emit_buf(&out);
+        buf_free(&out);
+    } else {
+        rv = p11->C_Verify(session, in, (CK_ULONG)data_len,
+                           c.signature, (CK_ULONG)c.signature_len);
+        /* A signature wrong by its length alone is CKR_SIGNATURE_LEN_RANGE,
+           which v3.2 ranks before CKR_SIGNATURE_INVALID. Both are the token
+           rejecting the signature, which is a verdict, not a fault. */
+        if (rv == CKR_OK)
+            emit("{\"testPassed\": true}");
+        else if (rv == CKR_SIGNATURE_INVALID || rv == CKR_SIGNATURE_LEN_RANGE)
+            emit("{\"testPassed\": false}");
+        else
+            emit_rv("C_Verify", rv);
+    }
+done:
+    discard_key(key);
+    free(signature);
+    ml_dsa_case_free(&c);
+}
+
 /* ---------------------------------------------------------------------- main */
 
 static void usage(void)
@@ -1060,6 +1377,8 @@ int main(int argc, char **argv)
         else if (!strcmp(operation, "encrypt"))        op_gcm(line, 1);
         else if (!strcmp(operation, "decrypt"))        op_gcm(line, 0);
         else if (!strcmp(operation, "key-wrap"))       op_key_wrap(line);
+        else if (!strcmp(operation, "ml-dsa-sign"))    op_ml_dsa(line, 1);
+        else if (!strcmp(operation, "ml-dsa-verify"))  op_ml_dsa(line, 0);
         else                                           emit_unsupported();
         free(operation);
     }
