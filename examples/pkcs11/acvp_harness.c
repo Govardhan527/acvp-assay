@@ -1026,8 +1026,9 @@ done:
  *                        case is interface_lacks, because the parameter
  *                        carries no rnd and the token's own randomness
  *                        matches nothing NIST recorded
- *   internal, externalMu interface_lacks: no v3.2 mechanism signs M' as given
- *                        or takes mu
+ *   externalMu, internal interface_lacks: no v3.2 mechanism takes mu or signs
+ *                        M' as given; externalMu is tested first, since every
+ *                        externalMu group is also internal
  *
  * Keys come from the vector and are imported with C_CreateObject, CKA_VALUE
  * and CKA_PARAMETER_SET -- which v3.2 Tables 280 and 281 require on creation
@@ -1089,20 +1090,21 @@ static CK_ULONG ml_dsa_parameter_set(const char *name)
 static const struct {
     const char       *name;
     CK_MECHANISM_TYPE hash_mldsa;
+    const char       *hash_mldsa_name;
     CK_MECHANISM_TYPE digest;
 } PREHASH[] = {
-    { "SHA2-224",     0x23, CKM_SHA224 },
-    { "SHA2-256",     0x24, CKM_SHA256 },
-    { "SHA2-384",     0x25, CKM_SHA384 },
-    { "SHA2-512",     0x26, CKM_SHA512 },
-    { "SHA2-512/224", 0,    CKM_SHA512_224 },
-    { "SHA2-512/256", 0,    CKM_SHA512_256 },
-    { "SHA3-224",     0x27, 0x2B5 },
-    { "SHA3-256",     0x28, 0x2B0 },
-    { "SHA3-384",     0x29, 0x2C0 },
-    { "SHA3-512",     0x2A, 0x2D0 },
-    { "SHAKE-128",    0x2B, 0 },
-    { "SHAKE-256",    0x2C, 0 },
+    { "SHA2-224",     0x23, "CKM_HASH_ML_DSA_SHA224",   CKM_SHA224 },
+    { "SHA2-256",     0x24, "CKM_HASH_ML_DSA_SHA256",   CKM_SHA256 },
+    { "SHA2-384",     0x25, "CKM_HASH_ML_DSA_SHA384",   CKM_SHA384 },
+    { "SHA2-512",     0x26, "CKM_HASH_ML_DSA_SHA512",   CKM_SHA512 },
+    { "SHA2-512/224", 0,    NULL,                       CKM_SHA512_224 },
+    { "SHA2-512/256", 0,    NULL,                       CKM_SHA512_256 },
+    { "SHA3-224",     0x27, "CKM_HASH_ML_DSA_SHA3_224", 0x2B5 },
+    { "SHA3-256",     0x28, "CKM_HASH_ML_DSA_SHA3_256", 0x2B0 },
+    { "SHA3-384",     0x29, "CKM_HASH_ML_DSA_SHA3_384", 0x2C0 },
+    { "SHA3-512",     0x2A, "CKM_HASH_ML_DSA_SHA3_512", 0x2D0 },
+    { "SHAKE-128",    0x2B, "CKM_HASH_ML_DSA_SHAKE128", 0 },
+    { "SHAKE-256",    0x2C, "CKM_HASH_ML_DSA_SHAKE256", 0 },
 };
 
 /* A sign or verify request, decoded once for both directions. */
@@ -1135,14 +1137,17 @@ static int ml_dsa_case_read(const char *line, int sign, MlDsaCase *c)
     char *context_hex = json_string(line, "context");
     char *signature_hex = sign ? NULL : json_string(line, "signature");
 
+    /* externalMu before the interface: every externalMu group in NIST's sets
+       is also on the internal interface, and checked second it would never
+       be the reason given. */
+    if (json_bool(line, "externalMu")) {
+        emit_interface_lacks("PKCS#11 v3.2: no mechanism takes mu as input");
+        goto done;
+    }
     if (interface && !strcmp(interface, "internal")) {
         emit_interface_lacks("PKCS#11 v3.2: no mechanism %s M' as given "
                              "(ML-DSA.%s_internal)", sign ? "signs" : "verifies",
                              sign ? "Sign" : "Verify");
-        goto done;
-    }
-    if (json_bool(line, "externalMu")) {
-        emit_interface_lacks("PKCS#11 v3.2: no mechanism takes mu as input");
         goto done;
     }
     if (sign && !json_bool(line, "deterministic")) {
@@ -1239,13 +1244,16 @@ static int ml_dsa_mechanism(const MlDsaCase *c, CK_MECHANISM *m,
     return 1;
 }
 
-static const char *ml_dsa_mechanism_name(CK_MECHANISM_TYPE type)
+/* The mechanism by name, and for the generic one the hash it was asked for,
+   so that a token missing one hash says which. */
+static void ml_dsa_mechanism_name(const MlDsaCase *c, char *out, size_t out_len)
 {
-    switch (type) {
-    case CKM_ML_DSA:      return "CKM_ML_DSA";
-    case CKM_HASH_ML_DSA: return "CKM_HASH_ML_DSA";
-    default:              return "its CKM_HASH_ML_DSA_<hash>";
-    }
+    if (c->prehash < 0)
+        snprintf(out, out_len, "CKM_ML_DSA");
+    else if (PREHASH[c->prehash].hash_mldsa_name)
+        snprintf(out, out_len, "%s", PREHASH[c->prehash].hash_mldsa_name);
+    else
+        snprintf(out, out_len, "CKM_HASH_ML_DSA for %s", PREHASH[c->prehash].name);
 }
 
 static void op_ml_dsa(const char *line, int sign)
@@ -1273,7 +1281,9 @@ static void op_ml_dsa(const char *line, int sign)
 
     rv = sign ? p11->C_SignInit(session, &m, key) : p11->C_VerifyInit(session, &m, key);
     if (rv == CKR_MECHANISM_INVALID) {
-        emit_unsupported_detail("the token does not offer %s", ml_dsa_mechanism_name(m.mechanism));
+        char name[64];
+        ml_dsa_mechanism_name(&c, name, sizeof name);
+        emit_unsupported_detail("the token does not offer %s", name);
         goto done;
     }
     if (rv != CKR_OK) { emit_rv(sign ? "C_SignInit" : "C_VerifyInit", rv); goto done; }

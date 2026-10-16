@@ -164,10 +164,12 @@ on the OpenSSL 3.5.7 FIPS provider), on the pinned sets:
 | `ML-DSA-sigVer-FIPS204` | 90 | 0 | 90 | 0 |
 
 The 90 in each are the 45 pure and the 45 preHash cases of the external,
-deterministic groups, compared with NIST's answers; in sigVer, 36 of the 45
-pure cases are signatures the token had to reject, and did. Every decline is `interface_lacks`,
-naming the standard: internal-interface groups in both sets, and the hedged
-groups in sigGen. Nothing is `implementation_lacks`, so FreeHSM took every
+deterministic groups, compared with NIST's answers; in sigVer, 72 of the 90
+-- 36 in each group of 45, preHash as well as pure -- are signatures the token
+had to reject, and did. Every decline is `interface_lacks`, naming the
+standard: external mu in 135 cases (90 sigGen, 45 sigVer), the internal
+interface in the other internal-interface groups, and hedged signing in
+sigGen. Nothing is `implementation_lacks`, so FreeHSM took every
 import and every mechanism.
 
 ## Three things worth keeping if you adapt it
